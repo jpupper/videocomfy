@@ -28,6 +28,7 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: uploadDir });
 
 const promptDetails = {};  // Almacena detalles del prompt
+let lastPromptDetails = null; // Fallback por si acaso el ID falla
 
 // ============================================
 // COMFYUI WEBSOCKET CON RECONEXIÓN
@@ -88,37 +89,48 @@ function connectToComfy() {
                 const details = promptDetails[promptId];
                 console.log(`🎬 Ejecución completada para el nodo: ${message.data.node} (Prompt ID: ${promptId})`);
 
-                // Buscar video en las distintas posibles salidas de ComfyUI
-                let videoFound = null;
+                // Buscar video o imagen en las distintas posibles salidas de ComfyUI
+                let assetFound = null;
+                let assetType = 'video';
                 const output = message.data.output;
 
-                if (output.video) videoFound = output.video;
-                else if (output.gifs) videoFound = output.gifs;
+                if (output.video) assetFound = output.video;
+                else if (output.gifs) assetFound = output.gifs;
                 else if (output.images) {
-                    // Verificar si alguno de los "images" es en realidad un video
                     const imgs = Array.isArray(output.images) ? output.images : [output.images];
+                    // Primero buscar videos camuflados como imágenes
                     const possibleVideo = imgs.find(img => img.filename.endsWith('.webm') || img.filename.endsWith('.mp4'));
-                    if (possibleVideo) videoFound = possibleVideo;
+                    if (possibleVideo) {
+                        assetFound = possibleVideo;
+                    } else if (details && (details.type === 'storyboard' || details.isImage)) {
+                        // Si es explícitamente un storyboard o imagen
+                        assetFound = imgs;
+                        assetType = 'image';
+                    } else if (imgs.length > 0) {
+                        // Por defecto, si hay imágenes y no se encontró video
+                        assetFound = imgs;
+                        assetType = 'image';
+                    }
                 }
 
-                if (videoFound) {
-                    const videoItems = Array.isArray(videoFound) ? videoFound : [videoFound];
+                if (assetFound) {
+                    const assetItems = Array.isArray(assetFound) ? assetFound : [assetFound];
 
-                    for (const video of videoItems) {
-                        console.log('📦 Procesando video encontrado:', video.filename);
+                    for (const asset of assetItems) {
+                        console.log(`📦 Procesando ${assetType} encontrado:`, asset.filename);
 
-                        const subfolder = video.subfolder || '';
-                        const videoUrl = `http://${serverAddress}/view?filename=${encodeURIComponent(video.filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(video.type || 'output')}`;
+                        const subfolder = asset.subfolder || '';
+                        const assetUrl = `http://${serverAddress}/view?filename=${encodeURIComponent(asset.filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(asset.type || 'output')}`;
 
-                        const filenameOnly = path.basename(video.filename);
-                        const targetDir = path.join(__dirname, 'public', 'videos');
+                        const filenameOnly = path.basename(asset.filename);
+                        const targetSubdir = assetType === 'video' ? 'videos' : 'uploads'; // Guardamos storyboard en uploads para I2V
+                        const targetDir = path.join(__dirname, 'public', targetSubdir);
                         const targetPath = path.join(targetDir, filenameOnly);
 
                         if (!fs.existsSync(targetDir)) {
                             fs.mkdirSync(targetDir, { recursive: true });
                         }
 
-                        // Intentar borrar si ya existe para evitar bloqueos
                         try {
                             if (fs.existsSync(targetPath)) {
                                 fs.unlinkSync(targetPath);
@@ -131,25 +143,40 @@ function connectToComfy() {
                             // Informar inicio de descarga
                             wss.clients.forEach(client => {
                                 if (client.readyState === WebSocket.OPEN) {
-                                    client.send(JSON.stringify({ type: 'video_downloading', message: 'Descargando video...' }));
+                                    client.send(JSON.stringify({ type: `${assetType}_downloading`, message: `Descargando ${assetType}...` }));
                                 }
                             });
 
-                            await downloadImage(videoUrl, targetPath);
-                            console.log(`✅ Video descargado: ${filenameOnly}`);
+                            await downloadImage(assetUrl, targetPath);
+                            console.log(`✅ ${assetType} descargado: ${filenameOnly}`);
+
+                            // Guardar metadatos asociados al archivo
+                            const metaToSave = details || lastPromptDetails || { prompt: 'Unknown Prompt', params: {} };
+                            
+                            if (assetType === 'video') {
+                                saveVideoMetadata(filenameOnly, {
+                                    prompt: metaToSave.prompt,
+                                    params: metaToSave.params,
+                                    imageFilename: metaToSave.imageFilename,
+                                    prompt_id: promptId
+                                });
+                            }
 
                             // Notificar al frontend
                             wss.clients.forEach(client => {
                                 if (client.readyState === WebSocket.OPEN) {
                                     client.send(JSON.stringify({
-                                        type: 'video_generated',
-                                        url: `/videos/${filenameOnly}`,
-                                        prompt: details ? details.prompt : ''
+                                        type: assetType === 'video' ? 'video_generated' : 'storyboard_generated',
+                                        url: `/${targetSubdir}/${filenameOnly}`,
+                                        filename: filenameOnly,
+                                        prompt: metaToSave.prompt,
+                                        storyboardIndex: metaToSave.storyboardIndex,
+                                        batchId: metaToSave.batchId
                                     }));
                                 }
                             });
                         } catch (error) {
-                            console.error('❌ Error al descargar video:', error);
+                            console.error(`❌ Error al descargar ${assetType}:`, error);
                         }
                     }
                 }
@@ -201,6 +228,73 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
     }
 });
 
+const METADATA_PATH = path.join(__dirname, 'public', 'videos', 'metadata.json');
+
+function saveVideoMetadata(filename, metadata) {
+    let allMetadata = {};
+    try {
+        if (fs.existsSync(METADATA_PATH)) {
+            allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+        }
+    } catch (e) { 
+        console.error('[METADATA] Error reading file:', e); 
+    }
+
+    // Asegurarse de que el prompt llegue
+    if (!metadata.prompt || metadata.prompt === '') {
+        console.warn(`[METADATA] Warning: Saving metadata for ${filename} with empty prompt!`);
+    }
+
+    allMetadata[filename] = {
+        ...metadata,
+        timestamp: Date.now()
+    };
+
+    try {
+        fs.writeFileSync(METADATA_PATH, JSON.stringify(allMetadata, null, 2));
+        console.log(`[METADATA] ✅ Guardado exitoso para: ${filename}`);
+        console.log(`[METADATA] Contenido: "${metadata.prompt?.substring(0, 50)}..."`);
+    } catch (e) { 
+        console.error('[METADATA] Error writing file:', e); 
+    }
+}
+
+function getVideoMetadata(filename) {
+    try {
+        if (fs.existsSync(METADATA_PATH)) {
+            const allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+            return allMetadata[filename] || null;
+        }
+    } catch (e) { }
+    return null;
+}
+
+app.get('/api/images', (req, res) => {
+    const uploadsDir = path.join(__dirname, 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) return res.json([]);
+    fs.readdir(uploadsDir, (err, files) => {
+        if (err) return res.json([]);
+        const images = files
+            .filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file))
+            .map(file => {
+                const stats = fs.statSync(path.join(uploadsDir, file));
+                return { filename: file, url: `/uploads/${file}`, mtime: stats.mtime.getTime() };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+        res.json(images);
+    });
+});
+
+async function checkAudio(filePath) {
+    try {
+        const { stdout } = await execPromise(`ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${filePath}"`);
+        return stdout.trim().length > 0;
+    } catch (e) {
+        console.warn(`[FFPROBE] Error checking audio for ${filePath}:`, e.message);
+        return false;
+    }
+}
+
 app.get('/api/videos', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -211,53 +305,107 @@ app.get('/api/videos', (req, res) => {
 
     fs.readdir(videosDir, (err, files) => {
         if (err) return res.json([]);
+        
+        let allMetadata = {};
+        try {
+            if (fs.existsSync(METADATA_PATH)) {
+                allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+            }
+        } catch (e) {}
+
         const videoFiles = files
             .filter(file => /\.(webm|mp4|gif)$/i.test(file))
             .map(file => {
                 const stats = fs.statSync(path.join(videosDir, file));
-                return { filename: file, url: `/videos/${file}`, mtime: stats.mtime.getTime() };
+                const meta = allMetadata[file] || {};
+                return { 
+                    filename: file, 
+                    url: `/videos/${file}`, 
+                    mtime: stats.mtime.getTime(),
+                    timestamp: meta.timestamp || stats.mtime.getTime(),
+                    prompt: meta.prompt || '',
+                    metadata: meta.params || {}
+                };
             })
-            .sort((a, b) => b.mtime - a.mtime);
+            .sort((a, b) => b.timestamp - a.timestamp);
         res.json(videoFiles);
     });
 });
 
-app.post('/api/blend-videos', async (req, res) => {
+app.post('/api/export-timeline', async (req, res) => {
     try {
-        const { videos, blendDuration = 1.0 } = req.body;
-        if (!videos || videos.length < 2) return res.status(400).json({ error: 'Min 2 videos' });
+        const { clips } = req.body;
+        if (!clips || clips.length === 0) return res.status(400).json({ error: 'No clips provided' });
+
+        console.log(`🎬 Iniciando exportación de timeline: ${clips.length} clips`);
 
         const videosDir = path.join(__dirname, 'public', 'videos');
-        const outputFilename = `blended_${Date.now()}.webm`;
+        const outputFilename = `export_${Date.now()}.mp4`;
         const outputPath = path.join(videosDir, outputFilename);
-        const videoInputs = videos.map(v => path.join(videosDir, v));
 
-        // Obtener dimensiones del primer video
-        const { stdout: info } = await execPromise(`ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "${videoInputs[0]}"`);
-        const [targetWidth, targetHeight] = info.trim().split('x').map(Number);
+        // 1. Determinar duración total y dimensiones
+        let targetWidth = 1280;
+        let targetHeight = 720;
+        let totalDuration = 0;
 
+        clips.forEach(c => {
+            const end = c.startTime + c.duration;
+            if (end > totalDuration) totalDuration = end;
+        });
+
+        // 2. Construir inputs de ffmpeg
+        const inputs = clips.map(c => `-i "${path.join(videosDir, c.filename)}"`).join(' ');
+
+        // 3. Construir Filter Complex
         let filterComplex = '';
-        for (let i = 0; i < videos.length; i++) {
-            filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24[v${i}s];`;
+        // Crear fondo negro base
+        filterComplex += `color=s=${targetWidth}x${targetHeight}:d=${totalDuration}:c=black[bg];`;
+
+        let currentLayer = '[bg]';
+        let audioLabels = [];
+
+        for (let i = 0; i < clips.length; i++) {
+            const c = clips[i];
+            const offsetMs = Math.round(c.startTime * 1000);
+            const offsetSec = offsetMs / 1000;
+            const clipPath = path.join(videosDir, c.filename);
+
+            // --- VIDEO ---
+            // Escalar, pad y offset temporal
+            filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS+(${offsetSec}/TB)[v${i}];`;
+            
+            const nextLayer = i === clips.length - 1 ? '[outv]' : `[layer${i}]`;
+            filterComplex += `${currentLayer}[v${i}]overlay=enable='between(t,${c.startTime},${c.startTime + c.duration})'${nextLayer};`;
+            currentLayer = `[layer${i}]`;
+
+            // --- AUDIO ---
+            const hasAudio = await checkAudio(clipPath);
+            if (hasAudio) {
+                // Trim para que no se pase del tiempo indicado en el timeline
+                // Adelay para ponerlo en su sitio (all=1 aplica el mismo delay a todos los canales)
+                filterComplex += `[${i}:a]atrim=0:${c.duration},asetpts=PTS-STARTPTS,adelay=${offsetMs}:all=1[a${i}];`;
+                audioLabels.push(`[a${i}]`);
+            }
         }
 
-        let currentVideo = '[v0s]';
-        let totalTime = 0;
-        for (let i = 1; i < videos.length; i++) {
-            const { stdout: dur } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoInputs[i - 1]}"`);
-            totalTime += parseFloat(dur.trim());
-            const offset = Math.max(0, totalTime - blendDuration);
-            const outputLabel = i === videos.length - 1 ? '[outv]' : `[vx${i}]`;
-            filterComplex += `${currentVideo}[v${i}s]xfade=transition=fade:duration=${blendDuration}:offset=${offset}${outputLabel};`;
-            currentVideo = `[vx${i}]`;
+        // 4. Mixing de Audio si existe
+        let mapAudio = '';
+        if (audioLabels.length > 0) {
+            filterComplex += `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest[outa]`;
+            mapAudio = '-map "[outa]" -c:a aac -b:a 192k';
+        } else {
+            // Si no hay audio, omitimos el mapeo de audio para no fallar
+            console.log('ℹ️ No se detectó audio en ningún clip, exportando solo video.');
         }
 
-        const inputs = videoInputs.map(v => `-i "${v}"`).join(' ');
-        await execPromise(`ffmpeg ${inputs} -filter_complex "${filterComplex}" -map "[outv]" -c:v libvpx-vp9 -b:v 2M -y "${outputPath}"`);
+        const command = `ffmpeg ${inputs} -filter_complex "${filterComplex}" -map "[outv]" ${mapAudio} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -y "${outputPath}"`;
+        
+        console.log('Ejecutando FFmpeg:', command);
+        await execPromise(command);
 
         res.json({ success: true, filename: outputFilename, url: `/videos/${outputFilename}` });
     } catch (error) {
-        console.error('Error blending:', error);
+        console.error('Error exporting timeline:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -282,7 +430,26 @@ wss.on('connection', (ws) => {
             if (message.type === 'generarImagen') {
                 console.log(`🎬 Petición generación: ${message.prompt} (${message.imageFilename ? 'I2V' : 'T2V'})`);
                 const promptId = await generarVideo(message.prompt, message.params, message.imageFilename);
-                promptDetails[promptId] = { prompt: message.prompt };
+                const details = { 
+                    prompt: message.prompt,
+                    params: message.params,
+                    imageFilename: message.imageFilename,
+                    type: 'video'
+                };
+                promptDetails[promptId] = details;
+                lastPromptDetails = details;
+            } else if (message.type === 'generarStoryboard') {
+                console.log(`🎬 Petición Storyboard: ${message.prompt}`);
+                const promptId = await generarStoryboard(message.prompt, message.params, message.storyboardIndex, message.batchId);
+                const details = { 
+                    prompt: message.prompt,
+                    params: message.params,
+                    type: 'storyboard',
+                    storyboardIndex: message.storyboardIndex,
+                    batchId: message.batchId
+                };
+                promptDetails[promptId] = details;
+                lastPromptDetails = details;
             }
         } catch (e) {
             console.error('Error en mensaje de cliente:', e);
@@ -348,13 +515,15 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
     const promptWorkflow = JSON.parse(data);
 
     // Configurar workflow
-    promptWorkflow["3"]["inputs"]["text"] = promptText;
-    promptWorkflow["11"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
-    promptWorkflow["67"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
-
     if (isI2V) {
+        promptWorkflow["3"]["inputs"]["text"] = promptText;
+        promptWorkflow["11"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
+        promptWorkflow["67"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
         promptWorkflow["200"]["inputs"]["image"] = imageFilename;
     } else {
+        promptWorkflow["3"]["inputs"]["text"] = promptText;
+        promptWorkflow["11"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
+        promptWorkflow["67"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
         if (params.videoWidth) promptWorkflow["89"]["inputs"]["width"] = params.videoWidth;
         if (params.videoHeight) promptWorkflow["89"]["inputs"]["height"] = params.videoHeight;
     }
@@ -364,5 +533,25 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
 
     const promptId = await queuePrompt(promptWorkflow);
     console.log(`🚀 Prompt enviado a ComfyUI. ID: ${promptId}`);
+    return promptId;
+}
+
+async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, batchId = null) {
+    const workflowFile = 'flux_dev_full_text_to_image_api.json';
+    const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
+    const promptWorkflow = JSON.parse(data);
+
+    // Configurar workflow de Flux
+    promptWorkflow["41"]["inputs"]["clip_l"] = promptText;
+    promptWorkflow["41"]["inputs"]["t5xxl"] = promptText;
+    promptWorkflow["31"]["inputs"]["seed"] = Math.floor(Math.random() * 1000000000000000);
+    
+    // Dimensiones (opcional, Flux suele ir bien en 1024)
+    if (params.videoWidth) promptWorkflow["27"]["inputs"]["width"] = params.videoWidth;
+    if (params.videoHeight) promptWorkflow["27"]["inputs"]["height"] = params.videoHeight;
+    if (params.storyboardSteps) promptWorkflow["31"]["inputs"]["steps"] = params.storyboardSteps;
+    
+    const promptId = await queuePrompt(promptWorkflow);
+    console.log(`🚀 Storyboard enviado a ComfyUI. ID: ${promptId}`);
     return promptId;
 }

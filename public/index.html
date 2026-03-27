@@ -11,1581 +11,14 @@
         rel="stylesheet">
     <title>AI Video Generator — LTX-2</title>
     <meta name="description"
-        content="Generate stunning AI videos with LTX-2. Text-to-Video and Image-to-Video generation powered by ComfyUI.">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1729 100%);
-            min-height: 100vh;
-            padding: 15px;
-            color: #e0e6ed;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 100vw;
-            display: grid;
-            grid-template-columns: 280px 1fr 400px; /* Workflows | Controls | Videos */
-            gap: 0;
-            height: 100vh;
-            background: #0f172a;
-            color: #f1f5f9;
-            padding: 0;
-            overflow: hidden;
-        }
-
-        /* Sidebar Panels */
-        .sidebar-left {
-            background: #1e293b;
-            border-right: 1px solid #334155;
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        .main-workspace {
-            background: #0f172a;
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .sidebar-right {
-            background: #1e293b;
-            border-left: 1px solid #334155;
-            display: flex;
-            flex-direction: column;
-            padding: 15px;
-            overflow-y: auto;
-        }
-
-        .workspace-header {
-            padding: 15px 25px;
-            border-bottom: 1px solid #334155;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #1e293b;
-        }
-
-        .workspace-content {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Professional Timeline Multi-Layer */
-        .timeline-editor-wrapper {
-            background: #111827;
-            border-top: 1px solid #334155;
-            height: 450px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .timeline-toolbar {
-            height: 40px;
-            background: #1f2937;
-            border-bottom: 1px solid #374151;
-            display: flex;
-            align-items: center;
-            padding: 0 15px;
-            gap: 15px;
-        }
-
-        .timeline-scroll-area {
-            flex: 1;
-            overflow: auto;
-            display: flex;
-        }
-
-        .timeline-track-headers {
-            width: 120px;
-            background: #1f2937;
-            border-right: 1px solid #374151;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .track-header {
-            height: 60px;
-            border-bottom: 1px solid #374151;
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-            font-size: 0.75em;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
-        }
-
-        .timeline-tracks-content {
-            flex: 1;
-            position: relative;
-            background-image: linear-gradient(90deg, #1f2937 1px, transparent 1px);
-            background-size: 50px 100%; /* Grid units */
-        }
-
-        .timeline-track {
-            height: 60px;
-            border-bottom: 1px solid #374151;
-            position: relative;
-            width: 3000px; /* Very wide for complex projects */
-        }
-
-        .timeline-clip {
-            position: absolute;
-            height: 50px;
-            top: 5px;
-            background: linear-gradient(90deg, #4f46e5, #7c3aed);
-            border: 1px solid #a78bfa;
-            border-radius: 4px;
-            color: white;
-            font-size: 0.7em;
-            padding: 4px 8px;
-            cursor: grab;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-
-        .timeline-clip video {
-            height: 100%;
-            border-radius: 2px;
-        }
-
-        /* Override old styles for new layout */
-        .controls-panel, .output-panel {
-            background: transparent;
-            box-shadow: none;
-            border: none;
-            padding: 0;
-            max-height: none;
-            overflow: visible;
-            width: 100%;
-        }
-
-        .placeholder { display: none; }
-
-        @media (max-width: 900px) {
-            .container {
-                grid-template-columns: 1fr;
-                height: auto;
-                min-height: 100vh;
-                border-radius: 0;
-                padding: 15px;
-                padding-top: 40px;
-                /* Evita corte arriba en mobile */
-            }
-
-            body {
-                padding: 0;
-                align-items: flex-start;
-            }
-        }
-
-        .controls-panel {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
-                0 0 0 1px rgba(99, 102, 241, 0.1);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            position: sticky;
-            top: 15px;
-            max-height: calc(100vh - 30px);
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .controls-panel::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .controls-panel::-webkit-scrollbar-track {
-            background: rgba(30, 41, 59, 0.4);
-            border-radius: 10px;
-        }
-
-        .controls-panel::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border-radius: 10px;
-        }
-
-        .controls-panel::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #8b5cf6, #a855f7);
-        }
-
-        .output-panel {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
-                0 0 0 1px rgba(99, 102, 241, 0.1);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            min-height: 300px;
-            max-height: calc(100vh - 50px);
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-        }
-
-        .output-panel::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .output-panel::-webkit-scrollbar-track {
-            background: rgba(30, 41, 59, 0.4);
-            border-radius: 10px;
-        }
-
-        .output-panel::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border-radius: 10px;
-        }
-
-        .output-panel::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #8b5cf6, #a855f7);
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 1.6em;
-            margin-bottom: 5px;
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 700;
-            letter-spacing: -1px;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #94a3b8;
-            margin-bottom: 20px;
-            font-size: 0.8em;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #cbd5e1;
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        label span {
-            float: right;
-            color: #a855f7;
-            font-weight: 700;
-            font-size: 1em;
-            text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
-        }
-
-        textarea {
-            width: 100%;
-            padding: 10px;
-            background: rgba(30, 41, 59, 0.6);
-            border: 2px solid rgba(99, 102, 241, 0.3);
-            border-radius: 8px;
-            color: #e0e6ed;
-            font-size: 0.9em;
-            resize: vertical;
-            min-height: 60px;
-            transition: all 0.3s ease;
-            font-family: 'Inter', sans-serif;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-            background: rgba(30, 41, 59, 0.8);
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 4px;
-            background: rgba(30, 41, 59, 0.8);
-            border-radius: 10px;
-            outline: none;
-            -webkit-appearance: none;
-            appearance: none;
-            margin-top: 5px;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: linear-gradient(135deg, #6366f1, #a855f7);
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
-            transition: all 0.2s ease;
-        }
-
-        input[type="range"]::-webkit-slider-thumb:hover {
-            transform: scale(1.2);
-            box-shadow: 0 0 25px rgba(99, 102, 241, 0.8);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            background: linear-gradient(135deg, #6366f1, #a855f7);
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            margin-bottom: 0;
-        }
-
-        button {
-            width: 100%;
-            padding: 12px 20px;
-            font-size: 0.9em;
-            font-weight: 600;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-family: 'Inter', sans-serif;
-        }
-
-        #generateButton {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: white;
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-        }
-
-        #generateButton:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(99, 102, 241, 0.6);
-        }
-
-
-        .progress-container {
-            width: 100%;
-            margin-top: 15px;
-            display: none;
-            position: relative;
-            z-index: 10;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: rgba(30, 41, 59, 0.8);
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
-            background-size: 200% 100%;
-            animation: shimmer 2s infinite;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 0.85em;
-        }
-
-        @keyframes shimmer {
-            0% {
-                background-position: 200% 0;
-            }
-
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        .progress-text {
-            margin-top: 8px;
-            text-align: center;
-            color: #94a3b8;
-            font-size: 0.8em;
-        }
-
-        #videoContainer {
-            width: 100%;
-            max-width: 800px;
-            display: none !important;
-        }
-
-        #videoContainer video {
-            width: 100%;
-            height: auto;
-            max-height: 600px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            background: #000;
-            object-fit: contain;
-        }
-
-        #videoContainer video::-webkit-media-controls {
-            display: flex !important;
-        }
-
-        #videoContainer video::-webkit-media-controls-panel {
-            display: flex !important;
-        }
-
-        #imageContainer {
-            width: 100%;
-            max-width: 800px;
-            display: none;
-        }
-
-        #imageContainer img {
-            width: 100%;
-            max-width: 800px;
-            height: auto;
-            max-height: 600px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-        }
-
-        #imageContainer video {
-            width: 100%;
-            max-width: 800px;
-            height: auto;
-            max-height: 600px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            background: #000;
-            object-fit: contain;
-        }
-
-        #imageContainer video::-webkit-media-controls {
-            display: flex !important;
-        }
-
-        #imageContainer video::-webkit-media-controls-panel {
-            display: flex !important;
-        }
-
-        .placeholder {
-            text-align: center;
-            color: #64748b;
-            padding: 40px 20px;
-        }
-
-        .placeholder svg {
-            width: 80px;
-            height: 80px;
-            margin-bottom: 15px;
-            opacity: 0.3;
-        }
-
-        @media (max-width: 1200px) {
-            .container {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            .controls-panel {
-                position: relative;
-                top: 0;
-            }
-        }
-
-        .params-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        #videoGallery {
-            width: 100%;
-            margin-top: 20px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            padding: 10px;
-        }
-
-        .gallery-item {
-            background: rgba(30, 41, 59, 0.6);
-            border-radius: 10px;
-            padding: 12px;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .gallery-item:hover {
-            border-color: rgba(99, 102, 241, 0.5);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
-        }
-
-        .gallery-item video {
-            width: 100%;
-            height: auto;
-            aspect-ratio: 1 / 1;
-            object-fit: cover;
-            border-radius: 8px;
-            cursor: pointer;
-            background: #000;
-        }
-
-        .gallery-item-label {
-            margin-top: 8px;
-            font-size: 0.75em;
-            color: #94a3b8;
-            text-align: center;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .gallery-title {
-            grid-column: 1 / -1;
-            color: #cbd5e1;
-            font-size: 1.2em;
-            margin-bottom: 10px;
-            text-align: center;
-            font-weight: 600;
-        }
-
-        #promptSequence {
-            max-height: 400px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 5px;
-            margin-bottom: 10px;
-        }
-
-        #promptSequence::-webkit-scrollbar {
-            width: 5px;
-        }
-
-        #promptSequence::-webkit-scrollbar-track {
-            background: rgba(30, 41, 59, 0.4);
-            border-radius: 10px;
-        }
-
-        #promptSequence::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            border-radius: 10px;
-        }
-
-        #promptSequence::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #8b5cf6, #a855f7);
-        }
-
-        .prompt-item {
-            margin-bottom: 15px;
-            padding: 15px;
-            background: rgba(30, 41, 59, 0.4);
-            border-radius: 12px;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .prompt-status {
-            font-size: 0.85em;
-            color: #a5b4fc;
-            font-weight: 600;
-        }
-
-        .remove-prompt {
-            background: rgba(239, 68, 68, 0.3);
-            color: #ef4444;
-            border: none;
-            border-radius: 4px;
-            padding: 2px 8px;
-            cursor: pointer;
-            font-size: 0.7em;
-            transition: all 0.2s ease;
-        }
-
-        .remove-prompt:hover {
-            background: rgba(239, 68, 68, 0.5);
-            transform: scale(1.05);
-        }
-
-        .sequence-prompt {
-            width: 100%;
-            padding: 12px;
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 10px;
-            color: #e0e6ed;
-            font-size: 1em;
-            line-height: 1.5;
-            resize: vertical;
-            min-height: 120px;
-            transition: all 0.3s ease;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .sequence-prompt:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
-            background: rgba(30, 41, 59, 0.8);
-        }
-
-        /* Estilos para modo de selección de blending */
-        .blend-controls {
-            width: 100%;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: rgba(30, 41, 59, 0.6);
-            border-radius: 10px;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            display: none;
-        }
-
-        .blend-controls.active {
-            display: block;
-        }
-
-        .blend-button {
-            width: 100%;
-            padding: 10px;
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            margin-top: 10px;
-        }
-
-        .blend-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-        }
-
-        .blend-button:disabled {
-            background: rgba(100, 116, 139, 0.5);
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .cancel-blend-button {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-        }
-
-        .cancel-blend-button:hover {
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
-        }
-
-        .gallery-item.selectable {
-            cursor: pointer;
-            position: relative;
-        }
-
-        .gallery-item.selected {
-            border-color: #10b981;
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-            background: rgba(16, 185, 129, 0.1);
-        }
-
-        .gallery-item.selected::after {
-            content: '✓';
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 30px;
-            height: 30px;
-            background: #10b981;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 1.2em;
-            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.5);
-        }
-
-        .selection-order {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: 30px;
-            height: 30px;
-            background: #6366f1;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.9em;
-            box-shadow: 0 2px 10px rgba(99, 102, 241, 0.5);
-        }
-
-        .blend-info {
-            text-align: center;
-            color: #94a3b8;
-            font-size: 0.85em;
-            margin-bottom: 10px;
-        }
-
-        .blend-duration-control {
-            margin-bottom: 15px;
-        }
-
-        .blend-duration-control label {
-            display: block;
-            margin-bottom: 5px;
-            color: #cbd5e1;
-            font-size: 0.8em;
-        }
-
-        /* ===== IMAGE UPLOAD SECTION ===== */
-        .image-upload-section {
-            margin-bottom: 18px;
-        }
-
-        .image-upload-area {
-            position: relative;
-            width: 100%;
-            min-height: 100px;
-            border: 2px dashed rgba(99, 102, 241, 0.35);
-            border-radius: 12px;
-            background: rgba(30, 41, 59, 0.4);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            overflow: hidden;
-            padding: 15px;
-        }
-
-        .image-upload-area:hover {
-            border-color: rgba(99, 102, 241, 0.7);
-            background: rgba(30, 41, 59, 0.6);
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
-        }
-
-        .image-upload-area.dragover {
-            border-color: #a855f7;
-            background: rgba(168, 85, 247, 0.1);
-            box-shadow: 0 0 30px rgba(168, 85, 247, 0.2);
-        }
-
-        .image-upload-area.has-image {
-            border-color: rgba(16, 185, 129, 0.5);
-            border-style: solid;
-            background: rgba(16, 185, 129, 0.05);
-            min-height: 0;
-            padding: 8px;
-        }
-
-        .upload-placeholder {
-            text-align: center;
-            color: #64748b;
-            pointer-events: none;
-        }
-
-        .upload-placeholder svg {
-            width: 36px;
-            height: 36px;
-            margin-bottom: 6px;
-            opacity: 0.5;
-        }
-
-        .upload-placeholder p {
-            font-size: 0.8em;
-            margin-bottom: 3px;
-        }
-
-        .upload-placeholder .upload-hint {
-            font-size: 0.7em;
-            color: #475569;
-        }
-
-        .image-preview-container {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .image-preview-container img {
-            width: 70px;
-            height: 70px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            flex-shrink: 0;
-        }
-
-        .image-preview-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .image-preview-info .filename {
-            font-size: 0.78em;
-            color: #e0e6ed;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .image-preview-info .mode-badge {
-            display: inline-block;
-            margin-top: 4px;
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 0.68em;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .mode-badge.i2v {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2));
-            color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .mode-badge.t2v {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-            color: #a5b4fc;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-        }
-
-        .remove-image-btn {
-            width: 28px !important;
-            height: 28px;
-            min-width: 28px;
-            padding: 0 !important;
-            border-radius: 50% !important;
-            background: rgba(239, 68, 68, 0.2) !important;
-            color: #ef4444 !important;
-            border: 1px solid rgba(239, 68, 68, 0.3) !important;
-            font-size: 1em !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            flex-shrink: 0;
-            text-transform: none !important;
-            letter-spacing: 0 !important;
-            transition: all 0.2s ease;
-        }
-
-        .remove-image-btn:hover {
-            background: rgba(239, 68, 68, 0.4) !important;
-            transform: scale(1.1);
-        }
-
-        .mode-indicator {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-size: 0.78em;
-            font-weight: 600;
-            margin-bottom: 12px;
-            transition: all 0.4s ease;
-        }
-
-        .mode-indicator.t2v {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            color: #a5b4fc;
-        }
-
-        .mode-indicator.i2v {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            color: #34d399;
-        }
-
-        .mode-indicator .mode-icon {
-            font-size: 1.1em;
-        }
-
-        .upload-status {
-            text-align: center;
-            font-size: 0.75em;
-            color: #f59e0b;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .upload-status.visible {
-            display: block;
-        }
-
-        #imageUploadInput {
-            display: none;
-        }
-
-        /* Estilos para la consola de estado */
-        .status-console {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 12px;
-            margin-top: 15px;
-            overflow: hidden;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            display: block;
-        }
-
-        .console-header {
-            background: rgba(30, 41, 59, 0.8);
-            padding: 8px 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .console-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .red {
-            background: #ef4444;
-        }
-
-        .yellow {
-            background: #f59e0b;
-        }
-
-        .green {
-            background: #10b981;
-        }
-
-        .console-title {
-            color: #94a3b8;
-            font-size: 0.65em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-left: 5px;
-        }
-
-        .console-body {
-            padding: 12px;
-            height: 120px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .console-line {
-            color: #34d399;
-            font-size: 0.75em;
-            line-height: 1.4;
-            opacity: 0.8;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .console-line.executing {
-            color: #6366f1;
-            font-weight: 500;
-        }
-
-        .console-line.system {
-            color: #94a3b8;
-            font-style: italic;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateX(-5px);
-            }
-
-            to {
-                opacity: 0.8;
-                transform: translateX(0);
-            }
-        }
-
-        .console-body::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .console-body::-webkit-scrollbar-thumb {
-            background: rgba(99, 102, 241, 0.3);
-            border-radius: 10px;
-        }
-
-        /* Acordeón de Configuración */
-        .accordion {
-            margin-bottom: 15px;
-        }
-
-        .accordion-header {
-            width: 100%;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid rgba(100, 116, 139, 0.4);
-            padding: 12px 16px;
-            font-size: 0.85em;
-            font-weight: 600;
-            color: #cbd5e1;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .accordion-header:hover {
-            background: rgba(30, 41, 59, 0.8);
-            border-color: #6366f1;
-            color: white;
-        }
-
-        .accordion-header.active {
-            border-bottom-left-radius: 0;
-            border-bottom-right-radius: 0;
-            border-bottom: 1px solid transparent;
-            background: rgba(15, 23, 42, 0.7);
-            border-color: #6366f1;
-            color: white;
-        }
-
-        .accordion-icon {
-            transition: transform 0.3s ease;
-        }
-
-        .accordion-header.active .accordion-icon {
-            transform: rotate(180deg);
-        }
-
-        .accordion-content {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-top: none;
-            border-bottom-left-radius: 10px;
-            border-bottom-right-radius: 10px;
-            padding: 15px;
-            display: none;
-        }
-
-        .accordion-content.show {
-            display: block;
-            animation: slideDown 0.3s ease-out;
-        }
-        
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Redesign Advanced Mode */
-        .advanced-panel {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(168, 85, 247, 0.3);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 15px;
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
-        }
-
-        .section-badge {
-            display: inline-block;
-            background: rgba(168, 85, 247, 0.2);
-            color: #e879f9;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.7em;
-            font-weight: 700;
-            margin-bottom: 10px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            border: 1px solid rgba(168, 85, 247, 0.4);
-        }
-
-        .prompt-general-wrapper {
-            margin-bottom: 15px;
-        }
-
-        .prompt-general-textarea {
-            width: 100%;
-            padding: 10px;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(168, 85, 247, 0.5);
-            border-radius: 8px;
-            color: #f8fafc;
-            font-size: 0.9em;
-            line-height: 1.4;
-            min-height: 80px;
-            resize: vertical;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .prompt-general-textarea:focus {
-            outline: none;
-            border-color: #e879f9;
-            box-shadow: 0 0 10px rgba(232, 121, 249, 0.3);
-            background: #0f1729;
-        }
-
-        .sequence-divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), transparent);
-            margin: 15px 0;
-        }
-
-        .prompt-item {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 12px;
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .prompt-item:hover {
-            border-color: rgba(99, 102, 241, 0.6);
-            background: rgba(30, 41, 59, 0.8);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-
-        .prompt-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .prompt-header-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .prompt-number {
-            width: 24px;
-            height: 24px;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 0.8em;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.5);
-        }
-
-        .prompt-status-text {
-            color: #a5b4fc;
-            font-size: 0.8em;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .remove-prompt-btn {
-            background: rgba(239, 68, 68, 0.15);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 0.7em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            text-transform: uppercase;
-        }
-
-        .remove-prompt-btn:hover {
-            background: rgba(239, 68, 68, 0.25);
-            border-color: #ef4444;
-        }
-
-        .sequence-prompt-textarea {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            color: #f1f5f9;
-            padding: 10px;
-            font-size: 0.9em;
-            line-height: 1.4;
-            min-height: 80px;
-            resize: vertical;
-            transition: all 0.3s;
-        }
-
-        .sequence-prompt-textarea:focus {
-            outline: none;
-            border-color: #6366f1;
-            background: #0f1729;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .add-prompt-btn {
-            width: 100%;
-            background: rgba(16, 185, 129, 0.1) !important;
-            border: 2px dashed rgba(16, 185, 129, 0.4) !important;
-            color: #34d399 !important;
-            padding: 12px !important;
-            border-radius: 10px !important;
-            font-weight: 600;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s !important;
-            margin-top: 5px;
-        }
-
-        .add-prompt-btn:hover {
-            background: rgba(16, 185, 129, 0.2) !important;
-            border-color: #10b981 !important;
-            color: white !important;
-            transform: translateY(-2px);
-        }
-
-        /* Tabs Styles */
-        .tabs-container {
-            width: 100%;
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(99, 102, 241, 0.3);
-            padding-bottom: 10px;
-        }
-
-        .tab-button {
-            background: rgba(30, 41, 59, 0.5);
-            color: #94a3b8;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            padding: 12px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 700;
-            transition: all 0.3s;
-            flex: 1;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-size: 0.85em;
-        }
-
-        .tab-button:hover {
-            background: rgba(99, 102, 241, 0.1);
-            color: #c7d2fe;
-        }
-
-        .tab-button.active {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
-            color: white;
-            border-color: #6366f1;
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
-        }
-
-        /* Editor Styles */
-        .timeline-container {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.9);
-            border: 2px dashed rgba(99, 102, 241, 0.3);
-            border-radius: 12px;
-            padding: 20px;
-            min-height: 200px;
-            margin-bottom: 20px;
-            overflow-x: auto;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            position: relative;
-        }
-
-        .timeline-container.drag-over {
-            background: rgba(99, 102, 241, 0.1);
-            border-color: #6366f1;
-        }
-
-        .timeline-empty-msg {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            color: #64748b;
-            text-align: center;
-            pointer-events: none;
-        }
-
-        .timeline-clip {
-            position: absolute;
-            height: 40px;
-            background: #1e293b;
-            border: 1px solid #6366f1;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            cursor: move;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            z-index: 10;
-            min-width: 20px;
-        }
-
-        .timeline-clip:hover {
-            border-color: #818cf8;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
-        }
-
-        .timeline-clip.selected {
-            border-color: #f59e0b;
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
-            z-index: 20;
-        }
-
-        .timeline-clip video {
-            height: 100%;
-            width: 40px;
-            object-fit: cover;
-            pointer-events: none;
-            flex-shrink: 0;
-            background: #000;
-        }
-
-        .clip-info {
-            flex: 1;
-            padding: 0 8px;
-            font-size: 9px;
-            color: #cbd5e1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            pointer-events: none;
-        }
-
-        /* Trim Handles */
-        .trim-handle {
-            position: absolute;
-            top: 0;
-            width: 8px;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.1);
-            cursor: ew-resize;
-            z-index: 5;
-            transition: background 0.2s;
-        }
-
-        .trim-handle:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .trim-handle-left { left: 0; border-right: 1px solid rgba(255,255,255,0.2); }
-        .trim-handle-right { right: 0; border-left: 1px solid rgba(255,255,255,0.2); }
-
-        .remove-clip-btn {
-            position: absolute;
-            top: 2px;
-            right: 12px;
-            background: rgba(239, 68, 68, 0.8);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 14px;
-            height: 14px;
-            font-size: 9px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-            z-index: 15;
-        }
-
-        .timeline-clip:hover .remove-clip-btn {
-            opacity: 1;
-        }
-
-        .editor-export-area {
-            background: rgba(30, 41, 59, 0.6);
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-        }
-
-        .export-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 700;
-            margin-top: 10px;
-            border: none;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-
-        .export-btn:hover {
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
-            transform: translateY(-2px);
-        }
-
-        .gallery-item[draggable="true"] {
-            cursor: grab;
-        }
-
-        .gallery-item[draggable="true"]:active {
-            cursor: grabbing;
-        }
-
-        .tab-content {
-            display: none;
-            width: 100%;
-            height: 100%;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        .tab-content.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Ocultar timeline por defecto */
-        .timeline-editor-wrapper {
-            display: none;
-            height: 220px;
-            background: #0f172a;
-            border-top: 1px solid #1e293b;
-        }
-
-        /* Mostrar timeline solo cuando la pestaña editor está activa */
-        body.tab-editor-active .timeline-editor-wrapper {
-            display: block;
-        }
-
-        .sidebar-right {
-            width: 320px;
-            background: #0f172a;
-            border-left: 1px solid #1e293b;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        #videoGallery {
-            flex: 1;
-            overflow-y: auto;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-            padding-right: 10px;
-        }
-
-        .gallery-item video {
-            width: 100%;
-            height: auto;
-            border-radius: 6px;
-        }
-
-        .prompt-mode-select {
-            width: 100%;
-            padding: 12px;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(99, 102, 241, 0.5);
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            font-size: 0.9em;
-            outline: none;
-            cursor: pointer;
-            margin-bottom: 15px;
-        }
-        
-        .prompt-mode-select:focus {
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
-            border-color: #818cf8;
-        }
-    </style>
-</head>
-
-<    <div class="container">
+        content="Generate stunning AI videos with LTX-2. Text-to-Video and Image-to-Video generation powered by ComfyUI."></head>
+<body>
+    <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
             <h1 style="font-size: 1.4em; margin-bottom: 25px; color: #fff; text-align: left;">Studio Generator</h1>
             
-            <h2 style="font-size: 0.85em; margin-bottom: 10px; color: #818cf8; text-transform: uppercase; letter-spacing: 1px;">⚡ Workflow Mode</h2>
-            
-            <div class="form-group">
-                <select id="promptModeSelect" class="prompt-mode-select">
-                    <option value="simple">Single Generation (T2V/I2V)</option>
-                    <option value="sequence">Batch Sequencer</option>
-                </select>
-            </div>
+            <h2 style="font-size: 0.85em; margin-bottom: 20px; color: #818cf8; text-transform: uppercase; letter-spacing: 1px;">⚡ Generative Flow</h2>
 
             <!-- Image Upload Section (Restored) -->
             <div class="image-upload-section">
@@ -1602,30 +35,29 @@
                 <input type="file" id="imageUploadInput" accept="image/png,image/jpeg,image/webp,image/jpg" style="display: none;">
             </div>
 
-            <div class="accordion" id="slidersAccordion" style="margin-top: 10px;">
-                <div class="accordion-header" id="slidersToggle" style="padding: 10px; font-size: 0.8em; background: rgba(30, 41, 59, 0.5);">
-                    <span>⚙️ Advanced Parameters</span>
-                    <span class="accordion-icon">▼</span>
+            <h2 style="font-size: 0.8em; margin-top: 15px; margin-bottom: 12px; color: #818cf8; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8;">⚙️ Generation Params</h2>
+            
+            <div class="params-grid" id="dimensionControls" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(99, 102, 241, 0.2); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <button id="resetParamsBtn" style="padding: 4px; font-size: 0.6em; background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 4px; float: right; margin-top: -5px;">Reset</button>
+                    <label>Width <span id="videoWidthValue" style="float: right; color: #818cf8; font-weight: 800;">1280</span></label>
+                    <input type="range" id="videoWidth" min="512" max="1920" step="64" value="1280">
                 </div>
-                <div class="accordion-content" id="slidersContent">
-                    <div class="params-grid" id="dimensionControls">
-                        <div class="form-group">
-                            <label>Width <span id="videoWidthValue">1280</span></label>
-                            <input type="range" id="videoWidth" min="512" max="1920" step="64" value="1280">
-                        </div>
-                        <div class="form-group">
-                            <label>Height <span id="videoHeightValue">720</span></label>
-                            <input type="range" id="videoHeight" min="512" max="1088" step="64" value="720">
-                        </div>
-                        <div class="form-group">
-                            <label>Frames <span id="videoLengthValue">121</span></label>
-                            <input type="range" id="videoLength" min="25" max="481" step="8" value="121">
-                        </div>
-                        <div class="form-group">
-                            <label>Steps <span id="samplerStepsValue">20</span></label>
-                            <input type="range" id="samplerSteps" min="10" max="50" step="1" value="20">
-                        </div>
-                    </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Height <span id="videoHeightValue" style="float: right; color: #818cf8; font-weight: 800;">720</span></label>
+                    <input type="range" id="videoHeight" min="512" max="1088" step="64" value="720">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Frames <span id="videoLengthValue" style="float: right; color: #818cf8; font-weight: 800;">121</span></label>
+                    <input type="range" id="videoLength" min="25" max="481" step="8" value="121">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Steps <span id="samplerStepsValue" style="float: right; color: #818cf8; font-weight: 800;">20</span></label>
+                    <input type="range" id="samplerSteps" min="10" max="50" step="1" value="20">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Flux Steps <span id="storyboardStepsValue" style="float: right; color: #a855f7; font-weight: 800;">25</span></label>
+                    <input type="range" id="storyboardSteps" min="15" max="50" step="1" value="25">
                 </div>
             </div>
 
@@ -1653,64 +85,169 @@
                             <span id="modeText">T2V ACTIVE</span>
                         </div>
                     </div>
-                    <!-- Progress Integrated in Header -->
-                    <div class="progress-container" id="progressContainer" style="display: block; margin: 0;">
-                        <div class="progress-bar" style="height: 12px; border-radius: 6px;">
-                            <div class="progress-fill" id="progressFill" style="font-size: 0.6em;">0%</div>
-                        </div>
-                        <div id="progressText" style="font-size: 0.6em; color: #94a3b8; margin-top: 2px;">Ready...</div>
-                    </div>
                 </div>
                 <div class="tabs-container" style="margin: 0; border: none; padding: 0; gap: 5px;">
+                    <button class="tab-button" id="tabPrevizBtn" data-target="tabPreviz" style="padding: 8px 15px;">Previz</button>
                     <button class="tab-button active" id="tabOutputBtn" data-target="tabOutput" style="padding: 8px 15px;">Stage</button>
                     <button class="tab-button" id="tabPromptsBtn" data-target="tabPrompts" style="padding: 8px 15px;">Sequencer</button>
+                    <button class="tab-button" id="tabStoryboardBtn" data-target="tabStoryboard" style="padding: 8px 15px;">Storyboard</button>
                     <button class="tab-button" id="tabEditorBtn" data-target="tabEditor" style="padding: 8px 15px;">Editor</button>
+                    <button class="tab-button" id="tabLogsBtn" data-target="tabLogs" style="padding: 8px 15px;">Engine Logs</button>
                 </div>
             </header>
 
             <div class="workspace-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
                 <!-- TABS CONTENT -->
+                <div class="tab-content" id="tabPreviz">
+                    <div class="sub-tabs" style="display: flex; gap: 2px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.5); padding: 4px; border-radius: 8px;">
+                        <button class="sub-tab-btn active" data-sub="previz-monitor" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: #6366f1; color: white; cursor: pointer; font-size: 0.75em; font-weight: bold;">VIDEO</button>
+                        <button class="sub-tab-btn" data-sub="previz-data" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.75em; font-weight: bold;">DATA</button>
+                    </div>
+
+                    <div id="previz-monitor" class="sub-tab-content active" style="flex: 1; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 2px dashed #475569;">
+                        <video id="previzVideo" style="max-height: 100%; max-width: 100%; display: none;" controls autoplay loop></video>
+                        <div id="previzPlaceholder" style="position: absolute; color: #475569; text-align: center;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 60px; margin-bottom: 10px; opacity: 0.3;">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <p>DRAG VIDEO HERE</p>
+                            <button id="syncWithEditorBtn" style="margin-top: 15px; background: #6366f1; color: white; padding: 10px 20px; border-radius: 6px; font-size: 0.8em; width: auto;">VIEW EDITOR OUTPUT</button>
+                        </div>
+                    </div>
+
+                    <div id="previz-data" class="sub-tab-content" style="display: none; flex: 1; background: #0f172a; border-radius: 12px; padding: 20px; color: #cbd5e1; overflow-y: auto;">
+                        <div id="previzInfo">
+                            <h3 style="font-size: 0.7em; color: #818cf8; text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px;">Generation Metadata</h3>
+                            <div id="previzMetadata" style="font-size: 0.9em; color: #e2e8f0; line-height: 1.8;">
+                                <p style="opacity: 0.5; text-align: center; margin-top: 50px;">No video loaded in Previz</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-content active" id="tabOutput">
-                    <div id="videoContainer" style="flex: 1; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden;">
+                    <!-- Progress Integrated in Stage -->
+                    <div class="progress-container" id="progressContainer" style="display: block; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <span id="progressText" style="font-size: 0.75em; color: #a5b4fc; font-weight: 600;">Ready for generation...</span>
+                            <span id="progressPct" style="font-size: 0.75em; color: #a5b4fc; font-weight: 800;">0%</span>
+                        </div>
+                        <div class="progress-bar" style="height: 8px; border-radius: 4px; background: rgba(30, 41, 59, 0.8);">
+                            <div class="progress-fill" id="progressFill" style="width: 0%; height: 100%; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+
+                    <div id="videoContainer" style="flex: 1; min-height: 300px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid #334155;">
                         <!-- Monitor principal Generativo -->
-                        <div id="placeholder" style="color: #475569;">Monitor Stage Ready</div>
+                        <div id="placeholder" style="color: #475569; font-weight: bold; opacity: 0.5;">MONITOR STAGE</div>
                     </div>
                     
-                    <div class="controls" style="margin-top: 20px; display: flex; gap: 10px;">
-                        <button id="generateButton" style="flex: 3; height: 50px; font-size: 1.1em; background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">🚀 LAUNCH GENERATION</button>
-                        <button id="stopButton" style="flex: 1; background: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; display: none; font-weight: bold;">🛑 ABORT</button>
+                    <div class="quick-prompt-area" style="margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155;">
+                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." style="width: 100%; height: 60px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: inherit; resize: none;"></textarea>
+                        <div class="controls" style="margin-top: 10px; display: flex; gap: 10px;">
+                            <button id="generateButton" style="flex: 3; height: 40px; font-size: 0.9em; background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🚀 LAUNCH</button>
+                            <button id="stopButton" style="flex: 1; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; display: none; font-weight: bold;">🛑 STOP</button>
+                        </div>
+                    </div>
+
+                    <!-- Integrated Global Queue -->
+                    <div id="globalQueueContainer" style="margin-top: 20px; display: none; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 0.8em; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Generation Queue</span>
+                            <span id="queueCount" style="background: #6366f1; padding: 2px 10px; border-radius: 20px; font-size: 0.7em; font-weight: 800; box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);">0</span>
+                        </div>
+                        <div id="queueList" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px;"></div>
                     </div>
                 </div>
 
                 <div class="tab-content" id="tabPrompts">
                     <div class="prompts-scroller" style="flex: 1; overflow-y: auto; padding: 10px;">
+                        <select id="promptModeSelect" class="prompt-mode-select">
+                            <option value="single">Single Prompt Mode</option>
+                            <option value="batch">Batch / Sequence Mode</option>
+                        </select>
+
                         <div id="simplePromptContainer">
                             <label style="display: block; margin-bottom: 10px; color: #94a3b8; font-size: 0.8em; text-transform: uppercase;">Main Prompt</label>
                             <textarea id="prompt" placeholder="Write your prompt..." style="width: 100%; min-height: 150px; background: #1e293b; border: 1px solid #334155; color: white; padding: 15px; border-radius: 8px; font-family: inherit; margin-bottom: 20px;"></textarea>
                         </div>
                         <div id="advancedMode" class="advanced-panel" style="display: none;">
-                            <label style="display: block; margin-bottom: 10px; color: #94a3b8; font-size: 0.8em; text-transform: uppercase;">Global Style/Prompt</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <button id="jsonExampleBtn" style="flex: 1; padding: 10px; font-size: 0.7em; background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📋 JSON EXAMPLE</button>
+                                <button id="importJsonBtn" style="flex: 1; padding: 10px; font-size: 0.7em; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📥 IMPORT JSON</button>
+                            </div>
                             <textarea id="promptGeneral" class="prompt-general-textarea" placeholder="Style to apply to all steps..." style="width: 100%; height: 80px; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 15px;"></textarea>
+                            
+                            <!-- AUTO-ASSEMBLE TICK (MOVECTED FOR VISIBILITY) -->
+                            <div style="margin: 0 0 15px 0; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                                <input type="checkbox" id="autoAssembleCheck" style="width: 22px; height: 22px; cursor: pointer; accent-color: #10b981;">
+                                <label for="autoAssembleCheck" style="margin: 0; font-size: 0.8em; color: #10b981; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 0.8px;">Auto-assemble in Timeline</label>
+                            </div>
+                            
+                            <!-- Area para importar JSON (TextField en vez de prompt) -->
+                            <div id="jsonImportArea" style="display: none; margin-bottom: 15px; background: rgba(15, 23, 42, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #6366f1;">
+                                <label style="display: block; margin-bottom: 8px; color: #818cf8; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">Paste JSON Sequence</label>
+                                <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' style="width: 100%; height: 120px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.8em; margin-bottom: 10px; resize: vertical;"></textarea>
+                                <div style="display: flex; gap: 10px;">
+                                    <button id="confirmJsonImport" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold;">IMPORT</button>
+                                    <button id="cancelJsonImport" style="flex: 1; padding: 8px; background: #475569; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold;">CANCEL</button>
+                                </div>
+                            </div>
+
                             <div id="promptSequence"></div>
+
                             <button id="addPromptButton" class="add-prompt-btn" style="width: 100%; padding: 10px; background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px dashed #818cf8; border-radius: 8px; cursor: pointer; margin: 10px 0;">+ Add Sequence Step</button>
                         </div>
                     </div>
-                    <div class="controls" style="margin-top: 10px; padding: 10px;">
-                        <button class="generate-from-prompts" style="width: 100%; height: 45px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">GENERATE FROM SEQUENCER</button>
+                    <div class="controls" style="margin-top: 10px; padding: 10px; display: flex; gap: 10px;">
+                        <button id="generateVideoFromSequencer" class="generate-from-prompts" style="flex: 1; height: 45px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">DIRECT TO VIDEO</button>
+                        <button id="generateStoryboardFromSequencer" style="flex: 1; height: 45px; background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid #a855f7; border-radius: 8px; cursor: pointer; font-weight: bold;">GENERATE STORYBOARD (T2I)</button>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tabStoryboard">
+                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px; height: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2 style="margin: 0; font-size: 1.2em; color: #818cf8;">Visual Storyboard</h2>
+                            <div style="display: flex; gap: 10px;">
+                                <button id="clearStoryboardBtn" style="padding: 8px 15px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; font-size: 0.8em; font-weight: bold; cursor: pointer;">CLEAR ALL</button>
+                                <button id="generateVidsFromStoryboardBtn" style="padding: 8px 15px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 0.8em; font-weight: bold; cursor: pointer;">🚀 GENERATE VIDEOS FROM STORYBOARD</button>
+                            </div>
+                        </div>
+                        <div id="storyboardGrid" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 10px; background: rgba(15, 23, 42, 0.3); border-radius: 12px; border: 1px dashed rgba(99, 102, 241, 0.2);">
+                            <!-- Storyboard items will be added here -->
+                            <div id="storyboardPlaceholder" style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 100px; color: #475569; gap: 15px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 60px; opacity: 0.3;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <p>Generate images from Sequencer to see them here</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="tab-content" id="tabEditor">
-                    <!-- Monitor de Previsualización del Editor -->
-                    <div id="editorMonitor" style="flex: 1; background: #000; border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
-                        <video id="timelinePreview" style="max-height: 100%; max-width: 100%;" muted></video>
-                        <div id="editorPlaceholder" style="color: #475569;">Preview Timeline</div>
+                    <!-- Monitor de Previsualización Dual (interpolado) -->
+                    <div id="editorMonitor" style="flex: 1; min-height: 400px; background: #000; border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border: 1px solid #1e293b;">
+                        <video id="timelinePreviewA" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" preload="auto"></video>
+                        <video id="timelinePreviewB" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 2; opacity: 0;" preload="auto"></video>
+                        <div id="editorPlaceholder" style="position: absolute; color: #475569; z-index: 0; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; opacity: 0.5;">Preview Monitor</div>
                     </div>
                     <div class="editor-controls" style="padding: 10px; display: flex; justify-content: center; gap: 20px; background: rgba(15, 23, 42, 0.5);">
-                         <div style="display: flex; gap: 10px;">
-                            <button id="tlPlayBtn" style="background: #10b981; color: white; border: none; padding: 5px 20px; border-radius: 4px; cursor: pointer;">PLAY</button>
-                            <button id="tlStopBtn" style="background: #ef4444; color: white; border: none; padding: 5px 20px; border-radius: 4px; cursor: pointer;">STOP</button>
+                         <div style="display: flex; gap: 10px; align-items: center;">
+                            <button id="tlPlayBtn" style="background: #10b981; color: white; border: none; padding: 8px 30px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span id="playIcon">▶</span> <span id="playText">PLAY</span>
+                            </button>
+                            <button id="tlResetBtn" title="Reset to start" style="background: #475569; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; width: 40px;">⏮</button>
                          </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tabLogs">
+                    <div class="logs-container" style="flex: 1; background: #020617; border-radius: 12px; padding: 20px; font-family: 'Courier New', Courier, monospace; overflow-y: auto;">
+                        <div id="extendedLogs" style="color: #34d399; font-size: 0.85em; line-height: 1.6;">
+                            <div style="color: #64748b;">[SYSTEM] Studio Engine initialized. Waiting for commands...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1718,21 +255,20 @@
             <div class="timeline-editor-wrapper" id="masterTimeline">
                 <div class="timeline-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; background: #1e293b;">
                     <span style="font-size: 0.7em; font-weight: bold; color: #6366f1; text-transform: uppercase;">Timeline Maestro v1.1</span>
-                    <button id="exportProjectBtn" style="width: auto; padding: 4px 12px; font-size: 0.7em; background: #059669; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;">EXPORT FINAL VIDEO</button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div id="activeExportWidget" style="display: none; background: rgba(99, 102, 241, 0.2); border: 1px solid #6366f1; padding: 4px 10px; border-radius: 4px; font-size: 0.6em; cursor: pointer; animation: pulse 2s infinite;">
+                            ⚡ RENDERING IN PROGRESS...
+                        </div>
+                        <button id="exportProjectBtn" style="width: auto; padding: 4px 12px; font-size: 0.7em; background: #059669; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;">EXPORT FINAL VIDEO</button>
+                    </div>
                 </div>
                 <div class="timeline-scroll-area">
                     <div class="timeline-track-content-wrapper" style="position: relative; display: flex;">
                         <div class="timeline-track-headers" style="width: 80px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155;">
-                            <div class="track-header" style="height: 40px; border-bottom: 1px solid #0f172a; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: #94a3b8;">V3</div>
-                            <div class="track-header" style="height: 40px; border-bottom: 1px solid #0f172a; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: #94a3b8;">V2</div>
                             <div class="track-header" style="height: 40px; border-bottom: 1px solid #0f172a; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: #94a3b8;">V1</div>
-                            <div class="track-header" style="height: 40px; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: #94a3b8;">A1</div>
                         </div>
                         <div class="timeline-tracks-content" id="editorTimeline" style="flex: 1; position: relative; height: 160px; overflow-x: auto; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 50px 40px;">
-                            <div class="timeline-track" data-track="V3" style="height: 40px; border-bottom: 1px solid #1e293b; position: relative;"></div>
-                            <div class="timeline-track" data-track="V2" style="height: 40px; border-bottom: 1px solid #1e293b; position: relative;"></div>
                             <div class="timeline-track" data-track="V1" style="height: 40px; border-bottom: 1px solid #1e293b; position: relative;"></div>
-                            <div class="timeline-track" data-track="A1" style="height: 40px; position: relative;"></div>
                             <div class="timeline-empty-msg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #334155; pointer-events: none; font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px;">Drag Assets Here</div>
                         </div>
                     </div>
@@ -1740,16 +276,48 @@
             </div>
         </main>
 
-        <!-- RIGHT SIDEBAR: ASSETS & STATUS -->
+        <!-- RIGHT SIDEBAR: ASSETS ONLY -->
         <aside class="sidebar-right">
             <h2 style="font-size: 0.85em; margin-bottom: 15px; color: #a855f7; text-transform: uppercase; letter-spacing: 1px;">📦 Studio Assets</h2>
-            <div id="videoGallery"></div>
-
-            <div class="status-console" id="statusConsole" style="margin-top: 20px; border-radius: 8px; background: #020617; border: 1px solid #1e293b;">
-                <div class="console-header" style="padding: 5px 10px; background: #1e293b; border-bottom: 1px solid #334155; font-size: 0.6em; color: #64748b;">Engine Logs</div>
-                <div class="console-body" id="consoleBody" style="font-size: 0.65em; height: 120px; padding: 10px; color: #34d399; font-family: monospace;"></div>
+            
+            <div class="asset-tabs" style="display: flex; gap: 5px; margin-bottom: 15px; background: rgba(15, 23, 42, 0.5); padding: 4px; border-radius: 8px;">
+                <button class="asset-tab-btn active" data-type="videos" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: #6366f1; color: white; cursor: pointer; font-size: 0.7em; font-weight: bold; transition: all 0.2s;">VIDEOS</button>
+                <button class="asset-tab-btn" data-type="images" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.7em; font-weight: bold; transition: all 0.2s;">IMAGES</button>
             </div>
+
+            <div id="videoGallery" style="display: flex; flex-direction: column; gap: 20px;"></div>
+            <div id="imageGallery" style="display: none; flex-direction: column; gap: 20px;"></div>
         </aside>
+    </div>
+
+    <!-- EXPORT MODAL -->
+    <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div style="width: 500px; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 30px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); position: relative;">
+            <button id="closeExportBtnTop" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.5em; width: auto; padding: 0;">&times;</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-right: 20px;">
+                <h2 style="color: #fff; font-size: 1.4em;">Rendering Project</h2>
+                <div id="exportStatusBadge" style="font-size: 0.7em; background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 4px 10px; border-radius: 4px;">INITIALIZING</div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span id="exportProgressText" style="font-size: 0.8em; color: #94a3b8;">Preparing frames...</span>
+                    <span id="exportProgressPct" style="font-size: 0.8em; color: #fff; font-weight: bold;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden;">
+                    <div id="exportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); transition: width 0.3s;"></div>
+                </div>
+            </div>
+
+            <div id="exportConsole" style="background: #020617; height: 120px; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 0.7em; color: #34d399; overflow-y: auto; margin-bottom: 20px; border: 1px solid #334155;">
+                > Export task started.
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button id="closeExportModal" style="flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; cursor: pointer; display: none;">CANCEL</button>
+                <button id="viewFinalVideo" style="flex: 2; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; display: none; font-weight: bold;">VIEW & DOWNLOAD</button>
+            </div>
+        </div>
     </div>
 
     <script src="js/script.js"></script>

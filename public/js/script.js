@@ -11,16 +11,117 @@ const ws = new WebSocket(`ws://${window.location.hostname}:${window.location.por
 let globalGenerationQueue = [];
 let isGeneratingGlobal = false;
 let currentExecutingId = null;
-let isAdvancedMode = false;
-
 
 // Variables para modo de blending
 let isBlendMode = false;
 let selectedVideos = [];
-let videoElements = new Map(); // Mapa de filename -> elemento de galería
+let videoElements = new Map();
 
 // Variables para image upload
-let uploadedImageFilename = null; // Nombre del archivo en ComfyUI
+let uploadedImageFilename = null;
+
+// Variables para Storyboard
+let storyboardItems = [];
+
+// ============================================
+// WEBSOCKET HANDLING
+// ============================================
+
+ws.onopen = () => {
+    console.log('WebSocket connection established');
+    appendConsoleLine('[SYSTEM] WebSocket connected. Engine ready.', 'system');
+};
+
+ws.onmessage = (event) => {
+    try {
+        const message = JSON.parse(event.data);
+        console.log('Mensaje del servidor:', message.type, message);
+
+        appendConsoleLine(`[${message.type.toUpperCase()}] ${JSON.stringify(message)}`, 'debug');
+
+        if (message.type === 'progress') {
+            const percentage = Math.round((message.value / message.max) * 100);
+            if (progressFill) {
+                progressFill.style.width = percentage + '%';
+            }
+            if (document.getElementById('progressPct')) {
+                document.getElementById('progressPct').textContent = percentage + '%';
+            }
+            if (currentExecutingId) {
+                const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
+                if (item && progressText) {
+                    const modeLabel = item.imageFilename ? 'I2V' : 'T2V';
+                    progressText.textContent = `⚡ [${modeLabel}] Animating: ${message.value}/${message.max}`;
+                }
+            }
+        }
+
+        if (message.type === 'video_generated') {
+            loadExistingVideos();
+            if (currentExecutingId) {
+                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId);
+                if (itemIndex !== -1) {
+                    const item = globalGenerationQueue[itemIndex];
+                    item.status = 'completed';
+                    item.resultUrl = message.url;
+                    
+                    // REEMPLAZO AUTOMATICO PARA REGENERACION
+                    if (item.replaceClipId) {
+                        const clipQuery = `.timeline-clip[data-clip-id="${item.replaceClipId}"]`;
+                        const clip = document.querySelector(clipQuery);
+                        if (clip) {
+                            const v = clip.querySelector('video');
+                            v.src = message.url + '?t=' + Date.now();
+                            v.load();
+                            
+                            // Actualizar etiqueta de nombre de archivo
+                            const filename = message.url.split('/').pop().split('?')[0];
+                            const label = clip.querySelector('.clip-info span');
+                            if (label) label.textContent = filename;
+
+                            clip.dataset.prompt = item.prompt;
+                            clip.dataset.metadata = JSON.stringify(item.params);
+                            appendConsoleLine(`♻️ Video replaced in timeline: ${filename}`, 'system');
+                            
+                            // Refrescar cache y sincronizar
+                            refreshClipCache();
+                        }
+                    }
+
+                    updateGlobalQueueUI();
+                    
+                    // AUTO-ASSEMBLY LOGIC
+                    const autoBatch = globalGenerationQueue.filter(i => i.batchId === item.batchId && i.isAutoAssemble);
+                    if (autoBatch.length > 0 && autoBatch.every(i => i.status === 'completed')) {
+                        // All items in the batch are finished! Assemble them.
+                        assembleBatchInTimeline(autoBatch);
+                        // Clean batchId from queue to avoid repeating
+                        autoBatch.forEach(i => i.isAutoAssemble = false);
+                    }
+                }
+                isGeneratingGlobal = false;
+                currentExecutingId = null;
+                setTimeout(() => checkGlobalQueue(), 1000);
+            }
+        }
+
+        if (message.type === 'storyboard_generated') {
+            handleStoryboardGenerated(message);
+            if (currentExecutingId === message.prompt_id || currentExecutingId) {
+                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId || i.prompt_id === message.prompt_id);
+                if (itemIndex !== -1) {
+                    globalGenerationQueue[itemIndex].status = 'completed';
+                    updateGlobalQueueUI();
+                }
+                isGeneratingGlobal = false;
+                currentExecutingId = null;
+                setTimeout(() => checkGlobalQueue(), 1000);
+            }
+        }
+    } catch (e) {
+        console.error('Error procesando mensaje WebSocket:', e);
+    }
+};
 
 // ============================================
 // IMAGE UPLOAD HANDLING
@@ -28,88 +129,54 @@ let uploadedImageFilename = null; // Nombre del archivo en ComfyUI
 
 const imageUploadArea = document.getElementById('imageUploadArea');
 const imageUploadInput = document.getElementById('imageUploadInput');
-const uploadPlaceholder = document.getElementById('uploadPlaceholder');
 const uploadStatus = document.getElementById('uploadStatus');
 const modeIndicator = document.getElementById('modeIndicator');
 const modeText = document.getElementById('modeText');
 const dimensionControls = document.getElementById('dimensionControls');
 
-// Click to upload
-imageUploadArea.addEventListener('click', () => {
-    if (!imageUploadArea.classList.contains('has-image')) {
-        imageUploadInput.click();
-    }
-});
+if (imageUploadArea) {
+    imageUploadArea.addEventListener('click', () => {
+        if (!imageUploadArea.classList.contains('has-image')) imageUploadInput.click();
+    });
 
-// Drag & Drop
-imageUploadArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    imageUploadArea.classList.add('dragover');
-});
+    imageUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); imageUploadArea.classList.add('dragover'); });
+    imageUploadArea.addEventListener('dragleave', () => imageUploadArea.classList.remove('dragover'));
+    imageUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        imageUploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleImageFile(e.dataTransfer.files[0]);
+    });
+}
 
-imageUploadArea.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    imageUploadArea.classList.remove('dragover');
-});
-
-imageUploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    imageUploadArea.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].type.startsWith('image/')) {
-        handleImageFile(files[0]);
-    }
-});
-
-// File input change
-imageUploadInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        handleImageFile(e.target.files[0]);
-    }
-});
+if (imageUploadInput) {
+    imageUploadInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleImageFile(e.target.files[0]);
+    });
+}
 
 async function handleImageFile(file) {
-    // Show preview immediately
     const reader = new FileReader();
-    reader.onload = (e) => {
-        showImagePreview(e.target.result, file.name);
-    };
+    reader.onload = (e) => showImagePreview(e.target.result, file.name);
     reader.readAsDataURL(file);
 
-    // Upload to server -> ComfyUI
     uploadStatus.classList.add('visible');
-    uploadStatus.textContent = '⏳ Subiendo imagen a ComfyUI...';
+    uploadStatus.textContent = '⏳ Subiendo imagen...';
 
     try {
         const formData = new FormData();
         formData.append('image', file);
-
-        const response = await fetch('/api/upload-image', {
-            method: 'POST',
-            body: formData
-        });
-
+        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
         const result = await response.json();
 
         if (result.success) {
             uploadedImageFilename = result.filename;
-            uploadStatus.textContent = '✅ Imagen lista para I2V';
+            uploadStatus.textContent = '✅ Imagen lista';
             uploadStatus.style.color = '#34d399';
-            setTimeout(() => {
-                uploadStatus.classList.remove('visible');
-                uploadStatus.style.color = '';
-            }, 2000);
             updateMode();
-        } else {
-            throw new Error(result.error || 'Error desconocido');
         }
     } catch (error) {
-        console.error('Error uploading image:', error);
-        uploadStatus.textContent = '❌ Error al subir imagen: ' + error.message;
+        uploadStatus.textContent = '❌ Error';
         uploadStatus.style.color = '#ef4444';
-        // Still keep the preview but clear the filename
-        uploadedImageFilename = null;
-        updateMode();
     }
 }
 
@@ -120,12 +187,11 @@ function showImagePreview(dataUrl, filename) {
             <img src="${dataUrl}" alt="Preview">
             <div class="image-preview-info">
                 <div class="filename">${filename}</div>
-                <span class="mode-badge i2v">🎬 Image-to-Video</span>
+                <span class="mode-badge i2v">🎬 I2V ACTIVE</span>
             </div>
-            <button class="remove-image-btn" id="removeImageBtn" title="Quitar imagen">✕</button>
+            <button class="remove-image-btn" id="removeImageBtn">✕</button>
         </div>
     `;
-
     document.getElementById('removeImageBtn').addEventListener('click', (e) => {
         e.stopPropagation();
         removeImage();
@@ -135,412 +201,150 @@ function showImagePreview(dataUrl, filename) {
 function removeImage() {
     uploadedImageFilename = null;
     imageUploadArea.classList.remove('has-image');
-    imageUploadArea.innerHTML = `
-        <div class="upload-placeholder" id="uploadPlaceholder">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p>Arrastra una imagen o haz clic</p>
-            <p class="upload-hint">PNG, JPG, WEBP • Si subes imagen → modo I2V</p>
-        </div>
-    `;
-    imageUploadInput.value = '';
+    imageUploadArea.innerHTML = `<div class="upload-placeholder">...</div>`; // Use existing HTML structure
     updateMode();
 }
 
 function updateMode() {
     const isI2V = !!uploadedImageFilename;
-
-    if (isI2V) {
-        modeIndicator.className = 'mode-indicator i2v';
-        modeText.textContent = 'Modo Image-to-Video (I2V)';
-        modeIndicator.querySelector('.mode-icon').textContent = '🖼️';
-        dimensionControls.classList.add('disabled-for-i2v');
-    } else {
-        modeIndicator.className = 'mode-indicator t2v';
-        modeText.textContent = 'Modo Text-to-Video (T2V)';
-        modeIndicator.querySelector('.mode-icon').textContent = '🎬';
-        dimensionControls.classList.remove('disabled-for-i2v');
+    const modeInd = document.getElementById('modeIndicator');
+    const modeTxt = document.getElementById('modeText');
+    const dimControls = document.getElementById('dimensionControls');
+    
+    if (modeInd) modeInd.className = isI2V ? 'mode-indicator i2v' : 'mode-indicator t2v';
+    if (modeTxt) modeTxt.textContent = isI2V ? 'I2V ACTIVE' : 'T2V ACTIVE';
+    if (dimControls) {
+        if (isI2V) dimControls.classList.add('disabled-for-i2v');
+        else dimControls.classList.remove('disabled-for-i2v');
     }
 }
 
 // ============================================
-// WEBSOCKET HANDLING
+// CORE UI LOGIC (TABS & CONSOLE)
 // ============================================
 
-ws.onopen = () => {
-    console.log('WebSocket connection established');
-};
-
-ws.onmessage = (event) => {
-    try {
-        const message = JSON.parse(event.data);
-        console.log('Mensaje del servidor:', message.type, message);
-
-        // Manejar actualizaciones de progreso
-        if (message.type === 'progress') {
-            const percentage = Math.round((message.value / message.max) * 100);
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            const progressContainer = document.getElementById('progressContainer');
-
-            if (progressFill) {
-                progressFill.style.width = percentage + '%';
-                progressFill.textContent = percentage + '%';
-            }
-
-            if (currentExecutingId) {
-                const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
-                if (item) {
-                    const modeLabel = item.imageFilename ? 'I2V' : 'T2V';
-                    if (progressText) {
-                        progressText.textContent = `⏳ [${modeLabel}] Generando... ${message.value}/${message.max} pasos (${percentage}%)`;
-                    }
-                }
-            } else if (progressText) {
-                progressText.textContent = `⏳ Generando... ${message.value}/${message.max} pasos (${percentage}%)`;
-            }
-
-            if (progressContainer && progressContainer.style.display === 'none') {
-                progressContainer.style.display = 'block';
-            }
-        }
-
-        // Manejar estado de descarga de video
-        if (message.type === 'video_downloading') {
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            const progressContainer = document.getElementById('progressContainer');
-
-            progressFill.style.width = '100%';
-            progressFill.textContent = '100%';
-            progressText.textContent = message.message;
-            progressContainer.style.display = 'block';
-            appendConsoleLine(`> ${message.message}`, 'system');
-        }
-
-        // Manejar mensajes de ejecución de nodos (Mini-Consola)
-        if (message.type === 'executing') {
-            const statusConsole = document.getElementById('statusConsole');
-            const consoleBody = document.getElementById('consoleBody');
-
-            if (statusConsole.style.display === 'none' || !statusConsole.style.display) {
-                statusConsole.style.display = 'block';
-            }
-
-            let msg = '';
-            if (message.node === null) {
-                msg = '> Step finished.';
-            } else {
-                msg = `> Executing node ID: ${message.node}`;
-            }
-
-            appendConsoleLine(msg, 'executing');
-        }
-
-        // Manejar video generado
-        if (message.type === 'video_generated') {
-            const timestamp = Date.now();
-            const videoUrlWithCacheBuster = `${message.url}?t=${timestamp}`;
-            console.log('Video generado con éxito:', videoUrlWithCacheBuster);
-
-            // Ocultar placeholder
-            if (placeholder) placeholder.style.display = 'none';
-
-            // Forzar actualización inmediata de la galería
-            loadExistingVideos();
-
-            // Pequeño retardo adicional para asegurar que el SO haya liberado el archivo
-            setTimeout(() => {
-                loadExistingVideos();
-            }, 1000);
-
-            // Si estamos en modo Queue Global
-            if (currentExecutingId) {
-                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId);
-                if (itemIndex !== -1) {
-                    // Actualizar UI
-                    globalGenerationQueue[itemIndex].status = 'completed';
-                    updateGlobalQueueUI();
-
-                    // Eliminar de la cola tras unos segundos para no llenar la vista
-                    const doneId = currentExecutingId;
-                    setTimeout(() => {
-                        const idx = globalGenerationQueue.findIndex(i => i.id === doneId);
-                        if (idx !== -1) {
-                            globalGenerationQueue.splice(idx, 1);
-                            updateGlobalQueueUI();
-                        }
-                    }, 6000);
-                }
-
-                isGeneratingGlobal = false;
-                currentExecutingId = null;
-
-                // Iniciar el próximo si hay
-                setTimeout(() => {
-                    checkGlobalQueue();
-                }, 2000);
-            }
-
-            // Mantener barra visible con estado
-            const progressContainer = document.getElementById('progressContainer');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-
-            if (progressContainer) progressContainer.style.display = 'block';
-            if (progressFill) {
-                progressFill.style.width = '100%';
-                progressFill.textContent = '✓ Listo';
-            }
-            if (progressText) progressText.textContent = '✅ Video generado exitosamente';
-        }
-    } catch (e) {
-        console.error('Error procesando mensaje WebSocket:', e, event.data);
-    }
-};
-
-// Actualizar valores de los sliders en tiempo real
-const sliders = [
-    { id: 'videoWidth', valueId: 'videoWidthValue' },
-    { id: 'videoHeight', valueId: 'videoHeightValue' },
-    { id: 'videoLength', valueId: 'videoLengthValue' },
-    { id: 'samplerSteps', valueId: 'samplerStepsValue' }
-];
-
-sliders.forEach(slider => {
-    const element = document.getElementById(slider.id);
-    const valueElement = document.getElementById(slider.valueId);
-
-    element.addEventListener('input', (e) => {
-        valueElement.textContent = e.target.value;
-    });
-});
-
-// Select modo de ejecución
-const promptModeSelect = document.getElementById('promptModeSelect');
-const simplePrompt = document.getElementById('simplePromptContainer');
-
-if (promptModeSelect) {
-    promptModeSelect.addEventListener('change', (e) => {
-        isAdvancedMode = e.target.value === 'sequence';
-        
-        if (isAdvancedMode) {
-            simplePrompt.style.display = 'none';
-            // Mover automáticamente a la pestaña de Secuenciador
-            const tabBtn = document.getElementById('tabPromptsBtn');
-            if (tabBtn) tabBtn.click();
-            
-            // Agregar primer prompt si está vacío
-            if (document.getElementById('promptSequence').children.length === 0) {
-                addPromptToSequence();
-            }
-        } else {
-            simplePrompt.style.display = 'block';
-            // Volver a la pestaña de salida
-            const tabBtn = document.getElementById('tabOutputBtn');
-            if (tabBtn) tabBtn.click();
-        }
-    });
+function appendConsoleLine(text, type = 'info') {
+    const extendedLogs = document.getElementById('extendedLogs');
+    if (!extendedLogs) return;
+    const line = document.createElement('div');
+    const timestamp = new Date().toLocaleTimeString();
+    let color = '#34d399';
+    if (type === 'debug') color = '#64748b';
+    if (type === 'error') color = '#ef4444';
+    if (type === 'system') color = '#818cf8';
+    line.innerHTML = `<span style="color: #475569">[${timestamp}]</span> <span style="color: ${color}">${text}</span>`;
+    extendedLogs.appendChild(line);
+    extendedLogs.parentElement.scrollTop = extendedLogs.parentElement.scrollHeight;
 }
 
-// Lógica de Tabs Mejorada
 const tabButtons = document.querySelectorAll('.tab-button');
 const tabContents = document.querySelectorAll('.tab-content');
 
 tabButtons.forEach(button => {
     button.addEventListener('click', () => {
         const targetId = button.dataset.target;
-        
-        // Manejar clases del body para layout dinámico
-        document.body.classList.remove('tab-stage-active', 'tab-sequencer-active', 'tab-editor-active');
-        if (targetId === 'tabOutput') document.body.classList.add('tab-stage-active');
-        if (targetId === 'tabPrompts') document.body.classList.add('tab-sequencer-active');
-        if (targetId === 'tabEditor') document.body.classList.add('tab-editor-active');
-
-        // Switches de botones
         tabButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
-
-        // Switches de contenido
         tabContents.forEach(content => content.classList.remove('active'));
-        if (targetId) {
-            const target = document.getElementById(targetId);
-            if (target) target.classList.add('active');
-        }
         
-        // Pausar reproducción del timeline si salimos del editor
-        if (targetId === 'tabOutput' || targetId === 'tabPrompts') { // Solo pausar si salimos del editor
+        const target = document.getElementById(targetId);
+        if (target) target.classList.add('active');
+
+        // Manejar visibilidad del Timeline y clases del body
+        document.body.classList.remove('tab-editor-active');
+        if (targetId === 'tabEditor') {
+            document.body.classList.add('tab-editor-active');
+        } else {
             stopTimelinePlayback();
         }
     });
 });
 
-// Accordion Toggle Config
-const slidersToggle = document.getElementById('slidersToggle');
-const slidersContent = document.getElementById('slidersContent');
-if (slidersToggle && slidersContent) {
-    slidersToggle.addEventListener('click', () => {
-        slidersToggle.classList.toggle('active');
-        slidersContent.classList.toggle('show');
-    });
-}
+// Listeners para actualización de valores de los sliders
+const sliders = [
+    { id: 'videoWidth', valueId: 'videoWidthValue' },
+    { id: 'videoHeight', valueId: 'videoHeightValue' },
+    { id: 'videoLength', valueId: 'videoLengthValue' },
+    { id: 'samplerSteps', valueId: 'samplerStepsValue' },
+    { id: 'storyboardSteps', valueId: 'storyboardStepsValue' }
+];
 
-// Agregar prompt a la secuencia
-let promptCounter = 0;
-function addPromptToSequence() {
-    promptCounter++;
-    const container = document.getElementById('promptSequence');
-    const promptDiv = document.createElement('div');
-    promptDiv.className = 'prompt-item';
-    promptDiv.dataset.promptId = promptCounter;
-    
-    // Contamos cuántos hay en el DOM para el número
-    const currentCount = container.children.length + 1;
-    
-    promptDiv.innerHTML = `
-        <div class="prompt-header">
-            <div class="prompt-header-left">
-                <div class="prompt-number">${currentCount}</div>
-                <span class="prompt-status-text">⏳ En espera</span>
-            </div>
-            <button class="remove-prompt-btn">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                Quitar
-            </button>
-        </div>
-        <textarea class="sequence-prompt-textarea sequence-prompt" placeholder="Describe aquí la acción o detalle para esta escena...">A cinematic video of </textarea>
-    `;
-
-    // Botón para eliminar
-    promptDiv.querySelector('.remove-prompt-btn').addEventListener('click', () => {
-        promptDiv.remove();
-        updatePromptNumbers();
-    });
-
-    container.appendChild(promptDiv);
-
-    // Scroll automático al nuevo prompt
-    container.scrollTop = container.scrollHeight;
-}
-
-function updatePromptNumbers() {
-    const container = document.getElementById('promptSequence');
-    const items = container.querySelectorAll('.prompt-item');
-    items.forEach((item, index) => {
-        item.querySelector('.prompt-number').textContent = index + 1;
-    });
-}
-
-// Actualizar estado visual de los prompts
-function updatePromptStatus(index, status) {
-    const promptItems = document.querySelectorAll('.prompt-item');
-    promptItems.forEach((item, i) => {
-        const statusSpan = item.querySelector('.prompt-status-text');
-        
-        // Reset properties
-        item.style.background = 'rgba(30, 41, 59, 0.6)';
-        item.style.boxShadow = 'none';
-
-        if (i < index) {
-            // Completado
-            item.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-            statusSpan.innerHTML = `✅ Completado`;
-            statusSpan.style.color = '#10b981';
-        } else if (i === index) {
-            // Generando
-            item.style.borderColor = '#6366f1';
-            item.style.boxShadow = '0 0 15px rgba(99, 102, 241, 0.3)';
-            statusSpan.innerHTML = `⚡ ${status}`;
-            statusSpan.style.color = '#818cf8';
-        } else {
-            // Pendiente
-            item.style.borderColor = 'rgba(99, 102, 241, 0.2)';
-            statusSpan.innerHTML = `⏳ En espera`;
-            statusSpan.style.color = '#94a3b8';
-        }
-    });
-}
-
-document.getElementById('addPromptButton').addEventListener('click', addPromptToSequence);
-
-// Funciones de consola
-function appendConsoleLine(text, type = '') {
-    const consoleBody = document.getElementById('consoleBody');
-    const line = document.createElement('div');
-    line.className = `console-line ${type}`;
-    line.textContent = text;
-    consoleBody.appendChild(line);
-
-    // Auto-scroll al final
-    consoleBody.scrollTop = consoleBody.scrollHeight;
-
-    // Limitar número de líneas para no saturar el DOM
-    if (consoleBody.children.length > 50) {
-        consoleBody.removeChild(consoleBody.firstChild);
+sliders.forEach(slider => {
+    const el = document.getElementById(slider.id);
+    const valEl = document.getElementById(slider.valueId);
+    if (el && valEl) {
+        el.addEventListener('input', () => {
+            valEl.textContent = el.value;
+        });
     }
+});
+
+// Botón Reset para parámetros
+const resetParamsBtn = document.getElementById('resetParamsBtn');
+if (resetParamsBtn) {
+    resetParamsBtn.addEventListener('click', () => {
+        document.getElementById('videoWidth').value = 1280;
+        document.getElementById('videoHeight').value = 720;
+        document.getElementById('videoLength').value = 121;
+        document.getElementById('samplerSteps').value = 20;
+        
+        // Disparar evento input para actualizar los labels
+        sliders.forEach(s => document.getElementById(s.id).dispatchEvent(new Event('input')));
+    });
 }
 
 // ============================================
-// SISTEMA DE COLA GLOBAL (QUEUE)
+// GENERATION ENGINE & QUEUE
 // ============================================
 
 function updateGlobalQueueUI() {
     const queueContainer = document.getElementById('globalQueueContainer');
     const queueList = document.getElementById('queueList');
     const queueCount = document.getElementById('queueCount');
-    
-    // Actualizar botones de Generar / Stop
-    const generateBtn = document.getElementById('generateButton');
-    const stopBtn = document.getElementById('stopButton');
+    if (!queueContainer || !queueList) return;
+
     const activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
-    
     if (activeItems.length > 0 || isGeneratingGlobal) {
-        if (generateBtn) generateBtn.style.display = 'none';
-        if (stopBtn) stopBtn.style.display = 'block';
+        queueContainer.style.display = 'block';
     } else {
-        if (generateBtn) generateBtn.style.display = 'block';
-        if (stopBtn) stopBtn.style.display = 'none';
-    }
-
-    if (!queueContainer || !queueList || !queueCount) return;
-
-    if (globalGenerationQueue.length === 0) {
         queueContainer.style.display = 'none';
-        return;
     }
 
-    queueContainer.style.display = 'block';
-
-    // Contar pendientes y generando
-    queueCount.textContent = activeItems.length;
-
+    if (queueCount) queueCount.textContent = activeItems.length;
     queueList.innerHTML = '';
-    globalGenerationQueue.forEach((item) => {
+
+    activeItems.forEach((item, idx) => {
         const div = document.createElement('div');
-        div.style.padding = '10px';
-        div.style.borderRadius = '8px';
-        div.style.marginBottom = '5px';
-        div.style.fontSize = '0.9em';
+        div.style.cssText = `
+            padding: 15px; 
+            background: rgba(15, 23, 42, 0.7); 
+            border-left: 4px solid ${item.status === 'generating' ? '#818cf8' : '#334155'}; 
+            border-radius: 8px; 
+            font-size: 0.85em; 
+            color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        `;
+        
+        let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
+        if (item.type === 'storyboard') modeLabel = 'STORYBOARD (T2I)';
 
-        let borderColor, bg, icon, statusText, color;
-        if (item.status === 'generating') {
-            borderColor = '#10b981'; bg = 'rgba(16, 185, 129, 0.15)'; color = '#34d399'; icon = '⏳'; statusText = 'Generando ahora...';
-        } else if (item.status === 'completed') {
-            borderColor = '#6366f1'; bg = 'rgba(15, 23, 42, 0.6)'; color = '#a5b4fc'; icon = '✅'; statusText = 'Completado';
-        } else {
-            borderColor = '#f59e0b'; bg = 'rgba(15, 23, 42, 0.6)'; color = '#e2e8f0'; icon = '⏸'; statusText = 'En cola...';
-        }
-
-        div.style.borderLeft = `4px solid ${borderColor}`;
-        div.style.background = bg;
+        const progressIndicator = item.status === 'generating' ? 
+            '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' : 
+            '<span style="color: #94a3b8;">⏳ QUEUED</span>';
 
         div.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px; color: ${color}">
-                ${icon} ${statusText}
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="font-weight: 700; color: #818cf8; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;">
+                    Item #${idx + 1} <span style="margin: 0 5px; opacity: 0.3;">|</span> ${modeLabel}
+                </div>
+                <div style="font-size: 0.7em; font-weight: 800;">${progressIndicator}</div>
             </div>
-            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #cbd5e1; font-size: 0.85em;" title="${item.prompt}">
-                ${item.imageFilename ? '🖼️ ' : '🎬 '} ${item.prompt}
+            <div style="font-size: 0.9em; line-height: 1.5; color: #f1f5f9; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                ${item.prompt}
             </div>
         `;
         queueList.appendChild(div);
@@ -549,596 +353,486 @@ function updateGlobalQueueUI() {
 
 function checkGlobalQueue() {
     if (isGeneratingGlobal) return;
+    const nextItem = globalGenerationQueue.find(item => item.status === 'pending');
+    if (!nextItem) return;
 
-    const nextItemIndex = globalGenerationQueue.findIndex(item => item.status === 'pending');
-    if (nextItemIndex === -1) {
-        // Si estamos en modo avanzado, marcar todo como completado
-        if (isAdvancedMode) {
-            updatePromptStatus(999, '');
-        }
-        return;
-    }
-
-    const nextItem = globalGenerationQueue[nextItemIndex];
     nextItem.status = 'generating';
     currentExecutingId = nextItem.id;
     isGeneratingGlobal = true;
-
     updateGlobalQueueUI();
 
-    // Si tiene un uiIndex (viene de modo avanzado), actualizar su estado visual
-    if (nextItem.uiIndex !== undefined && nextItem.uiIndex !== null) {
-        updatePromptStatus(nextItem.uiIndex, 'Generando...');
-    }
-
-    generateVideoQueueItem(nextItem);
-
-}
-
-function generateVideoQueueItem(item) {
-    // Asegurar que la consola sea visible
-    const statusConsole = document.getElementById('statusConsole');
-    const consoleBody = document.getElementById('consoleBody');
-
-    if (statusConsole) {
-        statusConsole.style.display = 'block';
-        statusConsole.style.opacity = '1';
-        statusConsole.style.visibility = 'visible';
-    }
-
-    if (consoleBody) {
-        consoleBody.innerHTML = '<div class="console-line system">> Initializing generative pipeline for queued item...</div>';
-    }
-
-    if (progressContainer) {
-        progressContainer.style.display = 'block';
-        progressContainer.style.visibility = 'visible';
-        progressContainer.style.opacity = '1';
-    }
-    if (progressFill) {
-        progressFill.style.width = '0%';
-        progressFill.textContent = '0%';
-    }
-
-    const modeLabel = item.imageFilename ? 'I2V 🖼️' : 'T2V 🎬';
-    const shortPrompt = item.prompt.length > 50 ? item.prompt.substring(0, 50) + '...' : item.prompt;
-    progressText.textContent = `🛠 [${modeLabel}] Iniciando: "${shortPrompt}"`;
-
-    // Ocultar placeholders y videos previos
-    videoContainer.style.display = 'none';
-    imageContainer.style.display = 'none';
-    if (placeholder) placeholder.style.display = 'none';
-
-    // Enviar requerimiento websocket
     const message = {
-        type: 'generarImagen',
-        prompt: item.prompt,
-        params: item.params,
-        imageFilename: item.imageFilename
+        type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
+        prompt: nextItem.prompt,
+        params: nextItem.params,
+        imageFilename: nextItem.imageFilename,
+        storyboardIndex: nextItem.storyboardIndex,
+        batchId: nextItem.batchId
     };
-
-    console.log('Sending queued generation request:', message);
     ws.send(JSON.stringify(message));
+    appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
 }
 
-// Función para generar video (para uso directo, no cola)
-function generateVideo(prompt) {
-    // Asegurar que la consola sea visible
-    const statusConsole = document.getElementById('statusConsole');
-    const consoleBody = document.getElementById('consoleBody');
+// Botón de Lanzamiento (Stage)
+const generateBtn = document.getElementById('generateButton');
+if (generateBtn) {
+    generateBtn.addEventListener('click', () => {
+        const promptText = document.getElementById('promptStage').value.trim();
+        if (!promptText) return alert('Please enter a prompt');
 
-    if (statusConsole) {
-        statusConsole.style.display = 'block';
-        statusConsole.style.opacity = '1';
-        statusConsole.style.visibility = 'visible';
-    }
-
-    if (consoleBody) {
-        consoleBody.innerHTML = '<div class="console-line system">> Initializing new generation pipeline...</div>';
-    }
-
-    const params = {
-        videoWidth: parseInt(document.getElementById('videoWidth').value),
-        videoHeight: parseInt(document.getElementById('videoHeight').value),
-        videoLength: parseInt(document.getElementById('videoLength').value),
-        samplerSteps: parseInt(document.getElementById('samplerSteps').value)
-    };
-
-    // Mostrar barra de progreso al iniciar - asegurar que sea visible
-    if (progressContainer) {
-        progressContainer.style.display = 'block';
-        progressContainer.style.visibility = 'visible';
-        progressContainer.style.opacity = '1';
-    }
-    if (progressFill) {
-        progressFill.style.width = '0%';
-        progressFill.textContent = '0%';
-    }
-
-    const modeLabel = uploadedImageFilename ? 'I2V 🖼️' : 'T2V 🎬';
-    progressText.textContent = `🛠 [${modeLabel}] Iniciando generación de video...`;
-
-    // Ocultar contenedores de medios anteriores
-    videoContainer.style.display = 'none';
-    imageContainer.style.display = 'none';
-    if (placeholder) placeholder.style.display = 'none';
-
-    // Enviar con o sin imagen
-    const message = {
-        type: 'generarImagen',
-        prompt,
-        params,
-        imageFilename: uploadedImageFilename || null
-    };
-
-    console.log('Sending generation request:', message);
-    ws.send(JSON.stringify(message));
+        addToQueue(promptText);
+        document.getElementById('promptStage').value = ''; // Limpiar
+    });
 }
 
-// Agregar video a la galería
-function addToGallery(videoElement, prompt, index) {
-    let gallery = document.getElementById('videoGallery');
-    if (!gallery) {
-        // Crear galería si no existe
-        gallery = document.createElement('div');
-        gallery.id = 'videoGallery';
-        document.querySelector('.output-panel').appendChild(gallery);
-    }
+const generateSequencerBtn = document.querySelector('.generate-from-prompts');
+const promptModeSelect = document.getElementById('promptModeSelect');
+const simplePromptContainer = document.getElementById('simplePromptContainer');
+const advancedMode = document.getElementById('advancedMode');
 
-    const galleryItem = document.createElement('div');
-    galleryItem.className = 'gallery-item';
-
-    const miniVideo = videoElement.cloneNode(true);
-    miniVideo.controls = true;
-    miniVideo.setAttribute('allowfullscreen', '');
-    miniVideo.setAttribute('webkitallowfullscreen', '');
-    miniVideo.setAttribute('mozallowfullscreen', '');
-
-    const label = document.createElement('div');
-    label.className = 'gallery-item-label';
-    label.textContent = `Video #${index}`;
-    label.title = prompt;
-
-    galleryItem.appendChild(miniVideo);
-    galleryItem.appendChild(label);
-
-    // Habilitar Drag and Drop para el Editor
-    galleryItem.draggable = true;
-    galleryItem.addEventListener('dragstart', (e) => {
-        const videoSrc = miniVideo.querySelector('source') ? miniVideo.querySelector('source').src : miniVideo.src;
-        e.dataTransfer.setData('videoSrc', videoSrc);
-        e.dataTransfer.setData('prompt', prompt);
-        galleryItem.style.opacity = '0.5';
-    });
-    galleryItem.addEventListener('dragend', () => {
-        galleryItem.style.opacity = '1';
-    });
-
-    // Click para reproducir el video en su lugar
-    miniVideo.addEventListener('click', () => {
-        if (miniVideo.paused) {
-            miniVideo.play();
+if (promptModeSelect) {
+    promptModeSelect.addEventListener('change', () => {
+        if (promptModeSelect.value === 'single') {
+            simplePromptContainer.style.display = 'block';
+            advancedMode.style.display = 'none';
         } else {
-            miniVideo.pause();
+            simplePromptContainer.style.display = 'none';
+            advancedMode.style.display = 'block';
         }
     });
-
-    gallery.appendChild(galleryItem);
 }
 
-document.getElementById('generateButton').addEventListener('click', () => {
-    const params = {
-        videoWidth: parseInt(document.getElementById('videoWidth').value),
-        videoHeight: parseInt(document.getElementById('videoHeight').value),
-        videoLength: parseInt(document.getElementById('videoLength').value),
-        samplerSteps: parseInt(document.getElementById('samplerSteps').value)
-    };
+if (generateSequencerBtn) {
+    generateSequencerBtn.addEventListener('click', () => {
+        handleSequencerGenerate('video');
+    });
+}
 
-    // Captura si hay modo avanzado o simple
-    let promptsToQueueItems = [];
-    const imageFilename = uploadedImageFilename || null;
+const generateStoryboardBtn = document.getElementById('generateStoryboardFromSequencer');
+if (generateStoryboardBtn) {
+    generateStoryboardBtn.addEventListener('click', () => {
+        handleSequencerGenerate('storyboard');
+    });
+}
 
-    if (isAdvancedMode) {
+function handleSequencerGenerate(type) {
+    const mode = promptModeSelect ? promptModeSelect.value : 'single';
+    console.log(`Generating ${type} in mode:`, mode);
+    
+    if (mode === 'single') {
+        const promptVal = document.getElementById('prompt').value.trim();
+        if (promptVal) {
+            if (type === 'storyboard') addToStoryboardQueue(promptVal);
+            else addToQueue(promptVal);
+        }
+        else alert("Please enter a prompt");
+    } else {
         const promptGeneral = document.getElementById('promptGeneral').value.trim();
-        const promptElements = document.querySelectorAll('.sequence-prompt');
+        const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
+        let addedCount = 0;
 
-        promptElements.forEach((el, index) => {
+        const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
+        const batchId = 'batch_' + Date.now();
+
+        sequencePrompts.forEach((el, index) => {
             const val = el.value.trim();
             if (val) {
-                // Combinar con prompt general si existe (estilo al final para mejor resultado)
                 const finalPrompt = promptGeneral ? `${val}, ${promptGeneral}` : val;
-                promptsToQueueItems.push({
-                    prompt: finalPrompt,
-                    uiIndex: index
-                });
+                if (type === 'storyboard') {
+                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index });
+                } else {
+                    addToQueue(finalPrompt, null, { isAutoAssemble, batchId });
+                }
+                addedCount++;
             }
         });
-
-        if (promptsToQueueItems.length === 0) {
-            alert('Por favor, agregue al menos un prompt a la secuencia.');
-            return;
+        if (addedCount === 0) alert("Please enter at least one sequence step");
+        else {
+            if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
+            else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)`, 'system');
         }
-    } else {
-        const promptItem = document.getElementById('prompt').value.trim();
-        if (!promptItem) {
-            alert('Por favor, ingrese un prompt.');
-            return;
-        }
-        promptsToQueueItems.push({
-            prompt: promptItem,
-            uiIndex: null
-        });
     }
+    
+    // Redirigir a la pestaña correspondiente
+    if (type === 'storyboard') document.getElementById('tabStoryboardBtn').click();
+    else document.getElementById('tabOutputBtn').click();
+}
 
-    // Meter todo a la cola masiva
-    promptsToQueueItems.forEach(item => {
-        globalGenerationQueue.push({
-            id: Date.now() + Math.random().toString(36).substring(2, 9),
-            prompt: item.prompt,
-            uiIndex: item.uiIndex,
-            params,
-            imageFilename,
-            status: 'pending'
+document.getElementById('addPromptButton')?.addEventListener('click', () => {
+    addPromptStep();
+});
+
+function addPromptStep(val = '') {
+    const container = document.getElementById('promptSequence');
+    if (!container) return;
+    
+    const count = container.querySelectorAll('.prompt-item').length + 1;
+    const div = document.createElement('div');
+    div.className = 'prompt-item';
+    div.innerHTML = `
+        <div class="prompt-header">
+            <div class="prompt-header-left">
+                <div class="prompt-number">${count}</div>
+                <span class="prompt-status-text">PROMPT ${count}</span>
+            </div>
+            <button class="remove-prompt-btn">×</button>
+        </div>
+        <textarea class="sequence-prompt-textarea" placeholder="Step description...">${val}</textarea>
+    `;
+    
+    div.querySelector('.remove-prompt-btn').addEventListener('click', () => {
+        div.remove();
+        // Update numbers
+        container.querySelectorAll('.prompt-item').forEach((item, idx) => {
+            item.querySelector('.prompt-number').textContent = idx + 1;
+            item.querySelector('.prompt-status-text').textContent = `PROMPT ${idx + 1}`;
         });
     });
-
-    // Actualizar UI y arrancar
-    updateGlobalQueueUI();
-    checkGlobalQueue();
-
-    // Redirigir automáticamente a la pestaña de progreso
-    const tabBtn = document.getElementById('tabOutputBtn');
-    if (tabBtn) tabBtn.click();
-});
-
-document.getElementById('stopButton').addEventListener('click', () => {
-    isGeneratingGlobal = false;
-    // Eliminamos todo menos el item actual que ya está corriendo en el servidor.
-    // O podríamos enviar también una señal WS para cancelar al worker.
-    globalGenerationQueue = globalGenerationQueue.filter(i => i.status === 'completed' || i.status === 'generating');
     
-    // Set pending tasks effectively removed
-    updateGlobalQueueUI();
-    const progressText = document.getElementById('progressText');
-    if (progressText) {
-        progressText.textContent = '🛑 Generación en base a secuencia detenida exitosamente.';
-    }
-    
-    setTimeout(() => {
-        updateGlobalQueueUI(); // refresh view
-    }, 100);
-});
+    container.appendChild(div);
+}
 
-// Cargar videos existentes al iniciar la página
-async function loadExistingVideos() {
-    try {
-        console.log('Refrescando galería de videos...');
-        const response = await fetch('/api/videos?t=' + Date.now());
-        const videos = await response.json();
+// Initial step
+if (document.getElementById('promptSequence') && document.getElementById('promptSequence').children.length === 0) {
+    addPromptStep();
+}
 
-        if (videos.length > 0) {
-            console.log(`Cargando ${videos.length} videos existentes...`);
+// ============================================
+// JSON ACTIONS (SEQUENCER)
+// ============================================
 
-            // Ocultar placeholder
-            if (placeholder) placeholder.style.display = 'none';
+const jsonExampleBtn = document.getElementById('jsonExampleBtn');
+const importJsonBtn = document.getElementById('importJsonBtn');
 
-            // Crear galería si no existe
-            let gallery = document.getElementById('videoGallery');
-            if (!gallery) {
-                gallery = document.createElement('div');
-                gallery.id = 'videoGallery';
+if (jsonExampleBtn) {
+    jsonExampleBtn.addEventListener('click', () => {
+        const example = {
+            global: "cinematic style, 4k, highly detailed, masterwork",
+            steps: [
+                "a futuristic city at night",
+                "a forest with glowing plants",
+                "a space station orbiting a blue planet"
+            ]
+        };
+        const jsonStr = JSON.stringify(example, null, 2);
+        
+        // Copiar al portapapeles
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            appendConsoleLine('📋 JSON Example copied to clipboard!', 'system');
+            alert('Example JSON copied to clipboard!\n\nYou can now use "IMPORT JSON" to paste it.');
+        }).catch(err => {
+            console.error('Failed to copy JSON:', err);
+            alert('Example JSON:\n\n' + jsonStr);
+        });
+    });
+}
 
-                // Agregar título a la galería
-                const galleryTitle = document.createElement('h3');
-                galleryTitle.className = 'gallery-title';
-                galleryTitle.textContent = 'Videos Generados';
-                gallery.appendChild(galleryTitle);
+if (importJsonBtn) {
+    importJsonBtn.addEventListener('click', () => {
+        const area = document.getElementById('jsonImportArea');
+        if (area) area.style.display = 'block';
+    });
+}
 
-                document.querySelector('.output-panel').appendChild(gallery);
+const confirmJsonImport = document.getElementById('confirmJsonImport');
+const cancelJsonImport = document.getElementById('cancelJsonImport');
+
+if (cancelJsonImport) {
+    cancelJsonImport.addEventListener('click', () => {
+        const area = document.getElementById('jsonImportArea');
+        if (area) area.style.display = 'none';
+    });
+}
+
+if (confirmJsonImport) {
+    confirmJsonImport.addEventListener('click', () => {
+        const input = document.getElementById('jsonInputText').value.trim();
+        if (!input) return;
+
+        try {
+            const data = JSON.parse(input);
+            if (!data.steps || !Array.isArray(data.steps)) {
+                throw new Error("Invalid format: 'steps' array is missing.");
             }
 
-            // Limpiar galería existente (excepto el título)
-            const existingItems = gallery.querySelectorAll('div:not(h3)');
-            existingItems.forEach(item => item.remove());
+            // Limpiar pasos actuales
+            const container = document.getElementById('promptSequence');
+            if (container) container.innerHTML = '';
 
-            // Agregar cada video a la galería
-            videos.forEach((video, index) => {
-                const galleryItem = document.createElement('div');
-                galleryItem.className = 'gallery-item';
+            // Cargar Global Prompt
+            const promptGeneral = document.getElementById('promptGeneral');
+            if (promptGeneral && data.global) {
+                promptGeneral.value = data.global;
+            }
 
-                const videoElement = document.createElement('video');
-                // Cache buster agresivo para evitar ERR_CACHE_OPERATION_NOT_SUPPORTED
-                videoElement.src = `${video.url}?t=${Date.now()}_${index}`;
-                videoElement.controls = true;
-                videoElement.preload = 'metadata';
-                videoElement.setAttribute('allowfullscreen', '');
-                videoElement.setAttribute('webkitallowfullscreen', '');
-                videoElement.setAttribute('mozallowfullscreen', '');
-
-                const label = document.createElement('div');
-                label.className = 'gallery-item-label';
-                label.textContent = video.filename;
-
-                galleryItem.appendChild(videoElement);
-                galleryItem.appendChild(label);
-
-                // Habilitar Drag and Drop para el Editor (Videos Existentes)
-                galleryItem.draggable = true;
-                galleryItem.addEventListener('dragstart', (e) => {
-                    const videoSrc = videoElement.src;
-                    e.dataTransfer.setData('videoSrc', videoSrc);
-                    e.dataTransfer.setData('prompt', video.filename);
-                    galleryItem.style.opacity = '0.5';
-                });
-                galleryItem.addEventListener('dragend', () => {
-                    galleryItem.style.opacity = '1';
-                });
-
-                // Guardar referencia en el mapa
-                videoElements.set(video.filename, galleryItem);
-
-                // Click en el item de galería para selección en modo blending
-                galleryItem.addEventListener('click', (e) => {
-                    // Si está en modo blending, manejar selección
-                    if (isBlendMode) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleVideoSelection(video.filename, galleryItem);
-                    }
-                });
-
-                // Click en el video para reproducir (solo si no está en modo blending)
-                videoElement.addEventListener('click', (e) => {
-                    if (!isBlendMode) {
-                        if (videoElement.paused) {
-                            videoElement.play();
-                        } else {
-                            videoElement.pause();
-                        }
-                    } else {
-                        // En modo blending, prevenir reproducción
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-                });
-
-                // Si ya está en modo blending, hacer seleccionable
-                if (isBlendMode) {
-                    galleryItem.classList.add('selectable');
-                }
-
-                gallery.appendChild(galleryItem);
+            // Cargar pasos
+            data.steps.forEach(stepText => {
+                addPromptStep(stepText);
             });
 
-            // NO mostrar video en contenedor principal - mantenerlo oculto
-            videoContainer.style.display = 'none';
-            imageContainer.style.display = 'none';
-
-            // Solo actualizar texto si no estamos generando
-            if (!isGeneratingGlobal && progressText && !progressText.textContent.includes('Generando')) {
-                progressText.textContent = `📹 ${videos.length} video${videos.length > 1 ? 's' : ''} cargado${videos.length > 1 ? 's' : ''}`;
-            }
-        } else {
-            if (!isGeneratingGlobal && progressText) {
-                progressText.textContent = '⏸ Esperando para generar...';
-            }
+            appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added.`, 'system');
+            
+            // Cerrar el area
+            document.getElementById('jsonImportArea').style.display = 'none';
+            document.getElementById('jsonInputText').value = '';
+        } catch (e) {
+            console.error('JSON Import Error:', e);
+            alert("Error importing JSON: " + e.message);
         }
-    } catch (error) {
-        console.error('Error al cargar videos existentes:', error);
-        progressText.textContent = '⏸ Esperando para generar...';
-    }
-}
-
-// Estado inicial
-progressContainer.style.display = 'block';
-progressFill.style.width = '0%';
-progressFill.textContent = '⏸';
-progressText.textContent = '⏸ Cargando videos...';
-
-// Cargar videos al iniciar
-loadExistingVideos();
-
-// ============================================
-// FUNCIONALIDAD DE BLENDING DE VIDEOS
-// ============================================
-
-// Actualizar valor del slider de duración de blend
-const blendDurationSlider = document.getElementById('blendDuration');
-const blendDurationValue = document.getElementById('blendDurationValue');
-if (blendDurationSlider && blendDurationValue) {
-    blendDurationSlider.addEventListener('input', (e) => {
-        blendDurationValue.textContent = e.target.value;
     });
 }
 
-// Activar/Desactivar modo de blending
-const blendModeButton = document.getElementById('blendModeButton');
-const blendControls = document.getElementById('blendControls');
-const blendInfo = document.getElementById('blendInfo');
-const executeBlendButton = document.getElementById('executeBlendButton');
-const cancelBlendButton = document.getElementById('cancelBlendButton');
+function addToQueue(prompt, forcedImage = null, options = {}) {
+    const params = {
+        videoWidth: parseInt(document.getElementById('videoWidth').value),
+        videoHeight: parseInt(document.getElementById('videoHeight').value),
+        videoLength: parseInt(document.getElementById('videoLength').value),
+        samplerSteps: parseInt(document.getElementById('samplerSteps').value)
+    };
 
-blendModeButton.addEventListener('click', () => {
-    isBlendMode = !isBlendMode;
+    globalGenerationQueue.push({
+        id: Date.now() + Math.random(),
+        prompt: prompt,
+        params,
+        imageFilename: forcedImage !== null ? forcedImage : uploadedImageFilename,
+        status: 'pending',
+        ...options // replaceClipId, isAutoAssemble, batchId, etc.
+    });
 
-    if (isBlendMode) {
-        // Activar modo blending
-        blendControls.classList.add('active');
-        blendModeButton.style.background = 'rgba(239, 68, 68, 0.2)';
-        blendModeButton.style.color = '#ef4444';
-        blendModeButton.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-        blendModeButton.textContent = '❌ Salir de Modo Blending';
+    updateGlobalQueueUI();
+    checkGlobalQueue();
+}
 
-        // Hacer todos los videos seleccionables
-        document.querySelectorAll('.gallery-item').forEach(item => {
-            item.classList.add('selectable');
+async function loadExistingVideos() {
+    try {
+        const response = await fetch('/api/videos?t=' + Date.now());
+        const videos = await response.json();
+        const gallery = document.getElementById('videoGallery');
+        if (!gallery) return;
+        gallery.innerHTML = '';
+
+        videos.forEach((video, index) => {
+            const galleryItem = document.createElement('div');
+            galleryItem.className = 'gallery-item';
+            galleryItem.style.cssText = 'background: #1e293b; padding: 12px; border-radius: 12px; border: 1px solid #334155; position: relative; display: flex; flex-direction: column; gap: 8px;';
+            
+            const techInfo = video.metadata || { videoWidth: 1280, videoHeight: 720, samplerSteps: 20, videoLength: 121 };
+            const promptStr = video.prompt || '';
+            const dateStr = new Date(video.timestamp).toLocaleString();
+
+            galleryItem.innerHTML = `
+                <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <video src="${video.url}?t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover;" controls preload="metadata"></video>
+                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: #6366f1; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0;">👁️</button>
+                    <div style="position: absolute; top: 8px; left: 8px; background: rgba(15, 23, 42, 0.7); padding: 2px 6px; border-radius: 4px; font-size: 8px; color: #94a3b8; pointer-events: none;">${dateStr}</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #a5b4fc; font-weight: 600; border: 1px solid rgba(99, 102, 241, 0.3);">${techInfo.videoWidth}x${techInfo.videoHeight} • ${techInfo.samplerSteps} steps</div>
+                </div>
+                <div style="padding: 4px;">
+                    <div style="font-size: 11px; color: #6366f1; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Prompt</div>
+                    <div style="font-size: 10px; color: #e2e8f0; line-height: 1.4; max-height: 4.2em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                        ${promptStr || '<span style="opacity: 0.5; font-style: italic;">No prompt recorded</span>'}
+                    </div>
+                </div>
+            `;
+
+            galleryItem.draggable = true;
+            galleryItem.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('videoSrc', video.url);
+                e.dataTransfer.setData('videoPrompt', promptStr);
+                e.dataTransfer.setData('videoMetadata', JSON.stringify(techInfo));
+                galleryItem.style.opacity = '0.5';
+            });
+            galleryItem.addEventListener('dragend', () => galleryItem.style.opacity = '1');
+
+            galleryItem.querySelector('.previz-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadVideoToPreviz(video.url);
+                // Cambiar a la pestaña Previz
+                const tabPrevizBtn = document.getElementById('tabPrevizBtn');
+                if (tabPrevizBtn) tabPrevizBtn.click();
+            });
+
+            gallery.appendChild(galleryItem);
         });
+    } catch (e) { console.error(e); }
+}
 
-        updateBlendInfo();
-    } else {
-        // Desactivar modo blending
-        exitBlendMode();
-    }
-});
+async function loadExistingImages() {
+    try {
+        const response = await fetch('/api/images?t=' + Date.now());
+        const images = await response.json();
+        const gallery = document.getElementById('imageGallery');
+        if (!gallery) return;
+        gallery.innerHTML = '';
 
-// Cancelar selección
-cancelBlendButton.addEventListener('click', () => {
-    exitBlendMode();
-});
+        images.forEach((image) => {
+            const galleryItem = document.createElement('div');
+            galleryItem.className = 'gallery-item';
+            galleryItem.style.cssText = 'background: #1e293b; padding: 12px; border-radius: 12px; border: 1px solid #334155; position: relative; display: flex; flex-direction: column; gap: 8px;';
+            
+            galleryItem.innerHTML = `
+                <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                    <img src="${image.url}" style="width: 100%; height: 100%; object-fit: cover;">
+                    <button class="previz-btn" title="Use as Reference" style="position: absolute; top: 10px; right: 10px; background: #a855f7; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0;">📤</button>
+                </div>
+                <div style="padding: 4px;">
+                    <div style="font-size: 10px; color: #94a3b8;">${image.filename}</div>
+                </div>
+            `;
 
-function exitBlendMode() {
-    isBlendMode = false;
-    selectedVideos = [];
+            galleryItem.querySelector('.previz-btn').addEventListener('click', () => {
+                showImagePreview(image.url, image.filename);
+                uploadedImageFilename = image.filename;
+                updateMode();
+            });
 
-    blendControls.classList.remove('active');
-    blendModeButton.style.background = 'rgba(16, 185, 129, 0.2)';
-    blendModeButton.style.color = '#10b981';
-    blendModeButton.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-    blendModeButton.textContent = '🎞️ Modo Blending de Videos';
+            gallery.appendChild(galleryItem);
+        });
+    } catch (e) { console.error(e); }
+}
 
-    // Remover clase selectable y selected de todos los videos
-    document.querySelectorAll('.gallery-item').forEach(item => {
-        item.classList.remove('selectable', 'selected');
-        // Remover indicador de orden si existe
-        const orderIndicator = item.querySelector('.selection-order');
-        if (orderIndicator) {
-            orderIndicator.remove();
+// Asset Tab Switching
+document.querySelectorAll('.asset-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const type = btn.dataset.type;
+        document.querySelectorAll('.asset-tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.background = 'transparent';
+            b.style.color = '#94a3b8';
+        });
+        btn.classList.add('active');
+        btn.style.background = '#6366f1';
+        btn.style.color = 'white';
+
+        if (type === 'videos') {
+            document.getElementById('videoGallery').style.display = 'flex';
+            document.getElementById('imageGallery').style.display = 'none';
+        } else {
+            document.getElementById('videoGallery').style.display = 'none';
+            document.getElementById('imageGallery').style.display = 'flex';
+            loadExistingImages();
         }
     });
-
-    updateBlendInfo();
-}
-
-function updateBlendInfo() {
-    if (!isBlendMode) return;
-    const count = selectedVideos.length;
-    if (count === 0) {
-        blendInfo.textContent = 'Selecciona 2 o más videos para hacer blending';
-        executeBlendButton.disabled = true;
-    } else if (count === 1) {
-        blendInfo.textContent = `1 video seleccionado - Selecciona al menos 1 más`;
-        executeBlendButton.disabled = true;
-    } else {
-        blendInfo.textContent = `${count} videos seleccionados - Orden: ${selectedVideos.map((v, i) => i + 1).join(' → ')}`;
-        executeBlendButton.disabled = false;
-    }
-}
-
-// Estado inicial
-progressContainer.style.display = 'block';
-progressFill.style.width = '0%';
-progressFill.textContent = '⏸';
-progressText.textContent = '⏸ Cargando videos...';
-
-// Cargar videos al iniciar
-loadExistingVideos();
-
-// El bloque de funcionalidad de blending ya está definido arriba de la línea 1022.
-// Solo mantenemos lo que sigue después del bloque duplicado.
+});
 
 // ============================================
-// LÓGICA DEL EDITOR MAESTRO (TIMELINE)
+// TIMELINE & EDITOR (OPTIMIZED)
 // ============================================
 
 let isPlayingTl = false;
-let tlPlaybackInterval = null;
+let tlAnimationFrame = null; // Cambio de Interval a AnimationFrame para fluidez
 let currentTlPos = 0;
-
-function addClipToTimeline(src, trackElement, xPos) {
-    const emptyMsg = document.querySelector('.timeline-empty-msg');
-    if (emptyMsg) emptyMsg.remove();
-
-    const clip = document.createElement('div');
-    clip.className = 'timeline-clip';
-    const filename = src.split('/').pop();
-    
-    const rect = trackElement.getBoundingClientRect();
-    const relativeX = xPos - rect.left;
-    clip.style.left = `${relativeX}px`;
-    clip.style.width = '150px';
-
-    clip.innerHTML = `
-        <div class="trim-handle trim-handle-left"></div>
-        <video src="${src}" muted preload="metadata"></video>
-        <div class="clip-info">
-            <span>${filename}</span>
-        </div>
-        <div class="trim-handle trim-handle-right"></div>
-        <button class="remove-clip-btn">×</button>
-    `;
-
-    // Eventos de Mover y Recortar
-    setupClipInteractions(clip);
-
-    clip.querySelector('.remove-clip-btn').addEventListener('click', (e) => {
-        e.stopPropagation(); clip.remove(); checkTimelineEmpty();
-    });
-
-    trackElement.appendChild(clip);
-}
-
-function checkTimelineEmpty() {
-    const anyClip = document.querySelector('.timeline-clip');
-    const container = document.getElementById('editorTimeline');
-    if (!anyClip && container) {
-        if (!container.querySelector('.timeline-empty-msg')) {
-             container.insertAdjacentHTML('beforeend', '<div class="timeline-empty-msg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #334155; pointer-events: none; font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px;">Drag Assets Here</div>');
-        }
-    }
-}
-
-document.querySelectorAll('.timeline-track').forEach(track => {
-    track.addEventListener('dragover', e => { e.preventDefault(); track.style.background = 'rgba(99,102,241,0.1)'; });
-    track.addEventListener('dragleave', () => { track.style.background = ''; });
-    track.addEventListener('drop', e => {
-        e.preventDefault();
-        track.style.background = '';
-        const videoSrc = e.dataTransfer.getData('videoSrc');
-        if (videoSrc) addClipToTimeline(videoSrc, track, e.clientX);
-    });
-});
+let clipCache = []; // Cache para evitar leer el DOM cada frame
 
 const timelineTracksContent = document.getElementById('editorTimeline');
 const playhead = document.createElement('div');
 playhead.id = 'timelinePlayhead';
 playhead.style.cssText = 'position: absolute; top: 0; left: 0; width: 2px; height: 100%; background: #ff3e3e; z-index: 50; pointer-events: none;';
-if (timelineTracksContent) timelineTracksContent.appendChild(playhead);
-
 if (timelineTracksContent) {
-    timelineTracksContent.addEventListener('click', (e) => {
+    timelineTracksContent.appendChild(playhead);
+    
+    let isScrubbing = false;
+
+    const handleScrub = (e) => {
         const rect = timelineTracksContent.getBoundingClientRect();
         const x = e.clientX - rect.left + timelineTracksContent.scrollLeft;
-        currentTlPos = x;
-        playhead.style.left = `${x}px`;
-        syncPreviewToTime(x);
+        currentTlPos = Math.max(0, x);
+        playhead.style.left = `${currentTlPos}px`;
+        syncPreviewToTime(currentTlPos, true); // true means force seek
+    };
+
+    timelineTracksContent.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.timeline-clip')) return; // Let clip dragging handle itself
+        isScrubbing = true;
+        handleScrub(e);
+        document.addEventListener('mousemove', handleScrub);
+        document.addEventListener('mouseup', () => {
+            isScrubbing = false;
+            document.removeEventListener('mousemove', handleScrub);
+        }, { once: true });
+    });
+
+    timelineTracksContent.addEventListener('click', (e) => {
+        if (e.target.closest('.timeline-clip')) return;
+        handleScrub(e);
     });
 }
 
+// Función para refrescar la cache de clips (se llama cuando cambian)
+function refreshClipCache() {
+    const clips = document.querySelectorAll('.timeline-clip');
+    clipCache = Array.from(clips).map(clip => {
+        const l = parseFloat(clip.style.left) || 0;
+        const w = clip.offsetWidth;
+        const track = clip.parentElement.dataset.track || 'V1';
+        const video = clip.querySelector('video');
+        return {
+            element: clip,
+            left: l,
+            width: w,
+            right: l + w,
+            track: track,
+            src: video ? video.src : null,
+            videoElement: video
+        };
+    }).sort((a, b) => b.track.localeCompare(a.track)); // Ordenar por track descending (V3 encima de V1)
+}
+
+function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) {
+    const emptyMsg = document.querySelector('.timeline-empty-msg');
+    if (emptyMsg) emptyMsg.remove();
+    const clip = document.createElement('div');
+    clip.className = 'timeline-clip';
+    clip.dataset.clipId = 'clip_' + Date.now() + Math.random();
+    clip.dataset.prompt = prompt;
+    clip.dataset.metadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
+
+    const filename = src.split('/').pop().split('?')[0];
+    const rect = trackElement.getBoundingClientRect();
+    clip.style.left = `${xPos - rect.left}px`;
+    clip.style.width = '150px';
+    clip.innerHTML = `
+        <div class="trim-handle trim-handle-left"></div>
+        <video src="${src}" muted preload="metadata" style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <div class="clip-info" style="position: absolute; bottom: 2px; left: 4px; pointer-events: none; text-shadow: 0 0 4px #000;"><span>${filename}</span></div>
+        <div class="trim-handle trim-handle-right"></div>
+        <button class="regen-clip-btn" title="Regenerate this clip">↻</button>
+        <button class="remove-clip-btn" style="width: 20px; height: 20px; padding: 0;">×</button>
+    `;
+    setupClipInteractions(clip);
+    
+    clip.querySelector('.remove-clip-btn').addEventListener('click', () => { 
+        clip.remove(); 
+        refreshClipCache(); 
+        checkTimelineEmpty(); 
+    });
+
+    clip.querySelector('.regen-clip-btn').addEventListener('click', () => {
+        const p = clip.dataset.prompt;
+        const m = JSON.parse(clip.dataset.metadata || '{}');
+        if (!p) return appendConsoleLine('❌ No prompt available for regeneration', 'error');
+        
+        appendConsoleLine(`♻️ Regenerating clip: ${p.substring(0, 30)}...`, 'system');
+        addToQueue(p, m.imageFilename || null, { replaceClipId: clip.dataset.clipId });
+    });
+
+    trackElement.appendChild(clip);
+    calculateTimelineOverlaps();
+    refreshClipCache();
+}
+
 function setupClipInteractions(clip) {
-    let isDragging = false;
-    let isTrimmingLeft = false;
-    let isTrimmingRight = false;
+    let isDragging = false, isTrimmingLeft = false, isTrimmingRight = false;
     let startX, startLeft, startWidth;
 
     clip.addEventListener('mousedown', (e) => {
         if (e.target.classList.contains('remove-clip-btn')) return;
-        
-        // Seleccionar clip
-        document.querySelectorAll('.timeline-clip').forEach(c => c.classList.remove('selected'));
-        clip.classList.add('selected');
-
         startX = e.clientX;
         startLeft = parseFloat(clip.style.left) || 0;
         startWidth = clip.offsetWidth;
-
-        if (e.target.classList.contains('trim-handle-left')) {
-            isTrimmingLeft = true;
-        } else if (e.target.classList.contains('trim-handle-right')) {
-            isTrimmingRight = true;
-        } else {
-            isDragging = true;
-        }
-
+        if (e.target.classList.contains('trim-handle-left')) isTrimmingLeft = true;
+        else if (e.target.classList.contains('trim-handle-right')) isTrimmingRight = true;
+        else isDragging = true;
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
         e.preventDefault();
@@ -1146,152 +840,695 @@ function setupClipInteractions(clip) {
 
     function handleMouseMove(e) {
         const deltaX = e.clientX - startX;
-
         if (isDragging) {
-            let newLeft = startLeft + deltaX;
-            if (newLeft < 0) newLeft = 0;
-            clip.style.left = `${newLeft}px`;
-
-            // Detectar cambio de pista
+            let nL = startLeft + deltaX;
+            clip.style.left = `${nL < 0 ? 0 : nL}px`;
             const tracks = document.querySelectorAll('.timeline-track');
             tracks.forEach(track => {
-                const rect = track.getBoundingClientRect();
-                if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                    if (clip.parentElement !== track) {
-                        track.appendChild(clip);
-                    }
-                }
+                const r = track.getBoundingClientRect();
+                if (e.clientY >= r.top && e.clientY <= r.bottom) track.appendChild(clip);
             });
         } else if (isTrimmingLeft) {
-            let newLeft = startLeft + deltaX;
-            let newWidth = startWidth - deltaX;
-            if (newWidth > 20 && newLeft >= 0) {
-                clip.style.left = `${newLeft}px`;
-                clip.style.width = `${newWidth}px`;
-            }
+            let nL = startLeft + deltaX, nW = startWidth - deltaX;
+            if (nW > 20 && nL >= 0) { clip.style.left = `${nL}px`; clip.style.width = `${nW}px`; }
         } else if (isTrimmingRight) {
-            let newWidth = startWidth + deltaX;
-            if (newWidth > 20) {
-                clip.style.width = `${newWidth}px`;
-            }
+            let nW = startWidth + deltaX;
+            if (nW > 20) clip.style.width = `${nW}px`;
         }
-        
-        // Sincronizar previsualización mientras mueves
-        syncPreviewToTime(parseFloat(clip.style.left));
+        checkAutoBlending(clip);
+        refreshClipCache(); // Update cache during drag for smooth preview
+        syncPreviewToTime(currentTlPos || parseFloat(clip.style.left));
     }
 
     function handleMouseUp() {
-        isDragging = false;
-        isTrimmingLeft = false;
-        isTrimmingRight = false;
+        isDragging = isTrimmingLeft = isTrimmingRight = false;
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        
+        // Finalizar el movimiento, calcular transparencias
+        calculateTimelineOverlaps();
+        refreshClipCache();
     }
 }
-function syncPreviewToTime(xPos) {
-    const clips = document.querySelectorAll('.timeline-clip');
-    const previewVideo = document.getElementById('timelinePreview');
-    const edPlaceholder = document.getElementById('editorPlaceholder');
 
-    if (!clips.length) return;
-
-    let foundClip = null;
-    // Prioridad por track (V3 > V2 > V1)
-    const sortedClips = Array.from(clips).sort((a, b) => {
-        const tA = a.parentElement.dataset.track || '';
-        const tB = b.parentElement.dataset.track || '';
-        return tB.localeCompare(tA);
+function calculateTimelineOverlaps() {
+    const clips = Array.from(document.querySelectorAll('.timeline-clip'));
+    clips.forEach(clip => {
+        clip.style.opacity = '1';
+        clip.dataset.overlapping = 'false';
     });
 
-    for (const clip of sortedClips) {
-        const left = parseFloat(clip.style.left);
-        const width = clip.offsetWidth;
-        if (xPos >= left && xPos <= left + width) {
-            foundClip = clip;
-            break;
-        }
-    }
-
-    if (foundClip) {
-        if (edPlaceholder) edPlaceholder.style.display = 'none';
-        if (previewVideo) {
-            previewVideo.style.display = 'block';
-            const srcVideo = foundClip.querySelector('video');
-            if (previewVideo.src !== srcVideo.src) {
-                previewVideo.src = srcVideo.src;
+    for (let i = 0; i < clips.length; i++) {
+        const c1 = clips[i];
+        const r1 = c1.getBoundingClientRect();
+        for (let j = i + 1; j < clips.length; j++) {
+            const c2 = clips[j];
+            const r2 = c2.getBoundingClientRect();
+            
+            // Si hay solapamiento horizontal (sin importar el track para la visualización del editor)
+            const overlap = !(r1.right < r2.left || r1.left > r2.right);
+            if (overlap) {
+                c1.style.opacity = '0.6';
+                c2.style.opacity = '0.6';
+                c1.dataset.overlapping = 'true';
+                c2.dataset.overlapping = 'true';
             }
-            const internalOffset = xPos - parseFloat(foundClip.style.left);
-            previewVideo.currentTime = internalOffset / 25; 
         }
-    } else {
-        if (previewVideo) previewVideo.pause();
     }
 }
 
-// Controles de Playback del Timeline
+// Atajo de Barra Espaciadora para Play/Pause
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') {
+        e.preventDefault(); 
+        const playBtn = document.getElementById('tlPlayBtn');
+        if (playBtn) playBtn.click();
+    }
+});
+
+function checkAutoBlending(activeClip) {
+    const allClips = document.querySelectorAll('.timeline-clip');
+    const aL = parseFloat(activeClip.style.left), aR = aL + activeClip.offsetWidth;
+    activeClip.style.background = '';
+    allClips.forEach(other => {
+        if (other === activeClip) return;
+        const oL = parseFloat(other.style.left), oR = oL + other.offsetWidth;
+        if (aL < oR && aR > oL) {
+            activeClip.style.background = 'linear-gradient(90deg, #4f46e5, #ec4899)';
+            other.style.border = '1px dashed #ec4899';
+        } else other.style.border = '';
+    });
+}
+
+function syncPreviewToTime(xPos, forceSeek = false) {
+    const previewA = document.getElementById('timelinePreviewA');
+    const previewB = document.getElementById('timelinePreviewB');
+    const edPlaceholder = document.getElementById('editorPlaceholder');
+    
+    if (!clipCache.length) {
+        if (edPlaceholder) edPlaceholder.style.display = 'block';
+        if (previewA) previewA.style.display = 'none';
+        if (previewB) previewB.style.display = 'none';
+        return;
+    }
+
+    // Buscar clips que coincidan con la posición actual
+    const activeClips = clipCache.filter(c => xPos >= c.left && xPos <= c.right);
+
+    if (activeClips.length === 0) {
+        if (previewA) previewA.pause();
+        if (previewB) previewB.pause();
+        if (edPlaceholder) edPlaceholder.style.display = 'block';
+        return;
+    }
+
+    if (edPlaceholder) edPlaceholder.style.display = 'none';
+    if (previewA) previewA.style.display = 'block';
+
+    // Lógica de Interpolación (Crossfade)
+    if (activeClips.length >= 2) {
+        // Tenemos al menos 2 videos solapados
+        const v1 = activeClips[0];
+        const v2 = activeClips[1];
+
+        // Determinar rango de solapamiento
+        const overlapStart = Math.max(v1.left, v2.left);
+        const overlapEnd = Math.min(v1.right, v2.right);
+        const overlapDuration = overlapEnd - overlapStart;
+
+        // Calcular factor de mezcla (0 a 1)
+        let t = 0;
+        if (overlapDuration > 0) {
+            t = (xPos - overlapStart) / overlapDuration;
+        }
+
+        // Configurar Video A (Base / Saliente)
+        updateVideoPreview(previewA, v1, xPos, 1 - t, forceSeek);
+        
+        // Configurar Video B (Entrante)
+        if (previewB) {
+            previewB.style.display = 'block';
+            updateVideoPreview(previewB, v2, xPos, t, forceSeek);
+        }
+    } else {
+        // Solo un video
+        const v = activeClips[0];
+        updateVideoPreview(previewA, v, xPos, 1.0, forceSeek);
+        if (previewB) {
+            previewB.style.display = 'none';
+            previewB.pause();
+        }
+    }
+}
+
+function updateVideoPreview(video, clip, xPos, weight, forceSeek) {
+    const targetTime = (xPos - clip.left) / 25;
+    
+    if (video.src !== clip.src) {
+        video.src = clip.src;
+        video.muted = false;
+        video.currentTime = targetTime;
+        if (isPlayingTl) video.play().catch(() => {});
+    } else {
+        // Si el video ya está cargado pero no está reproduciendo y debería estarlo
+        if (isPlayingTl && video.paused) {
+            video.muted = false;
+            video.play().catch(() => {});
+        }
+    }
+
+    // Aplicar interpolación visual y sonora
+    video.style.opacity = weight;
+    video.volume = weight; // Interpolación de audio conforme al crossfade
+
+    const drift = Math.abs(video.currentTime - targetTime);
+    if (forceSeek || drift > 0.15) {
+        video.currentTime = targetTime;
+    }
+}
+
+let lastTickTime = 0;
+
+function playbackLoop() {
+    if (!isPlayingTl) return;
+
+    const now = performance.now();
+    const deltaTime = now - lastTickTime;
+    lastTickTime = now;
+
+    const pixelsToMove = (deltaTime / 1000) * 25;
+    currentTlPos += pixelsToMove;
+
+    if (playhead) playhead.style.left = `${currentTlPos}px`;
+    syncPreviewToTime(currentTlPos, false);
+    
+    if (timelineTracksContent && currentTlPos > timelineTracksContent.clientWidth + timelineTracksContent.scrollLeft - 100) {
+        timelineTracksContent.scrollLeft += pixelsToMove;
+    }
+
+    if (currentTlPos > 3000) stopTimelinePlayback();
+    else tlAnimationFrame = requestAnimationFrame(playbackLoop);
+}
+
+function startTimelinePlayback() {
+    isPlayingTl = true;
+    const playBtn = document.getElementById('tlPlayBtn');
+    const playIcon = document.getElementById('playIcon');
+    const playText = document.getElementById('playText');
+    
+    if (playBtn) {
+        playBtn.style.background = '#f59e0b';
+        if (playIcon) playIcon.textContent = '⏸';
+        if (playText) playText.textContent = 'PAUSE';
+    }
+
+    lastTickTime = performance.now();
+    tlAnimationFrame = requestAnimationFrame(playbackLoop);
+}
+
+function stopTimelinePlayback() {
+    isPlayingTl = false;
+    if (tlAnimationFrame) {
+        cancelAnimationFrame(tlAnimationFrame);
+        tlAnimationFrame = null;
+    }
+    const playBtn = document.getElementById('tlPlayBtn');
+    const playIcon = document.getElementById('playIcon');
+    const playText = document.getElementById('playText');
+    const previewVideo = document.getElementById('timelinePreview');
+
+    if (playBtn) {
+        playBtn.style.background = '#10b981';
+        if (playIcon) playIcon.textContent = '▶';
+        if (playText) playText.textContent = 'PLAY';
+    }
+    
+    // PAUSE ALL PREVIEW VIDEOS
+    const pA = document.getElementById('timelinePreviewA');
+    const pB = document.getElementById('timelinePreviewB');
+    if (pA) pA.pause();
+    if (pB) pB.pause();
+}
+
 const tlPlayBtn = document.getElementById('tlPlayBtn');
-const tlStopBtn = document.getElementById('tlStopBtn');
+const tlResetBtn = document.getElementById('tlResetBtn');
 
 if (tlPlayBtn) {
     tlPlayBtn.addEventListener('click', () => {
         if (isPlayingTl) {
             stopTimelinePlayback();
         } else {
+            // Asegurar que los monitores tengan sonido al dar Play (interacción del usuario)
+            const pA = document.getElementById('timelinePreviewA');
+            const pB = document.getElementById('timelinePreviewB');
+            if (pA) { pA.muted = false; pA.volume = 1.0; }
+            if (pB) { pB.muted = false; pB.volume = 1.0; }
             startTimelinePlayback();
         }
     });
 }
 
-if (tlStopBtn) {
-    tlStopBtn.addEventListener('click', () => {
+if (tlResetBtn) {
+    tlResetBtn.addEventListener('click', () => {
         stopTimelinePlayback();
         currentTlPos = 0;
-        playhead.style.left = '0px';
+        if (playhead) playhead.style.left = '0px';
+        syncPreviewToTime(0, true);
+        if (timelineTracksContent) timelineTracksContent.scrollLeft = 0;
     });
 }
 
-function startTimelinePlayback() {
-    isPlayingTl = true;
-    tlPlayBtn.textContent = 'PAUSE';
-    tlPlayBtn.style.background = '#f59e0b';
-    
-    tlPlaybackInterval = setInterval(() => {
-        currentTlPos += 2; // Velocidad de reproducción
-        playhead.style.left = `${currentTlPos}px`;
-        syncPreviewToTime(currentTlPos);
-        
-        // Auto-scroll si se sale de vista
-        if (currentTlPos > timelineTracksContent.clientWidth + timelineTracksContent.scrollLeft - 100) {
-            timelineTracksContent.scrollLeft += 2;
-        }
-        
-        // Límite del timeline (ej: 5000px)
-        if (currentTlPos > 5000) stopTimelinePlayback();
-    }, 40);
-}
+// ============================================
+// PREVIZ TAB LOGIC
+// ============================================
 
-function stopTimelinePlayback() {
-    isPlayingTl = false;
-    clearInterval(tlPlaybackInterval);
-    if (tlPlayBtn) {
-        tlPlayBtn.textContent = 'PLAY';
-        tlPlayBtn.style.background = '#10b981';
+const previzTab = document.getElementById('tabPreviz');
+if (previzTab) {
+    const subTabBtns = previzTab.querySelectorAll('.sub-tab-btn');
+    const subTabContents = previzTab.querySelectorAll('.sub-tab-content');
+
+    subTabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.dataset.sub;
+            subTabBtns.forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'transparent';
+                b.style.color = '#94a3b8';
+            });
+            btn.classList.add('active');
+            btn.style.background = '#6366f1';
+            btn.style.color = 'white';
+
+            subTabContents.forEach(content => {
+                content.style.display = 'none';
+                if (content.id === targetId) {
+                    content.style.display = (targetId === 'previz-monitor') ? 'flex' : 'block';
+                }
+            });
+        });
+    });
+
+    const monitor = document.getElementById('previz-monitor');
+    if (monitor) {
+        monitor.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            monitor.style.borderColor = '#6366f1';
+            monitor.style.background = 'rgba(99, 102, 241, 0.1)';
+        });
+
+        monitor.addEventListener('dragleave', () => {
+            monitor.style.borderColor = '#475569';
+            monitor.style.background = '#000';
+        });
+
+        monitor.addEventListener('drop', (e) => {
+            e.preventDefault();
+            monitor.style.borderColor = '#475569';
+            monitor.style.background = '#000';
+            const src = e.dataTransfer.getData('videoSrc');
+            if (src) {
+                loadVideoToPreviz(src);
+            }
+        });
     }
 }
 
-// Exportar (Placeholder funcional)
+function loadVideoToPreviz(src) {
+    const previzVideo = document.getElementById('previzVideo');
+    const previzPlaceholder = document.getElementById('previzPlaceholder');
+    if (!previzVideo) return;
+    
+    previzVideo.src = src;
+    previzVideo.style.display = 'block';
+    if (previzPlaceholder) previzPlaceholder.style.display = 'none';
+    
+    // Mostrar información de metadatos detallada
+    const filename = src.split('/').pop().split('?')[0];
+    const metaContainer = document.getElementById('previzMetadata');
+    
+    if (metaContainer) {
+        metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
+        fetch('/api/videos?t=' + Date.now())
+            .then(res => res.json())
+            .then(videos => {
+                const videoData = videos.find(v => v.filename === filename);
+                if (videoData && videoData.prompt) {
+                    const tech = videoData.metadata || {};
+                    const creationDate = videoData.timestamp ? new Date(videoData.timestamp).toLocaleString() : 'N/A';
+                    metaContainer.innerHTML = `
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #6366f1;">
+                            <div style="font-size: 0.7em; color: #818cf8; text-transform: uppercase; margin-bottom: 5px;">Original Prompt</div>
+                            <div style="font-size: 1.1em; color: white; font-weight: 500;">${videoData.prompt}</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Resolution</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.videoWidth || '?'} x ${tech.videoHeight || '?'}</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Steps</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.samplerSteps || '?'} steps</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Length</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.videoLength || '?'} frames</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Created</div>
+                                <div style="font-size: 0.8em; color: #e2e8f0; font-weight: 600;">${creationDate}</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Method</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.imageFilename ? 'I2V (Image to Video)' : 'T2V (Text to Video)'}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #334155; font-size: 0.8em; color: #64748b;">
+                            Filename: ${filename}
+                        </div>
+                    `;
+                } else {
+                    metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center; margin-top:50px;">Metadata not found for this video.</p>';
+                }
+            })
+            .catch(err => {
+                metaContainer.innerHTML = '<p style="color:#ef4444; text-align:center;">Error loading metadata.</p>';
+            });
+    }
+
+    previzVideo.play();
+}
+
+if (syncWithEditorBtn) {
+    syncWithEditorBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const editorVideo = document.getElementById('timelinePreviewA');
+        if (editorVideo && editorVideo.src) {
+            loadVideoToPreviz(editorVideo.src);
+            previzVideo.currentTime = editorVideo.currentTime;
+        } else {
+            alert("No video currently in Editor timeline.");
+        }
+    });
+}
+
+// ============================================
+// EXPORT PIPELINE (REAL)
+// ============================================
+
+let currentExportTaskId = null;
+let isExporting = false;
+
+function getTimelineData() {
+    const clips = document.querySelectorAll('.timeline-clip');
+    const data = [];
+    clips.forEach(clip => {
+        const video = clip.querySelector('video');
+        if (!video) return;
+        
+        // El timeline funciona a 25px = 1s
+        const startTime = parseFloat(clip.style.left) / 25;
+        const duration = clip.offsetWidth / 25;
+        const track = clip.parentElement.dataset.track || 'V1';
+        
+        // Extraer nombre de archivo de la URL
+        const filename = video.src.split('/').pop().split('?')[0];
+        
+        data.push({
+            filename,
+            startTime,
+            duration,
+            track
+        });
+    });
+    // Ordenar por tiempo de inicio
+    return data.sort((a, b) => a.startTime - b.startTime);
+}
+
 const exportBtn = document.getElementById('exportProjectBtn');
 if (exportBtn) {
     exportBtn.addEventListener('click', () => {
-        const clips = document.querySelectorAll('.timeline-clip');
-        if (clips.length < 1) {
-            alert('Agrega clips al timeline para exportar.');
-            return;
-        }
-        appendConsoleLine('>> Iniciando compilación de proyecto...', 'system');
-        setTimeout(() => {
-            alert('¡Exportación simulada con éxito! Enviando data al servidor...');
-            appendConsoleLine('>> Proyecto exportado: /exports/final_video.mp4', 'success');
-        }, 2000);
+        const timelineData = getTimelineData();
+        if (timelineData.length === 0) return alert("Timeline is empty!");
+        
+        startRealExport(timelineData);
     });
 }
+
+async function startRealExport(timelineData) {
+    const modal = document.getElementById('exportModal');
+    const progressBar = document.getElementById('exportProgressBar');
+    const progressPct = document.getElementById('exportProgressPct');
+    const statusText = document.getElementById('exportProgressText');
+    const exportConsole = document.getElementById('exportConsole');
+    const viewBtn = document.getElementById('viewFinalVideo');
+    const badge = document.getElementById('exportStatusBadge');
+    
+    modal.style.display = 'flex';
+    viewBtn.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressPct.textContent = '0%';
+    statusText.textContent = 'Enviando petición...';
+    badge.textContent = 'PROCESAMIENTO';
+    badge.style.background = 'rgba(99, 102, 241, 0.2)';
+    
+    isExporting = true;
+    
+    try {
+        appendExportLog('> Solicitando exportación de ' + timelineData.length + ' clips...');
+        
+        const response = await fetch('/api/export-timeline', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clips: timelineData })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            appendExportLog('> Renderizado completado con éxito.');
+            progressBar.style.width = '100%';
+            progressPct.textContent = '100%';
+            statusText.textContent = 'Listo para descargar';
+            badge.textContent = 'COMPLETED';
+            badge.style.background = '#10b981';
+            
+            viewBtn.style.display = 'block';
+            viewBtn.onclick = () => window.open(result.url, '_blank');
+        } else {
+            throw new Error(result.error || 'Error desconocido');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        appendExportLog('❌ ERROR: ' + error.message);
+        statusText.textContent = 'Fallo al exportar';
+        badge.textContent = 'FAILED';
+        badge.style.background = '#ef4444';
+    } finally {
+        isExporting = false;
+    }
+}
+
+function appendExportLog(text) {
+    const consoleEl = document.getElementById('exportConsole');
+    if (!consoleEl) return;
+    const div = document.createElement('div');
+    div.textContent = text;
+    consoleEl.appendChild(div);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+// Botón de cerrar modal
+const closeExportModal = document.getElementById('closeExportModal');
+const closeExportBtnTop = document.getElementById('closeExportBtnTop');
+const activeExportWidget = document.getElementById('activeExportWidget');
+
+if (closeExportModal) {
+    closeExportModal.onclick = () => {
+        document.getElementById('exportModal').style.display = 'none';
+        if (isExporting && activeExportWidget) activeExportWidget.style.display = 'block';
+    };
+}
+if (closeExportBtnTop) {
+    closeExportBtnTop.onclick = () => {
+        document.getElementById('exportModal').style.display = 'none';
+        if (isExporting && activeExportWidget) activeExportWidget.style.display = 'block';
+    };
+}
+if (activeExportWidget) {
+    activeExportWidget.onclick = () => {
+        document.getElementById('exportModal').style.display = 'flex';
+        activeExportWidget.style.display = 'none';
+    };
+}
+
+function assembleBatchInTimeline(batchItems) {
+    const track = document.querySelector('.timeline-track[data-track="V1"]');
+    if (!track) return;
+
+    let currentX = 0;
+    const clipWidth = 150; // Default width in pixels
+    const overlap = 0.15; // 15% overlap
+    const step = clipWidth * (1 - overlap); // Distance between starts
+
+    batchItems.forEach((item, idx) => {
+        if (item.resultUrl) {
+            addClipToTimeline(item.resultUrl, track, currentX + track.getBoundingClientRect().left, item.prompt, item.params);
+            currentX += step;
+        }
+    });
+
+    appendConsoleLine(`🎬 Auto-assembled ${batchItems.length} clips in timeline.`, 'system');
+    document.getElementById('tabEditorBtn').click(); // Ir al editor para ver el resultado
+}
+
+// Initial Load
+document.querySelectorAll('.timeline-track').forEach(track => {
+    track.addEventListener('dragover', e => e.preventDefault());
+    track.addEventListener('drop', e => {
+        e.preventDefault();
+        const src = e.dataTransfer.getData('videoSrc');
+        const prompt = e.dataTransfer.getData('videoPrompt');
+        const meta = e.dataTransfer.getData('videoMetadata');
+        if (src) addClipToTimeline(src, track, e.clientX, prompt, meta);
+    });
+});
+
+loadExistingVideos();
+calculateTimelineOverlaps();
+
+// ============================================
+// STORYBOARD LOGIC
+// ============================================
+
+function addToStoryboardQueue(prompt, options = {}) {
+    const params = {
+        videoWidth: parseInt(document.getElementById('videoWidth').value),
+        videoHeight: parseInt(document.getElementById('videoHeight').value),
+        storyboardSteps: parseInt(document.getElementById('storyboardSteps').value)
+    };
+
+    globalGenerationQueue.push({
+        id: Date.now() + Math.random(),
+        prompt: prompt,
+        params,
+        type: 'storyboard',
+        status: 'pending',
+        ...options
+    });
+
+    updateGlobalQueueUI();
+    checkGlobalQueue();
+}
+
+function handleStoryboardGenerated(message) {
+    const existing = storyboardItems.find(item => item.storyboardIndex === message.storyboardIndex && item.batchId === message.batchId);
+    
+    if (existing) {
+        existing.url = message.url;
+        existing.filename = message.filename;
+        existing.status = 'ready';
+        existing.params = message.params || {};
+    } else {
+        storyboardItems.push({
+            id: 'sb_' + Date.now() + Math.random(),
+            url: message.url,
+            filename: message.filename,
+            prompt: message.prompt,
+            storyboardIndex: message.storyboardIndex || storyboardItems.length,
+            batchId: message.batchId || 'default',
+            status: 'ready',
+            params: message.params || {}
+        });
+    }
+    
+    // Ordenar por storyboardIndex si existen
+    storyboardItems.sort((a, b) => a.storyboardIndex - b.storyboardIndex);
+    updateStoryboardUI();
+}
+
+function updateStoryboardUI() {
+    const grid = document.getElementById('storyboardGrid');
+    const placeholder = document.getElementById('storyboardPlaceholder');
+    if (!grid) return;
+
+    if (storyboardItems.length > 0) {
+        if (placeholder) placeholder.style.display = 'none';
+        grid.innerHTML = '';
+        
+        storyboardItems.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'storyboard-item';
+            div.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease;';
+            
+            div.innerHTML = `
+                <div style="position: relative; width: 100%; height: 200px; background: #000;">
+                    <img src="${item.url}?t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.8); padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: bold; color: #818cf8;">Step ${index + 1}</div>
+                    <button class="regen-story-btn" title="Regenerate Image" style="position: absolute; top: 10px; right: 10px; background: #a855f7; border: none; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; box-sizing: border-box;">↻</button>
+                    <button class="remove-story-btn" title="Remove" style="position: absolute; bottom: 10px; right: 10px; background: #ef4444; border: none; border-radius: 50%; width: 24px; height: 24px; min-width: 24px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8em; padding: 0; flex-shrink: 0; box-sizing: border-box;">×</button>
+                </div>
+                <div style="padding: 15px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.7em; color: #64748b; font-weight: bold; text-transform: uppercase;">Prompt</span>
+                        <span style="font-size: 0.6em; background: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 6px; border-radius: 4px;">Flux: ${item.params?.storyboardSteps || '??'} steps</span>
+                    </div>
+                    <div style="font-size: 0.85em; color: #e2e8f0; line-height: 1.4; max-height: 4.5em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                        ${item.prompt}
+                    </div>
+                </div>
+            `;
+            
+            div.querySelector('.regen-story-btn').onclick = (e) => {
+                e.stopPropagation();
+                // Actualizar estado antes de relanzar
+                item.status = 'regenerating';
+                addToStoryboardQueue(item.prompt, { storyboardIndex: item.storyboardIndex, batchId: item.batchId });
+                appendConsoleLine(`♻️ Regenerating storyboard image ${index + 1}...`, 'system');
+            };
+
+            div.querySelector('.remove-story-btn').onclick = (e) => {
+                e.stopPropagation();
+                storyboardItems = storyboardItems.filter(i => i.id !== item.id);
+                updateStoryboardUI();
+            };
+            
+            grid.appendChild(div);
+        });
+    } else {
+        if (placeholder) {
+            grid.innerHTML = '';
+            grid.appendChild(placeholder);
+            placeholder.style.display = 'flex';
+        }
+    }
+}
+
+// Event Listeners for Storyboard Buttons
+document.getElementById('clearStoryboardBtn')?.addEventListener('click', () => {
+    if (confirm('Clear all storyboard images?')) {
+        storyboardItems = [];
+        updateStoryboardUI();
+        appendConsoleLine('🗑️ Storyboard cleared.', 'system');
+    }
+});
+
+document.getElementById('generateVidsFromStoryboardBtn')?.addEventListener('click', () => {
+    if (storyboardItems.length === 0) return alert('No storyboard images to generate from');
+    
+    if (confirm(`Generate ${storyboardItems.length} videos from these images?`)) {
+        appendConsoleLine(`🚀 Transitioning storyboard to video pipeline (${storyboardItems.length} items)`, 'system');
+        
+        const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
+        const batchId = 'batch_vid_' + Date.now();
+
+        storyboardItems.forEach((item, index) => {
+            // Usamos la imagen del storyboard como base para I2V
+            addToQueue(item.prompt, item.filename, { isAutoAssemble, batchId });
+        });
+        
+        // Ir a Stage para ver progreso
+        const tabOutputBtn = document.getElementById('tabOutputBtn');
+        if (tabOutputBtn) tabOutputBtn.click();
+    }
+});
