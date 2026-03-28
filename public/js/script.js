@@ -50,16 +50,32 @@ ws.onmessage = (event) => {
             if (currentExecutingId) {
                 const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
                 if (item && progressText) {
-                    const modeLabel = item.imageFilename ? 'I2V' : 'T2V';
-                    progressText.textContent = `⚡ [${modeLabel}] Animating: ${message.value}/${message.max}`;
+                    const modeLabel = item.imageFilename ? 'I2V' : (item.type === 'storyboard' ? 'FLUX' : 'T2V');
+                    const stepInfo = message.value && message.max ? ` • Step ${message.value}/${message.max}` : '';
+                    progressText.textContent = `⚡ [${modeLabel}] ${item.type === 'storyboard' ? 'Drawing' : 'Animating'}: ${item.prompt.substring(0, 40)}...${stepInfo}`;
+                }
+            }
+        }
+
+        if (message.type === 'executing' && message.node) {
+             if (currentExecutingId && progressText) {
+                const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
+                if (item) {
+                    item.prompt_id = message.prompt_id; // Link client ID with ComfyUI prompt_id
+                    const modeLabel = item.imageFilename ? 'I2V' : (item.type === 'storyboard' ? 'FLUX' : 'T2V');
+                    progressText.textContent = `⚡ [${modeLabel}] Executing node ${message.node}: ${item.prompt.substring(0, 40)}...`;
                 }
             }
         }
 
         if (message.type === 'video_generated') {
             loadExistingVideos();
-            if (currentExecutingId) {
-                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId);
+            if (currentExecutingId || message.prompt_id) {
+                const itemIndex = globalGenerationQueue.findIndex(i => 
+                    i.status !== 'completed' && 
+                    (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
+                );
+                
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
@@ -91,10 +107,23 @@ ws.onmessage = (event) => {
                     updateGlobalQueueUI();
                     
                     // AUTO-ASSEMBLY LOGIC
-                    const autoBatch = globalGenerationQueue.filter(i => i.batchId === item.batchId && i.isAutoAssemble);
-                    if (autoBatch.length > 0 && autoBatch.every(i => i.status === 'completed')) {
+                    const batchItems = globalGenerationQueue.filter(i => i.batchId === item.batchId);
+                    const autoBatch = batchItems.filter(i => i.isAutoAssemble);
+                    
+                    if (autoBatch.length > 0 && batchItems.every(i => i.status === 'completed')) {
                         // All items in the batch are finished! Assemble them.
                         assembleBatchInTimeline(autoBatch);
+                        
+                        // AUTO-RENDER LOGIC
+                        const isAutoRender = batchItems.some(i => i.isAutoRender);
+                        if (isAutoRender) {
+                            appendConsoleLine(`🎬 Auto-render triggered for batch: ${item.batchId}`, 'system');
+                            setTimeout(() => {
+                                const timelineData = getTimelineData();
+                                if (timelineData.length > 0) startRealExport(timelineData);
+                            }, 1000);
+                        }
+                        
                         // Clean batchId from queue to avoid repeating
                         autoBatch.forEach(i => i.isAutoAssemble = false);
                     }
@@ -107,15 +136,46 @@ ws.onmessage = (event) => {
 
         if (message.type === 'storyboard_generated') {
             handleStoryboardGenerated(message);
-            if (currentExecutingId === message.prompt_id || currentExecutingId) {
-                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId || i.prompt_id === message.prompt_id);
+            loadExistingImages(); 
+            if (currentExecutingId || message.prompt_id) {
+                const itemIndex = globalGenerationQueue.findIndex(i => 
+                    i.status !== 'completed' && 
+                    (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
+                );
+
                 if (itemIndex !== -1) {
-                    globalGenerationQueue[itemIndex].status = 'completed';
+                    const item = globalGenerationQueue[itemIndex];
+                    item.status = 'completed';
+                    
+                    // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
+                    if (item.autoVideo) {
+                        // Use message.prompt to be absolutely sure we use the correct prompt returned by the server
+                        const generationPrompt = message.prompt || item.prompt;
+                        appendConsoleLine(`🎬 Auto-transitioning to Video for: ${generationPrompt.substring(0, 30)}...`, 'system');
+                        addToQueue(generationPrompt, message.filename, { 
+                            isAutoAssemble: item.isAutoAssemble, 
+                            isAutoRender: item.isAutoRender,
+                            batchId: item.batchId || ('batch_v_' + Date.now())
+                        });
+                    }
+
                     updateGlobalQueueUI();
                 }
                 isGeneratingGlobal = false;
                 currentExecutingId = null;
                 setTimeout(() => checkGlobalQueue(), 1000);
+            }
+        }
+        if (message.type === 'comfy_status') {
+            const statusDot = document.getElementById('comfyStatusDot');
+            if (statusDot) {
+                if (message.status === 'connected') {
+                    statusDot.className = 'status-dot connected';
+                    statusDot.title = 'ComfyUI Connected';
+                } else {
+                    statusDot.className = 'status-dot disconnected';
+                    statusDot.title = 'ComfyUI Disconnected';
+                }
             }
         }
     } catch (e) {
@@ -214,8 +274,13 @@ function updateMode() {
     if (modeInd) modeInd.className = isI2V ? 'mode-indicator i2v' : 'mode-indicator t2v';
     if (modeTxt) modeTxt.textContent = isI2V ? 'I2V ACTIVE' : 'T2V ACTIVE';
     if (dimControls) {
-        if (isI2V) dimControls.classList.add('disabled-for-i2v');
-        else dimControls.classList.remove('disabled-for-i2v');
+        if (isI2V) {
+            dimControls.classList.add('disabled-for-i2v');
+            document.getElementById('refStrengthGroup')?.style.setProperty('display', 'block');
+        } else {
+            dimControls.classList.remove('disabled-for-i2v');
+            document.getElementById('refStrengthGroup')?.style.setProperty('display', 'none');
+        }
     }
 }
 
@@ -266,7 +331,9 @@ const sliders = [
     { id: 'videoHeight', valueId: 'videoHeightValue' },
     { id: 'videoLength', valueId: 'videoLengthValue' },
     { id: 'samplerSteps', valueId: 'samplerStepsValue' },
-    { id: 'storyboardSteps', valueId: 'storyboardStepsValue' }
+    { id: 'storyboardSteps', valueId: 'storyboardStepsValue' },
+    { id: 'cfgScale', valueId: 'cfgScaleValue' },
+    { id: 'refStrength', valueId: 'refStrengthValue' }
 ];
 
 sliders.forEach(slider => {
@@ -308,6 +375,11 @@ function updateGlobalQueueUI() {
         queueContainer.style.display = 'block';
     } else {
         queueContainer.style.display = 'none';
+        if (progressText) {
+            progressText.textContent = '✨ Nothing to generate, all done';
+            if (progressFill) progressFill.style.width = '100%';
+            if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '100%';
+        }
     }
 
     if (queueCount) queueCount.textContent = activeItems.length;
@@ -380,8 +452,10 @@ if (generateBtn) {
         const promptText = document.getElementById('promptStage').value.trim();
         if (!promptText) return alert('Please enter a prompt');
 
-        addToQueue(promptText);
-        document.getElementById('promptStage').value = ''; // Limpiar
+        const negPrompt = document.getElementById('negativePromptStage').value.trim();
+        addToQueue(promptText, null, { negativePrompt: negPrompt });
+        document.getElementById('promptStage').value = ''; 
+        document.getElementById('negativePromptStage').value = '';
     });
 }
 
@@ -415,6 +489,13 @@ if (generateStoryboardBtn) {
     });
 }
 
+const generateFullAutoBtn = document.getElementById('generateFullAutoBtn');
+if (generateFullAutoBtn) {
+    generateFullAutoBtn.addEventListener('click', () => {
+        handleSequencerGenerate('full-auto');
+    });
+}
+
 function handleSequencerGenerate(type) {
     const mode = promptModeSelect ? promptModeSelect.value : 'single';
     console.log(`Generating ${type} in mode:`, mode);
@@ -423,25 +504,40 @@ function handleSequencerGenerate(type) {
         const promptVal = document.getElementById('prompt').value.trim();
         if (promptVal) {
             if (type === 'storyboard') addToStoryboardQueue(promptVal);
+            else if (type === 'full-auto') addToStoryboardQueue(promptVal, { autoVideo: true });
             else addToQueue(promptVal);
         }
         else alert("Please enter a prompt");
     } else {
         const promptGeneral = document.getElementById('promptGeneral').value.trim();
+        const negativePromptGeneral = document.getElementById('negativePromptGeneral').value.trim();
         const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
         let addedCount = 0;
 
         const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
+        const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
         const batchId = 'batch_' + Date.now();
 
         sequencePrompts.forEach((el, index) => {
             const val = el.value.trim();
             if (val) {
                 const finalPrompt = promptGeneral ? `${val}, ${promptGeneral}` : val;
+                const finalNegative = negativePromptGeneral; 
+                
                 if (type === 'storyboard') {
-                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index });
+                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, negativePrompt: finalNegative });
+                } else if (type === 'full-auto') {
+                    // Full Auto: Image then Video
+                    addToStoryboardQueue(finalPrompt, { 
+                        batchId, 
+                        storyboardIndex: index, 
+                        autoVideo: true, 
+                        isAutoAssemble,
+                        isAutoRender,
+                        negativePrompt: finalNegative
+                    });
                 } else {
-                    addToQueue(finalPrompt, null, { isAutoAssemble, batchId });
+                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, negativePrompt: finalNegative });
                 }
                 addedCount++;
             }
@@ -449,7 +545,8 @@ function handleSequencerGenerate(type) {
         if (addedCount === 0) alert("Please enter at least one sequence step");
         else {
             if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
-            else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)`, 'system');
+            else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
+            else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
         }
     }
     
@@ -519,7 +616,14 @@ if (jsonExampleBtn) {
         // Copiar al portapapeles
         navigator.clipboard.writeText(jsonStr).then(() => {
             appendConsoleLine('📋 JSON Example copied to clipboard!', 'system');
-            alert('Example JSON copied to clipboard!\n\nYou can now use "IMPORT JSON" to paste it.');
+            // Notify visually change button color temporarily
+            const originalText = jsonExampleBtn.textContent;
+            jsonExampleBtn.textContent = '✅';
+            jsonExampleBtn.style.color = '#10b981';
+            setTimeout(() => {
+                jsonExampleBtn.textContent = originalText;
+                jsonExampleBtn.style.color = '#818cf8';
+            }, 1500);
         }).catch(err => {
             console.error('Failed to copy JSON:', err);
             alert('Example JSON:\n\n' + jsonStr);
@@ -587,7 +691,13 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
         videoWidth: parseInt(document.getElementById('videoWidth').value),
         videoHeight: parseInt(document.getElementById('videoHeight').value),
         videoLength: parseInt(document.getElementById('videoLength').value),
-        samplerSteps: parseInt(document.getElementById('samplerSteps').value)
+        samplerSteps: parseInt(document.getElementById('samplerSteps').value),
+        cfgScale: parseFloat(document.getElementById('cfgScale').value),
+        refStrength: parseFloat(document.getElementById('refStrength').value),
+        seed: document.getElementById('randomSeed').checked ? -1 : parseInt(document.getElementById('seed').value),
+        negativePrompt: document.getElementById('tabOutput').classList.contains('active') ? 
+            document.getElementById('negativePromptStage').value.trim() : 
+            (options.negativePrompt || '')
     };
 
     globalGenerationQueue.push({
@@ -614,7 +724,7 @@ async function loadExistingVideos() {
         videos.forEach((video, index) => {
             const galleryItem = document.createElement('div');
             galleryItem.className = 'gallery-item';
-            galleryItem.style.cssText = 'background: #1e293b; padding: 12px; border-radius: 12px; border: 1px solid #334155; position: relative; display: flex; flex-direction: column; gap: 8px;';
+
             
             const techInfo = video.metadata || { videoWidth: 1280, videoHeight: 720, samplerSteps: 20, videoLength: 121 };
             const promptStr = video.prompt || '';
@@ -668,22 +778,35 @@ async function loadExistingImages() {
         images.forEach((image) => {
             const galleryItem = document.createElement('div');
             galleryItem.className = 'gallery-item';
-            galleryItem.style.cssText = 'background: #1e293b; padding: 12px; border-radius: 12px; border: 1px solid #334155; position: relative; display: flex; flex-direction: column; gap: 8px;';
-            
+
             galleryItem.innerHTML = `
                 <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
                     <img src="${image.url}" style="width: 100%; height: 100%; object-fit: cover;">
-                    <button class="previz-btn" title="Use as Reference" style="position: absolute; top: 10px; right: 10px; background: #a855f7; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0;">📤</button>
+                    <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;">
+                        <button class="view-img-btn" title="View in Previz" style="background: rgba(15, 23, 42, 0.8); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; border: 1px solid rgba(255,255,255,0.1); z-index: 5;">👁️</button>
+                        <button class="previz-btn" title="Use as Reference" style="background: #a855f7; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0; z-index: 5;">📤</button>
+                    </div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.75); padding: 3px 8px; border-radius: 4px; font-size: 9px; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1); pointer-events: none;">IMAGE ASSET</div>
                 </div>
-                <div style="padding: 4px;">
-                    <div style="font-size: 10px; color: #94a3b8;">${image.filename}</div>
+                <div style="padding: 8px 4px 4px 4px;">
+                    <div style="font-size: 11px; color: #a855f7; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px;">Filename</div>
+                    <div style="font-size: 10px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${image.filename}</div>
                 </div>
             `;
 
-            galleryItem.querySelector('.previz-btn').addEventListener('click', () => {
+            galleryItem.querySelector('.view-img-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadImageToPreviz(image.url);
+                const tabPrevizBtn = document.getElementById('tabPrevizBtn');
+                if (tabPrevizBtn) tabPrevizBtn.click();
+            });
+
+            galleryItem.querySelector('.previz-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
                 showImagePreview(image.url, image.filename);
                 uploadedImageFilename = image.filename;
                 updateMode();
+                appendConsoleLine(`🖼️ Loaded image as reference: ${image.filename}`, 'system');
             });
 
             gallery.appendChild(galleryItem);
@@ -705,11 +828,11 @@ document.querySelectorAll('.asset-tab-btn').forEach(btn => {
         btn.style.color = 'white';
 
         if (type === 'videos') {
-            document.getElementById('videoGallery').style.display = 'flex';
+            document.getElementById('videoGallery').style.display = 'grid';
             document.getElementById('imageGallery').style.display = 'none';
         } else {
             document.getElementById('videoGallery').style.display = 'none';
-            document.getElementById('imageGallery').style.display = 'flex';
+            document.getElementById('imageGallery').style.display = 'grid';
             loadExistingImages();
         }
     });
@@ -1156,9 +1279,11 @@ if (previzTab) {
 
 function loadVideoToPreviz(src) {
     const previzVideo = document.getElementById('previzVideo');
+    const previzImage = document.getElementById('previzImage');
     const previzPlaceholder = document.getElementById('previzPlaceholder');
     if (!previzVideo) return;
     
+    if (previzImage) previzImage.style.display = 'none';
     previzVideo.src = src;
     previzVideo.style.display = 'block';
     if (previzPlaceholder) previzPlaceholder.style.display = 'none';
@@ -1217,6 +1342,68 @@ function loadVideoToPreviz(src) {
     }
 
     previzVideo.play();
+}
+
+function loadImageToPreviz(src) {
+    const previzVideo = document.getElementById('previzVideo');
+    const previzImage = document.getElementById('previzImage');
+    const previzPlaceholder = document.getElementById('previzPlaceholder');
+    if (!previzImage) return;
+
+    if (previzVideo) {
+        previzVideo.pause();
+        previzVideo.style.display = 'none';
+    }
+    previzImage.src = src;
+    previzImage.style.display = 'block';
+    if (previzPlaceholder) previzPlaceholder.style.display = 'none';
+
+    // Mostrar información de metadatos detallada
+    const filename = src.split('/').pop().split('?')[0];
+    const metaContainer = document.getElementById('previzMetadata');
+
+    if (metaContainer) {
+        metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
+        fetch('/api/images?t=' + Date.now())
+            .then(res => res.json())
+            .then(images => {
+                const imageData = images.find(img => img.filename === filename);
+                if (imageData && imageData.prompt) {
+                    const creationDate = imageData.timestamp ? new Date(imageData.timestamp).toLocaleString() : 'N/A';
+                    metaContainer.innerHTML = `
+                        <div style="background: rgba(30, 41, 59, 0.5); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #a855f7;">
+                            <div style="font-size: 0.7em; color: #a855f7; text-transform: uppercase; margin-bottom: 5px;">Generation Prompt</div>
+                            <div style="font-size: 1.1em; color: white; font-weight: 500;">${imageData.prompt}</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Type</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">Flux Image</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Created</div>
+                                <div style="font-size: 0.8em; color: #e2e8f0; font-weight: 600;">${creationDate}</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Steps</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${imageData.metadata?.storyboardSteps || '20'} steps</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #334155; font-size: 0.8em; color: #64748b;">
+                            Filename: ${filename}
+                        </div>
+                    `;
+                } else {
+                    metaContainer.innerHTML = `
+                        <p style="opacity:0.5; text-align:center; margin-top:50px;">Metadata not found for this image.</p>
+                        <div style="opacity:0.3; font-size:0.7em; text-align:center;">${filename}</div>
+                    `;
+                }
+            })
+            .catch(err => {
+                metaContainer.innerHTML = '<p style="color:#ef4444; text-align:center;">Error loading metadata.</p>';
+            });
+    }
 }
 
 if (syncWithEditorBtn) {
@@ -1465,7 +1652,12 @@ function updateStoryboardUI() {
                 <div style="position: relative; width: 100%; height: 200px; background: #000;">
                     <img src="${item.url}?t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover;">
                     <div style="position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.8); padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: bold; color: #818cf8;">Step ${index + 1}</div>
-                    <button class="regen-story-btn" title="Regenerate Image" style="position: absolute; top: 10px; right: 10px; background: #a855f7; border: none; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; box-sizing: border-box;">↻</button>
+                    
+                    <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;">
+                        <button class="view-sb-btn" title="View in Previz" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0;">👁️</button>
+                        <button class="regen-story-btn" title="Regenerate Image" style="background: #a855f7; border: none; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; box-sizing: border-box;">↻</button>
+                    </div>
+                    
                     <button class="remove-story-btn" title="Remove" style="position: absolute; bottom: 10px; right: 10px; background: #ef4444; border: none; border-radius: 50%; width: 24px; height: 24px; min-width: 24px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8em; padding: 0; flex-shrink: 0; box-sizing: border-box;">×</button>
                 </div>
                 <div style="padding: 15px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
@@ -1478,6 +1670,13 @@ function updateStoryboardUI() {
                     </div>
                 </div>
             `;
+
+            div.querySelector('.view-sb-btn').onclick = (e) => {
+                e.stopPropagation();
+                loadImageToPreviz(item.url);
+                const tabPrevizBtn = document.getElementById('tabPrevizBtn');
+                if (tabPrevizBtn) tabPrevizBtn.click();
+            };
             
             div.querySelector('.regen-story-btn').onclick = (e) => {
                 e.stopPropagation();
@@ -1531,4 +1730,11 @@ document.getElementById('generateVidsFromStoryboardBtn')?.addEventListener('clic
         const tabOutputBtn = document.getElementById('tabOutputBtn');
         if (tabOutputBtn) tabOutputBtn.click();
     }
+});
+
+// INITIALIZATION: Load assets on startup
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Studio initialized. Loading assets...');
+    loadExistingVideos();
+    loadExistingImages();
 });

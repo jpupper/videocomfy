@@ -41,6 +41,7 @@ function connectToComfy() {
 
     wsComfy.on('open', () => {
         console.log('✅ Conexión establecida con ComfyUI');
+        broadcastComfyStatus('connected');
     });
 
     wsComfy.on('message', async (data) => {
@@ -150,6 +151,18 @@ function connectToComfy() {
                             await downloadImage(assetUrl, targetPath);
                             console.log(`✅ ${assetType} descargado: ${filenameOnly}`);
 
+                            // RE-UPLOAD TO COMFYUI: Si es una imagen (Storyboard), debemos subirla a ComfyUI/input 
+                            // para que el proceso de I2V pueda encontrarla, ya que por defecto Comfy solo la guardó en output.
+                            if (assetType === 'image') {
+                                try {
+                                    console.log(`📤 Re-subiendo storyboard a ComfyUI/input: ${filenameOnly}...`);
+                                    await uploadImageToComfy(targetPath, filenameOnly);
+                                    console.log(`✅ ${assetType} listo en ComfyUI.`);
+                                } catch (errUpload) {
+                                    console.error(`❌ Fallo al re-subir imagen a ComfyUI:`, errUpload);
+                                }
+                            }
+
                             // Guardar metadatos asociados al archivo
                             const metaToSave = details || lastPromptDetails || { prompt: 'Unknown Prompt', params: {} };
                             
@@ -158,6 +171,14 @@ function connectToComfy() {
                                     prompt: metaToSave.prompt,
                                     params: metaToSave.params,
                                     imageFilename: metaToSave.imageFilename,
+                                    prompt_id: promptId
+                                });
+                            } else {
+                                saveImageMetadata(filenameOnly, {
+                                    prompt: metaToSave.prompt,
+                                    params: metaToSave.params,
+                                    storyboardIndex: metaToSave.storyboardIndex,
+                                    batchId: metaToSave.batchId,
                                     prompt_id: promptId
                                 });
                             }
@@ -171,7 +192,8 @@ function connectToComfy() {
                                         filename: filenameOnly,
                                         prompt: metaToSave.prompt,
                                         storyboardIndex: metaToSave.storyboardIndex,
-                                        batchId: metaToSave.batchId
+                                        batchId: metaToSave.batchId,
+                                        prompt_id: promptId
                                     }));
                                 }
                             });
@@ -191,15 +213,18 @@ function connectToComfy() {
 
     wsComfy.on('close', () => {
         console.log('❌ Conexión con ComfyUI cerrada. Reconectando en 5s...');
+        broadcastComfyStatus('disconnected');
         setTimeout(connectToComfy, 5000);
     });
 
     wsComfy.on('error', (err) => {
         console.error('❌ Error en WebSocket de ComfyUI:', err.message);
+        broadcastComfyStatus('disconnected');
     });
 }
 
-connectToComfy();
+// Se llamará al final del archivo para asegurar que wss esté definido
+// connectToComfy();
 
 // ============================================
 // ENDPOINTS API
@@ -228,21 +253,25 @@ app.post('/api/upload-image', upload.single('image'), async (req, res) => {
     }
 });
 
-const METADATA_PATH = path.join(__dirname, 'public', 'videos', 'metadata.json');
+const VIDEO_META_PATH = path.join(__dirname, 'public', 'videos', 'metadata.json');
+const IMAGE_META_PATH = path.join(__dirname, 'public', 'uploads', 'metadata.json');
 
 function saveVideoMetadata(filename, metadata) {
+    saveMetadata(VIDEO_META_PATH, filename, metadata);
+}
+
+function saveImageMetadata(filename, metadata) {
+    saveMetadata(IMAGE_META_PATH, filename, metadata);
+}
+
+function saveMetadata(metaPath, filename, metadata) {
     let allMetadata = {};
     try {
-        if (fs.existsSync(METADATA_PATH)) {
-            allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+        if (fs.existsSync(metaPath)) {
+            allMetadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
         }
     } catch (e) { 
-        console.error('[METADATA] Error reading file:', e); 
-    }
-
-    // Asegurarse de que el prompt llegue
-    if (!metadata.prompt || metadata.prompt === '') {
-        console.warn(`[METADATA] Warning: Saving metadata for ${filename} with empty prompt!`);
+        console.error(`[METADATA] Error reading file ${metaPath}:`, e); 
     }
 
     allMetadata[filename] = {
@@ -251,18 +280,25 @@ function saveVideoMetadata(filename, metadata) {
     };
 
     try {
-        fs.writeFileSync(METADATA_PATH, JSON.stringify(allMetadata, null, 2));
-        console.log(`[METADATA] ✅ Guardado exitoso para: ${filename}`);
-        console.log(`[METADATA] Contenido: "${metadata.prompt?.substring(0, 50)}..."`);
+        fs.writeFileSync(metaPath, JSON.stringify(allMetadata, null, 2));
+        console.log(`[METADATA] ✅ Guardado exitoso para: ${filename} en ${path.basename(metaPath)}`);
     } catch (e) { 
-        console.error('[METADATA] Error writing file:', e); 
+        console.error(`[METADATA] Error writing file ${metaPath}:`, e); 
     }
 }
 
 function getVideoMetadata(filename) {
+    return getMetadata(VIDEO_META_PATH, filename);
+}
+
+function getImageMetadata(filename) {
+    return getMetadata(IMAGE_META_PATH, filename);
+}
+
+function getMetadata(metaPath, filename) {
     try {
-        if (fs.existsSync(METADATA_PATH)) {
-            const allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+        if (fs.existsSync(metaPath)) {
+            const allMetadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
             return allMetadata[filename] || null;
         }
     } catch (e) { }
@@ -272,15 +308,31 @@ function getVideoMetadata(filename) {
 app.get('/api/images', (req, res) => {
     const uploadsDir = path.join(__dirname, 'public', 'uploads');
     if (!fs.existsSync(uploadsDir)) return res.json([]);
+    
+    let allMetadata = {};
+    try {
+        if (fs.existsSync(IMAGE_META_PATH)) {
+            allMetadata = JSON.parse(fs.readFileSync(IMAGE_META_PATH, 'utf8'));
+        }
+    } catch (e) {}
+
     fs.readdir(uploadsDir, (err, files) => {
         if (err) return res.json([]);
         const images = files
             .filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file))
             .map(file => {
                 const stats = fs.statSync(path.join(uploadsDir, file));
-                return { filename: file, url: `/uploads/${file}`, mtime: stats.mtime.getTime() };
+                const meta = allMetadata[file] || {};
+                return { 
+                    filename: file, 
+                    url: `/uploads/${file}`, 
+                    mtime: stats.mtime.getTime(),
+                    timestamp: meta.timestamp || stats.mtime.getTime(),
+                    prompt: meta.prompt || '',
+                    metadata: meta.params || {}
+                };
             })
-            .sort((a, b) => b.mtime - a.mtime);
+            .sort((a, b) => b.timestamp - a.timestamp);
         res.json(images);
     });
 });
@@ -308,8 +360,8 @@ app.get('/api/videos', (req, res) => {
         
         let allMetadata = {};
         try {
-            if (fs.existsSync(METADATA_PATH)) {
-                allMetadata = JSON.parse(fs.readFileSync(METADATA_PATH, 'utf8'));
+            if (fs.existsSync(VIDEO_META_PATH)) {
+                allMetadata = JSON.parse(fs.readFileSync(VIDEO_META_PATH, 'utf8'));
             }
         } catch (e) {}
 
@@ -424,6 +476,12 @@ server.listen(port, () => {
 
 wss.on('connection', (ws) => {
     console.log('🔌 Cliente conectado');
+    
+    // Informar estado actual de ComfyUI al nuevo cliente
+    const currentStatus = (wsComfy && wsComfy.readyState === 1) ? 'connected' : 'disconnected';
+    console.log(`🔌 Estado entregado a nuevo cliente: ${currentStatus}`);
+    ws.send(JSON.stringify({ type: 'comfy_status', status: currentStatus }));
+
     ws.on('message', async (data) => {
         try {
             const message = JSON.parse(data);
@@ -517,15 +575,30 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
     // Configurar workflow
     if (isI2V) {
         promptWorkflow["3"]["inputs"]["text"] = promptText;
-        promptWorkflow["11"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
-        promptWorkflow["67"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
+        if (params.negativePrompt) promptWorkflow["4"]["inputs"]["text"] = params.negativePrompt;
+        
+        const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000);
+        promptWorkflow["11"]["inputs"]["noise_seed"] = seedValue;
+        promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
+        
         promptWorkflow["200"]["inputs"]["image"] = imageFilename;
+        
+        if (params.cfgScale) promptWorkflow["47"]["inputs"]["cfg"] = params.cfgScale;
+        if (params.refStrength) {
+            promptWorkflow["107"]["inputs"]["strength"] = params.refStrength;
+            promptWorkflow["108"]["inputs"]["strength"] = params.refStrength;
+        }
     } else {
         promptWorkflow["3"]["inputs"]["text"] = promptText;
-        promptWorkflow["11"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
-        promptWorkflow["67"]["inputs"]["noise_seed"] = Math.floor(Math.random() * 1000000000);
+        if (params.negativePrompt) promptWorkflow["4"]["inputs"]["text"] = params.negativePrompt;
+
+        const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000);
+        promptWorkflow["11"]["inputs"]["noise_seed"] = seedValue;
+        promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
+
         if (params.videoWidth) promptWorkflow["89"]["inputs"]["width"] = params.videoWidth;
         if (params.videoHeight) promptWorkflow["89"]["inputs"]["height"] = params.videoHeight;
+        if (params.cfgScale) promptWorkflow["47"]["inputs"]["cfg"] = params.cfgScale;
     }
 
     if (params.videoLength) promptWorkflow["62"]["inputs"]["value"] = params.videoLength;
@@ -555,3 +628,20 @@ async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, b
     console.log(`🚀 Storyboard enviado a ComfyUI. ID: ${promptId}`);
     return promptId;
 }
+
+function broadcastComfyStatus(status) {
+    if (!wss) {
+        console.warn('⚠️ No se pudo difundir el estado: wss no está inicializado');
+        return;
+    }
+    console.log(`📡 Difundiendo estado de ComfyUI a los clientes: ${status}`);
+    wss.clients.forEach(client => {
+        if (client.readyState === 1) { // 1 = OPEN
+            client.send(JSON.stringify({ type: 'comfy_status', status }));
+        }
+    });
+}
+
+// Iniciar conexión con ComfyUI una vez que el servidor está listo
+connectToComfy();
+

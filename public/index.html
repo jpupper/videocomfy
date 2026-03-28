@@ -16,7 +16,10 @@
     <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
-            <h1 style="font-size: 1.4em; margin-bottom: 25px; color: #fff; text-align: left;">Studio Generator</h1>
+            <h1 style="font-size: 1.4em; margin-bottom: 25px; color: #fff; text-align: left; display: flex; align-items: center; gap: 10px;">
+                Studio Generator
+                <span id="comfyStatusDot" class="status-dot disconnected" title="ComfyUI Status"></span>
+            </h1>
             
             <h2 style="font-size: 0.85em; margin-bottom: 20px; color: #818cf8; text-transform: uppercase; letter-spacing: 1px;">⚡ Generative Flow</h2>
 
@@ -58,6 +61,18 @@
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label>Flux Steps <span id="storyboardStepsValue" style="float: right; color: #a855f7; font-weight: 800;">25</span></label>
                     <input type="range" id="storyboardSteps" min="15" max="50" step="1" value="25">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>CFG Scale <span id="cfgScaleValue" style="float: right; color: #f59e0b; font-weight: 800;">4.0</span></label>
+                    <input type="range" id="cfgScale" min="1" max="10" step="0.5" value="4.0">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;" id="refStrengthGroup">
+                    <label>Ref Strength <span id="refStrengthValue" style="float: right; color: #34d399; font-weight: 800;">1.00</span></label>
+                    <input type="range" id="refStrength" min="0.1" max="1.0" step="0.05" value="1.00">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Seed <span style="float: right; font-size: 0.7em;"><input type="checkbox" id="randomSeed" checked> Random</span></label>
+                    <input type="number" id="seed" value="0" style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; padding: 4px; font-size: 0.8em;">
                 </div>
             </div>
 
@@ -106,6 +121,7 @@
 
                     <div id="previz-monitor" class="sub-tab-content active" style="flex: 1; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 2px dashed #475569;">
                         <video id="previzVideo" style="max-height: 100%; max-width: 100%; display: none;" controls autoplay loop></video>
+                        <img id="previzImage" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
                         <div id="previzPlaceholder" style="position: absolute; color: #475569; text-align: center;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 60px; margin-bottom: 10px; opacity: 0.3;">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -143,7 +159,8 @@
                     </div>
                     
                     <div class="quick-prompt-area" style="margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155;">
-                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." style="width: 100%; height: 60px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: inherit; resize: none;"></textarea>
+                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." style="width: 100%; height: 60px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: inherit; resize: none; margin-bottom: 10px;"></textarea>
+                        <textarea id="negativePromptStage" placeholder="Negative prompt (Optional): blurry, low quality..." style="width: 100%; height: 40px; background: #0f172a; border: 1px solid #334155; color: #94a3b8; padding: 8px; border-radius: 6px; font-family: inherit; font-size: 0.75em; resize: none;"></textarea>
                         <div class="controls" style="margin-top: 10px; display: flex; gap: 10px;">
                             <button id="generateButton" style="flex: 3; height: 40px; font-size: 0.9em; background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🚀 LAUNCH</button>
                             <button id="stopButton" style="flex: 1; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; display: none; font-weight: bold;">🛑 STOP</button>
@@ -172,17 +189,28 @@
                             <textarea id="prompt" placeholder="Write your prompt..." style="width: 100%; min-height: 150px; background: #1e293b; border: 1px solid #334155; color: white; padding: 15px; border-radius: 8px; font-family: inherit; margin-bottom: 20px;"></textarea>
                         </div>
                         <div id="advancedMode" class="advanced-panel" style="display: none;">
-                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <button id="jsonExampleBtn" style="flex: 1; padding: 10px; font-size: 0.7em; background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📋 JSON EXAMPLE</button>
-                                <button id="importJsonBtn" style="flex: 1; padding: 10px; font-size: 0.7em; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📥 IMPORT JSON</button>
+                            <div style="display: flex; gap: 6px; margin-bottom: 12px; align-items: center;">
+                                <button id="importJsonBtn" style="flex: 1; padding: 10px; font-size: 0.75em; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📥 IMPORT JSON</button>
+                                <button id="jsonExampleBtn" title="Copy JSON Example" style="width: 40px; height: 40px; padding: 0; font-size: 1em; background: rgba(15, 23, 42, 0.6); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">📋</button>
                             </div>
-                            <textarea id="promptGeneral" class="prompt-general-textarea" placeholder="Style to apply to all steps..." style="width: 100%; height: 80px; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 15px;"></textarea>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label style="margin: 0; color: #94a3b8; font-size: 0.7em; text-transform: uppercase; font-weight: bold;">Global Style / Master</label>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="autoAssembleCheck" style="width: 14px; height: 14px; cursor: pointer; accent-color: #10b981;">
+                                        <label for="autoAssembleCheck" style="margin: 0; font-size: 0.7em; color: #10b981; font-weight: 700; cursor: pointer; text-transform: uppercase;">Auto-assemble</label>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="autoRenderCheck" style="width: 14px; height: 14px; cursor: pointer; accent-color: #f59e0b;">
+                                        <label for="autoRenderCheck" style="margin: 0; font-size: 0.7em; color: #f59e0b; font-weight: 700; cursor: pointer; text-transform: uppercase;">Auto-render</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <textarea id="promptGeneral" class="prompt-general-textarea" placeholder="Style to apply to all steps..." style="width: 100%; height: 80px; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px;"></textarea>
+                            <label style="display: block; margin-bottom: 8px; color: #ef4444; font-size: 0.7em; text-transform: uppercase; font-weight: bold; opacity: 0.7;">Global Negative Style</label>
+                            <textarea id="negativePromptGeneral" placeholder="Negative words for all steps..." style="width: 100%; height: 50px; background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.8em;"></textarea>
                             
-                            <!-- AUTO-ASSEMBLE TICK (MOVECTED FOR VISIBILITY) -->
-                            <div style="margin: 0 0 15px 0; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                                <input type="checkbox" id="autoAssembleCheck" style="width: 22px; height: 22px; cursor: pointer; accent-color: #10b981;">
-                                <label for="autoAssembleCheck" style="margin: 0; font-size: 0.8em; color: #10b981; font-weight: 800; cursor: pointer; text-transform: uppercase; letter-spacing: 0.8px;">Auto-assemble in Timeline</label>
-                            </div>
+                            
                             
                             <!-- Area para importar JSON (TextField en vez de prompt) -->
                             <div id="jsonImportArea" style="display: none; margin-bottom: 15px; background: rgba(15, 23, 42, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #6366f1;">
@@ -201,6 +229,7 @@
                     </div>
                     <div class="controls" style="margin-top: 10px; padding: 10px; display: flex; gap: 10px;">
                         <button id="generateVideoFromSequencer" class="generate-from-prompts" style="flex: 1; height: 45px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">DIRECT TO VIDEO</button>
+                        <button id="generateFullAutoBtn" style="flex: 1; height: 45px; background: linear-gradient(135deg, #a855f7, #6366f1); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4); text-transform: uppercase;">FULL AUTO: T2I + I2V</button>
                         <button id="generateStoryboardFromSequencer" style="flex: 1; height: 45px; background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid #a855f7; border-radius: 8px; cursor: pointer; font-weight: bold;">GENERATE STORYBOARD (T2I)</button>
                     </div>
                 </div>
@@ -285,8 +314,10 @@
                 <button class="asset-tab-btn" data-type="images" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.7em; font-weight: bold; transition: all 0.2s;">IMAGES</button>
             </div>
 
-            <div id="videoGallery" style="display: flex; flex-direction: column; gap: 20px;"></div>
-            <div id="imageGallery" style="display: none; flex-direction: column; gap: 20px;"></div>
+            <div class="gallery-scroll-container" style="flex: 1; overflow-y: auto; padding-right: 5px; margin-top: 10px;">
+                <div id="videoGallery" class="asset-gallery-grid"></div>
+                <div id="imageGallery" class="asset-gallery-grid" style="display: none;"></div>
+            </div>
         </aside>
     </div>
 
