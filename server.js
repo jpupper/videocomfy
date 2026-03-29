@@ -337,6 +337,51 @@ app.get('/api/images', (req, res) => {
     });
 });
 
+app.get('/api/audio', (req, res) => {
+    const audioDir = path.join(__dirname, 'public', 'audio');
+    if (!fs.existsSync(audioDir)) return res.json([]);
+    
+    fs.readdir(audioDir, (err, files) => {
+        if (err) return res.json([]);
+        const audioFiles = files
+            .filter(file => /\.(mp3|wav|ogg|m4a)$/i.test(file))
+            .map(file => {
+                const stats = fs.statSync(path.join(audioDir, file));
+                return { 
+                    filename: file, 
+                    url: `/audio/${file}`, 
+                    mtime: stats.mtime.getTime()
+                };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+        res.json(audioFiles);
+    });
+});
+
+app.post('/api/upload-audio', upload.single('audio'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No audio received' });
+
+        const ext = path.extname(req.file.originalname) || '.mp3';
+        const newFilename = `audio_${Date.now()}${ext}`;
+        const audioDir = path.join(__dirname, 'public', 'audio');
+        if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+        
+        const newPath = path.join(audioDir, newFilename);
+        fs.renameSync(req.file.path, newPath);
+
+        res.json({
+            success: true,
+            filename: newFilename,
+            url: `/audio/${newFilename}`
+        });
+    } catch (error) {
+        console.error('Error uploading audio:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 async function checkAudio(filePath) {
     try {
         const { stdout } = await execPromise(`ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${filePath}"`);
@@ -392,10 +437,11 @@ app.post('/api/export-timeline', async (req, res) => {
         console.log(`🎬 Iniciando exportación de timeline: ${clips.length} clips`);
 
         const videosDir = path.join(__dirname, 'public', 'videos');
+        const audioDir = path.join(__dirname, 'public', 'audio');
         const outputFilename = `export_${Date.now()}.mp4`;
         const outputPath = path.join(videosDir, outputFilename);
 
-        // 1. Determinar duración total y dimensiones
+        // 1. Determinar duración total
         let targetWidth = 1280;
         let targetHeight = 720;
         let totalDuration = 0;
@@ -405,8 +451,16 @@ app.post('/api/export-timeline', async (req, res) => {
             if (end > totalDuration) totalDuration = end;
         });
 
-        // 2. Construir inputs de ffmpeg
-        const inputs = clips.map(c => `-i "${path.join(videosDir, c.filename)}"`).join(' ');
+        // 2. Construir inputs de ffmpeg y mapear rutas
+        const inputPaths = clips.map(c => {
+            let fullPath = path.join(videosDir, c.filename);
+            if (!fs.existsSync(fullPath)) {
+                fullPath = path.join(audioDir, c.filename);
+            }
+            return fullPath;
+        });
+
+        const inputs = inputPaths.map(p => `-i "${p}"`).join(' ');
 
         // 3. Construir Filter Complex
         let filterComplex = '';
@@ -415,47 +469,67 @@ app.post('/api/export-timeline', async (req, res) => {
 
         let currentLayer = '[bg]';
         let audioLabels = [];
+        let videoInputsCount = 0;
 
         for (let i = 0; i < clips.length; i++) {
             const c = clips[i];
+            const isAudioTrack = c.track && c.track.startsWith('A');
             const offsetMs = Math.round(c.startTime * 1000);
             const offsetSec = offsetMs / 1000;
-            const clipPath = path.join(videosDir, c.filename);
+            const clipPath = inputPaths[i];
 
-            // --- VIDEO ---
-            // Escalar, pad y offset temporal
-            filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS+(${offsetSec}/TB)[v${i}];`;
-            
-            const nextLayer = i === clips.length - 1 ? '[outv]' : `[layer${i}]`;
-            filterComplex += `${currentLayer}[v${i}]overlay=enable='between(t,${c.startTime},${c.startTime + c.duration})'${nextLayer};`;
-            currentLayer = `[layer${i}]`;
+            // --- VIDEO (Solo si no es track de audio) ---
+            if (!isAudioTrack) {
+                filterComplex += `[${i}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1,setpts=PTS-STARTPTS+(${offsetSec}/TB)[v${i}];`;
+                
+                const nextLayer = `[layer${i}]`;
+                filterComplex += `${currentLayer}[v${i}]overlay=enable='between(t,${c.startTime},${c.startTime + c.duration})'${nextLayer};`;
+                currentLayer = nextLayer;
+                videoInputsCount++;
+            }
 
-            // --- AUDIO ---
+            // --- AUDIO (En cualquier clip que lo tenga) ---
             const hasAudio = await checkAudio(clipPath);
             if (hasAudio) {
-                // Trim para que no se pase del tiempo indicado en el timeline
-                // Adelay para ponerlo en su sitio (all=1 aplica el mismo delay a todos los canales)
                 filterComplex += `[${i}:a]atrim=0:${c.duration},asetpts=PTS-STARTPTS,adelay=${offsetMs}:all=1[a${i}];`;
                 audioLabels.push(`[a${i}]`);
             }
         }
 
+        // Renombrar la última capa de video
+        if (videoInputsCount > 0) {
+            filterComplex = filterComplex.replace(new RegExp(`\\[layer${clips.length - 1}\\]$`), '[outv]');
+            // Si por alguna razón no se reemplazó (ej: el último clip era audio), aseguramos la salida
+            if (!filterComplex.includes('[outv]')) {
+                 filterComplex += `${currentLayer}copy[outv];`;
+            }
+        } else {
+             filterComplex += `${currentLayer}copy[outv];`;
+        }
+
         // 4. Mixing de Audio si existe
+        let mapVideo = '-map "[outv]"';
         let mapAudio = '';
         if (audioLabels.length > 0) {
             filterComplex += `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest[outa]`;
             mapAudio = '-map "[outa]" -c:a aac -b:a 192k';
-        } else {
-            // Si no hay audio, omitimos el mapeo de audio para no fallar
-            console.log('ℹ️ No se detectó audio en ningún clip, exportando solo video.');
         }
 
-        const command = `ffmpeg ${inputs} -filter_complex "${filterComplex}" -map "[outv]" ${mapAudio} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -y "${outputPath}"`;
+        const command = `ffmpeg ${inputs} -filter_complex "${filterComplex}" ${mapVideo} ${mapAudio} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -y "${outputPath}"`;
         
         console.log('Ejecutando FFmpeg:', command);
         await execPromise(command);
 
+        saveVideoMetadata(outputFilename, {
+            prompt: "Final Project Export",
+            isExport: true,
+            clipCount: clips.length,
+            duration: totalDuration,
+            params: { videoWidth: targetWidth, videoHeight: targetHeight }
+        });
+
         res.json({ success: true, filename: outputFilename, url: `/videos/${outputFilename}` });
+
     } catch (error) {
         console.error('Error exporting timeline:', error);
         res.status(500).json({ error: error.message });

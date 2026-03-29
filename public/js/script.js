@@ -58,7 +58,7 @@ ws.onmessage = (event) => {
         }
 
         if (message.type === 'executing' && message.node) {
-             if (currentExecutingId && progressText) {
+            if (currentExecutingId && progressText) {
                 const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
                 if (item) {
                     item.prompt_id = message.prompt_id; // Link client ID with ComfyUI prompt_id
@@ -71,16 +71,16 @@ ws.onmessage = (event) => {
         if (message.type === 'video_generated') {
             loadExistingVideos();
             if (currentExecutingId || message.prompt_id) {
-                const itemIndex = globalGenerationQueue.findIndex(i => 
-                    i.status !== 'completed' && 
+                const itemIndex = globalGenerationQueue.findIndex(i =>
+                    i.status !== 'completed' &&
                     (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
                 );
-                
+
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
                     item.resultUrl = message.url;
-                    
+
                     // REEMPLAZO AUTOMATICO PARA REGENERACION
                     if (item.replaceClipId) {
                         const clipQuery = `.timeline-clip[data-clip-id="${item.replaceClipId}"]`;
@@ -89,7 +89,7 @@ ws.onmessage = (event) => {
                             const v = clip.querySelector('video');
                             v.src = message.url + '?t=' + Date.now();
                             v.load();
-                            
+
                             // Actualizar etiqueta de nombre de archivo
                             const filename = message.url.split('/').pop().split('?')[0];
                             const label = clip.querySelector('.clip-info span');
@@ -98,22 +98,22 @@ ws.onmessage = (event) => {
                             clip.dataset.prompt = item.prompt;
                             clip.dataset.metadata = JSON.stringify(item.params);
                             appendConsoleLine(`♻️ Video replaced in timeline: ${filename}`, 'system');
-                            
+
                             // Refrescar cache y sincronizar
                             refreshClipCache();
                         }
                     }
 
                     updateGlobalQueueUI();
-                    
+
                     // AUTO-ASSEMBLY LOGIC
                     const batchItems = globalGenerationQueue.filter(i => i.batchId === item.batchId);
                     const autoBatch = batchItems.filter(i => i.isAutoAssemble);
-                    
+
                     if (autoBatch.length > 0 && batchItems.every(i => i.status === 'completed')) {
                         // All items in the batch are finished! Assemble them.
                         assembleBatchInTimeline(autoBatch);
-                        
+
                         // AUTO-RENDER LOGIC
                         const isAutoRender = batchItems.some(i => i.isAutoRender);
                         if (isAutoRender) {
@@ -123,7 +123,7 @@ ws.onmessage = (event) => {
                                 if (timelineData.length > 0) startRealExport(timelineData);
                             }, 1000);
                         }
-                        
+
                         // Clean batchId from queue to avoid repeating
                         autoBatch.forEach(i => i.isAutoAssemble = false);
                     }
@@ -136,26 +136,27 @@ ws.onmessage = (event) => {
 
         if (message.type === 'storyboard_generated') {
             handleStoryboardGenerated(message);
-            loadExistingImages(); 
+            loadExistingImages();
             if (currentExecutingId || message.prompt_id) {
-                const itemIndex = globalGenerationQueue.findIndex(i => 
-                    i.status !== 'completed' && 
+                const itemIndex = globalGenerationQueue.findIndex(i =>
+                    i.status !== 'completed' &&
                     (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
                 );
 
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
-                    
+
                     // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
                     if (item.autoVideo) {
                         // Use message.prompt to be absolutely sure we use the correct prompt returned by the server
                         const generationPrompt = message.prompt || item.prompt;
                         appendConsoleLine(`🎬 Auto-transitioning to Video for: ${generationPrompt.substring(0, 30)}...`, 'system');
-                        addToQueue(generationPrompt, message.filename, { 
-                            isAutoAssemble: item.isAutoAssemble, 
+                        addToQueue(generationPrompt, message.filename, {
+                            isAutoAssemble: item.isAutoAssemble,
                             isAutoRender: item.isAutoRender,
-                            batchId: item.batchId || ('batch_v_' + Date.now())
+                            batchId: item.batchId || ('batch_v_' + Date.now()),
+                            replaceClipId: item.replaceClipId
                         });
                     }
 
@@ -270,7 +271,7 @@ function updateMode() {
     const modeInd = document.getElementById('modeIndicator');
     const modeTxt = document.getElementById('modeText');
     const dimControls = document.getElementById('dimensionControls');
-    
+
     if (modeInd) modeInd.className = isI2V ? 'mode-indicator i2v' : 'mode-indicator t2v';
     if (modeTxt) modeTxt.textContent = isI2V ? 'I2V ACTIVE' : 'T2V ACTIVE';
     if (dimControls) {
@@ -311,7 +312,7 @@ tabButtons.forEach(button => {
         tabButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
         tabContents.forEach(content => content.classList.remove('active'));
-        
+
         const target = document.getElementById(targetId);
         if (target) target.classList.add('active');
 
@@ -354,7 +355,7 @@ if (resetParamsBtn) {
         document.getElementById('videoHeight').value = 720;
         document.getElementById('videoLength').value = 121;
         document.getElementById('samplerSteps').value = 20;
-        
+
         // Disparar evento input para actualizar los labels
         sliders.forEach(s => document.getElementById(s.id).dispatchEvent(new Event('input')));
     });
@@ -372,9 +373,9 @@ function updateGlobalQueueUI() {
 
     const activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
     if (activeItems.length > 0 || isGeneratingGlobal) {
-        queueContainer.style.display = 'block';
+        queueContainer.classList.remove('hidden');
     } else {
-        queueContainer.style.display = 'none';
+        queueContainer.classList.add('hidden');
         if (progressText) {
             progressText.textContent = '✨ Nothing to generate, all done';
             if (progressFill) progressFill.style.width = '100%';
@@ -400,12 +401,12 @@ function updateGlobalQueueUI() {
             transition: all 0.3s ease;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         `;
-        
+
         let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
         if (item.type === 'storyboard') modeLabel = 'STORYBOARD (T2I)';
 
-        const progressIndicator = item.status === 'generating' ? 
-            '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' : 
+        const progressIndicator = item.status === 'generating' ?
+            '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' :
             '<span style="color: #94a3b8;">⏳ QUEUED</span>';
 
         div.innerHTML = `
@@ -452,10 +453,8 @@ if (generateBtn) {
         const promptText = document.getElementById('promptStage').value.trim();
         if (!promptText) return alert('Please enter a prompt');
 
-        const negPrompt = document.getElementById('negativePromptStage').value.trim();
-        addToQueue(promptText, null, { negativePrompt: negPrompt });
-        document.getElementById('promptStage').value = ''; 
-        document.getElementById('negativePromptStage').value = '';
+        addToQueue(promptText);
+        document.getElementById('promptStage').value = '';
     });
 }
 
@@ -467,11 +466,11 @@ const advancedMode = document.getElementById('advancedMode');
 if (promptModeSelect) {
     promptModeSelect.addEventListener('change', () => {
         if (promptModeSelect.value === 'single') {
-            simplePromptContainer.style.display = 'block';
-            advancedMode.style.display = 'none';
+            simplePromptContainer.classList.remove('hidden');
+            advancedMode.classList.add('hidden');
         } else {
-            simplePromptContainer.style.display = 'none';
-            advancedMode.style.display = 'block';
+            simplePromptContainer.classList.add('hidden');
+            advancedMode.classList.remove('hidden');
         }
     });
 }
@@ -499,7 +498,7 @@ if (generateFullAutoBtn) {
 function handleSequencerGenerate(type) {
     const mode = promptModeSelect ? promptModeSelect.value : 'single';
     console.log(`Generating ${type} in mode:`, mode);
-    
+
     if (mode === 'single') {
         const promptVal = document.getElementById('prompt').value.trim();
         if (promptVal) {
@@ -510,7 +509,6 @@ function handleSequencerGenerate(type) {
         else alert("Please enter a prompt");
     } else {
         const promptGeneral = document.getElementById('promptGeneral').value.trim();
-        const negativePromptGeneral = document.getElementById('negativePromptGeneral').value.trim();
         const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
         let addedCount = 0;
 
@@ -521,23 +519,22 @@ function handleSequencerGenerate(type) {
         sequencePrompts.forEach((el, index) => {
             const val = el.value.trim();
             if (val) {
-                const finalPrompt = promptGeneral ? `${val}, ${promptGeneral}` : val;
-                const finalNegative = negativePromptGeneral; 
-                
+                // Prioridad Estilo Global antes del clip prompt
+                const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
+
                 if (type === 'storyboard') {
-                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, negativePrompt: finalNegative });
+                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index });
                 } else if (type === 'full-auto') {
                     // Full Auto: Image then Video
-                    addToStoryboardQueue(finalPrompt, { 
-                        batchId, 
-                        storyboardIndex: index, 
-                        autoVideo: true, 
+                    addToStoryboardQueue(finalPrompt, {
+                        batchId,
+                        storyboardIndex: index,
+                        autoVideo: true,
                         isAutoAssemble,
                         isAutoRender,
-                        negativePrompt: finalNegative
                     });
                 } else {
-                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, negativePrompt: finalNegative });
+                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId });
                 }
                 addedCount++;
             }
@@ -549,7 +546,7 @@ function handleSequencerGenerate(type) {
             else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
         }
     }
-    
+
     // Redirigir a la pestaña correspondiente
     if (type === 'storyboard') document.getElementById('tabStoryboardBtn').click();
     else document.getElementById('tabOutputBtn').click();
@@ -562,7 +559,7 @@ document.getElementById('addPromptButton')?.addEventListener('click', () => {
 function addPromptStep(val = '') {
     const container = document.getElementById('promptSequence');
     if (!container) return;
-    
+
     const count = container.querySelectorAll('.prompt-item').length + 1;
     const div = document.createElement('div');
     div.className = 'prompt-item';
@@ -576,7 +573,7 @@ function addPromptStep(val = '') {
         </div>
         <textarea class="sequence-prompt-textarea" placeholder="Step description...">${val}</textarea>
     `;
-    
+
     div.querySelector('.remove-prompt-btn').addEventListener('click', () => {
         div.remove();
         // Update numbers
@@ -585,7 +582,7 @@ function addPromptStep(val = '') {
             item.querySelector('.prompt-status-text').textContent = `PROMPT ${idx + 1}`;
         });
     });
-    
+
     container.appendChild(div);
 }
 
@@ -612,7 +609,7 @@ if (jsonExampleBtn) {
             ]
         };
         const jsonStr = JSON.stringify(example, null, 2);
-        
+
         // Copiar al portapapeles
         navigator.clipboard.writeText(jsonStr).then(() => {
             appendConsoleLine('📋 JSON Example copied to clipboard!', 'system');
@@ -634,7 +631,15 @@ if (jsonExampleBtn) {
 if (importJsonBtn) {
     importJsonBtn.addEventListener('click', () => {
         const area = document.getElementById('jsonImportArea');
-        if (area) area.style.display = 'block';
+
+        // El area de importación vive dentro de advancedMode, 
+        // así que debemos asegurarnos de que el modo Batch esté activo.
+        if (promptModeSelect) {
+            promptModeSelect.value = 'batch';
+            promptModeSelect.dispatchEvent(new Event('change'));
+        }
+
+        if (area) area.classList.remove('hidden');
     });
 }
 
@@ -644,7 +649,7 @@ const cancelJsonImport = document.getElementById('cancelJsonImport');
 if (cancelJsonImport) {
     cancelJsonImport.addEventListener('click', () => {
         const area = document.getElementById('jsonImportArea');
-        if (area) area.style.display = 'none';
+        if (area) area.classList.add('hidden');
     });
 }
 
@@ -675,9 +680,9 @@ if (confirmJsonImport) {
             });
 
             appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added.`, 'system');
-            
+
             // Cerrar el area
-            document.getElementById('jsonImportArea').style.display = 'none';
+            document.getElementById('jsonImportArea').classList.add('hidden');
             document.getElementById('jsonInputText').value = '';
         } catch (e) {
             console.error('JSON Import Error:', e);
@@ -695,9 +700,7 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
         cfgScale: parseFloat(document.getElementById('cfgScale').value),
         refStrength: parseFloat(document.getElementById('refStrength').value),
         seed: document.getElementById('randomSeed').checked ? -1 : parseInt(document.getElementById('seed').value),
-        negativePrompt: document.getElementById('tabOutput').classList.contains('active') ? 
-            document.getElementById('negativePromptStage').value.trim() : 
-            (options.negativePrompt || '')
+        negativePrompt: options.negativePrompt || ''
     };
 
     globalGenerationQueue.push({
@@ -724,26 +727,36 @@ async function loadExistingVideos() {
         videos.forEach((video, index) => {
             const galleryItem = document.createElement('div');
             galleryItem.className = 'gallery-item';
+            if (video.filename.startsWith('export_') || (video.metadata && video.metadata.isExport)) {
+                galleryItem.classList.add('export-item');
+            }
 
-            
+            const isEx = galleryItem.classList.contains('export-item');
             const techInfo = video.metadata || { videoWidth: 1280, videoHeight: 720, samplerSteps: 20, videoLength: 121 };
-            const promptStr = video.prompt || '';
+            const promptStr = isEx ? (video.metadata.prompt || 'Final Output Render') : (video.prompt || '');
             const dateStr = new Date(video.timestamp).toLocaleString();
 
+            // Badge style and text
+            const badgeLabel = isEx ? `🎬 FINAL EXPORT` : `${techInfo.videoWidth}x${techInfo.videoHeight} • ${techInfo.samplerSteps} steps`;
+            const badgeStyle = isEx ? `background: linear-gradient(90deg, #10b981, #059669); color: white; border: 1px solid rgba(16, 185, 129, 0.5);` : `background: rgba(15, 23, 42, 0.85); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3);`;
+
             galleryItem.innerHTML = `
-                <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                    <video src="${video.url}?t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover;" controls preload="metadata"></video>
-                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: #6366f1; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0;">👁️</button>
-                    <div style="position: absolute; top: 8px; left: 8px; background: rgba(15, 23, 42, 0.7); padding: 2px 6px; border-radius: 4px; font-size: 8px; color: #94a3b8; pointer-events: none;">${dateStr}</div>
-                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); padding: 3px 8px; border-radius: 6px; font-size: 10px; color: #a5b4fc; font-weight: 600; border: 1px solid rgba(99, 102, 241, 0.3);">${techInfo.videoWidth}x${techInfo.videoHeight} • ${techInfo.samplerSteps} steps</div>
+                <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+                    <div class="video-placeholder-icon" style="position: absolute; font-size: 40px; opacity: 0.15; filter: grayscale(1); pointer-events: none; z-index: 1;">🎬</div>
+                    <video src="${video.url}" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;" controls preload="none"></video>
+                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: ${isEx ? '#10b981' : '#6366f1'}; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0; z-index: 10;">👁️</button>
+                    ${isEx ? `<div style="position: absolute; top: 10px; left: 10px; background: #10b981; color: white; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 800; text-transform: uppercase; z-index: 10;">MASTER</div>` : ''}
+                    <div style="position: absolute; top: ${isEx ? '30' : '8'}px; left: 8px; background: rgba(15, 23, 42, 0.7); padding: 2px 6px; border-radius: 4px; font-size: 8px; color: #94a3b8; pointer-events: none; z-index: 10;">${dateStr}</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; ${badgeStyle}; z-index: 10;">${badgeLabel}</div>
                 </div>
                 <div style="padding: 4px;">
-                    <div style="font-size: 11px; color: #6366f1; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Prompt</div>
+                    <div style="font-size: 11px; color: ${isEx ? '#10b981' : '#6366f1'}; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">${isEx ? 'Project Output' : 'Prompt'}</div>
                     <div style="font-size: 10px; color: #e2e8f0; line-height: 1.4; max-height: 4.2em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
                         ${promptStr || '<span style="opacity: 0.5; font-style: italic;">No prompt recorded</span>'}
                     </div>
                 </div>
             `;
+
 
             galleryItem.draggable = true;
             galleryItem.addEventListener('dragstart', (e) => {
@@ -754,6 +767,15 @@ async function loadExistingVideos() {
             });
             galleryItem.addEventListener('dragend', () => galleryItem.style.opacity = '1');
 
+            // LOAD ON HOVER: Solo carga el video cuando el usuario pasa el mouse por encima
+            galleryItem.addEventListener('mouseenter', () => {
+                const v = galleryItem.querySelector('video');
+                if (v && v.preload === 'none') {
+                    v.preload = 'metadata';
+                    v.load();
+                }
+            }, { once: true });
+
             galleryItem.querySelector('.previz-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 loadVideoToPreviz(video.url);
@@ -763,6 +785,7 @@ async function loadExistingVideos() {
             });
 
             gallery.appendChild(galleryItem);
+
         });
     } catch (e) { console.error(e); }
 }
@@ -814,26 +837,129 @@ async function loadExistingImages() {
     } catch (e) { console.error(e); }
 }
 
+async function loadExistingAudio() {
+    try {
+        const response = await fetch('/api/audio?t=' + Date.now());
+        const audioFiles = await response.json();
+        const gallery = document.getElementById('audioGallery');
+        if (!gallery) return;
+        gallery.innerHTML = '';
+
+        audioFiles.forEach((audio) => {
+            const galleryItem = document.createElement('div');
+            galleryItem.className = 'gallery-item';
+
+            galleryItem.innerHTML = `
+                <div style="position: relative; width: 100%; height: 80px; overflow: hidden; border-radius: 8px; background: #1e3a8a; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+                    <div style="font-size: 30px; opacity: 0.5;">🎵</div>
+                    <div style="position: absolute; bottom: 5px; right: 8px; font-size: 9px; color: #94a3b8;">AUDIO</div>
+                </div>
+                <div style="padding: 8px 4px 4px 4px;">
+                    <div style="font-size: 11px; color: #3b82f6; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px;">Filename</div>
+                    <div style="font-size: 10px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${audio.filename}</div>
+                </div>
+            `;
+
+            galleryItem.draggable = true;
+            galleryItem.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('audioSrc', audio.url);
+                e.dataTransfer.setData('audioFilename', audio.filename);
+                galleryItem.style.opacity = '0.5';
+            });
+            galleryItem.addEventListener('dragend', () => galleryItem.style.opacity = '1');
+
+            gallery.appendChild(galleryItem);
+        });
+
+        // Setup drop to upload in audio gallery
+        if (!gallery.dataset.hasDropListener) {
+            gallery.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                gallery.style.background = 'rgba(59, 130, 246, 0.1)';
+            });
+            gallery.addEventListener('dragleave', () => {
+                gallery.style.background = '';
+            });
+            gallery.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                gallery.style.background = '';
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    for (const file of files) {
+                        if (file.type.startsWith('audio/')) {
+                            appendConsoleLine(`📤 Uploading audio: ${file.name}...`, 'system');
+                            const formData = new FormData();
+                            formData.append('audio', file);
+                            const res = await fetch('/api/upload-audio', { method: 'POST', body: formData });
+                            const result = await res.json();
+                            if (result.success) {
+                                appendConsoleLine(`✅ Audio uploaded: ${result.filename}`, 'system');
+                            }
+                        }
+                    }
+                    loadExistingAudio();
+                }
+            });
+            gallery.dataset.hasDropListener = 'true';
+        }
+    } catch (e) { console.error(e); }
+}
+
+// Main Workspace Tab Switching
+document.querySelectorAll('.tab-button-std').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        if (!target) return;
+
+        document.querySelectorAll('.tab-button-std').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const content = document.getElementById(target);
+        if (content) content.classList.add('active');
+
+        if (target === 'tabEditor') document.body.classList.add('tab-editor-active');
+        else document.body.classList.remove('tab-editor-active');
+    });
+});
+
+// Sub-Tab Switching (Previz)
+document.querySelectorAll('.sub-tab-btn-std').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetId = btn.dataset.sub;
+        const parent = btn.parentElement.parentElement;
+        parent.querySelectorAll('.sub-tab-btn-std').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        parent.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
+        const content = document.getElementById(targetId);
+        if (content) content.classList.add('active');
+    });
+});
+
 // Asset Tab Switching
 document.querySelectorAll('.asset-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const type = btn.dataset.type;
         document.querySelectorAll('.asset-tab-btn').forEach(b => {
             b.classList.remove('active');
-            b.style.background = 'transparent';
-            b.style.color = '#94a3b8';
         });
         btn.classList.add('active');
-        btn.style.background = '#6366f1';
-        btn.style.color = 'white';
 
         if (type === 'videos') {
-            document.getElementById('videoGallery').style.display = 'grid';
-            document.getElementById('imageGallery').style.display = 'none';
-        } else {
-            document.getElementById('videoGallery').style.display = 'none';
-            document.getElementById('imageGallery').style.display = 'grid';
+            document.getElementById('videoGallery')?.classList.remove('hidden');
+            document.getElementById('imageGallery')?.classList.add('hidden');
+            document.getElementById('audioGallery')?.classList.add('hidden');
+        } else if (type === 'images') {
+            document.getElementById('videoGallery')?.classList.add('hidden');
+            document.getElementById('imageGallery')?.classList.remove('hidden');
+            document.getElementById('audioGallery')?.classList.add('hidden');
             loadExistingImages();
+        } else if (type === 'audio') {
+            document.getElementById('videoGallery')?.classList.add('hidden');
+            document.getElementById('imageGallery')?.classList.add('hidden');
+            document.getElementById('audioGallery')?.classList.remove('hidden');
+            loadExistingAudio();
         }
     });
 });
@@ -846,6 +972,9 @@ let isPlayingTl = false;
 let tlAnimationFrame = null; // Cambio de Interval a AnimationFrame para fluidez
 let currentTlPos = 0;
 let clipCache = []; // Cache para evitar leer el DOM cada frame
+let selectedClipElement = null; // Elemento seleccionado actualmente en el timeline
+let currentTimelineMode = 'trim'; // 'trim' o 'stretch'
+let currentlyRegeneratingClipId = null; // ID del clip que se está editando en el modal de regeneración
 
 const timelineTracksContent = document.getElementById('editorTimeline');
 const playhead = document.createElement('div');
@@ -853,7 +982,7 @@ playhead.id = 'timelinePlayhead';
 playhead.style.cssText = 'position: absolute; top: 0; left: 0; width: 2px; height: 100%; background: #ff3e3e; z-index: 50; pointer-events: none;';
 if (timelineTracksContent) {
     timelineTracksContent.appendChild(playhead);
-    
+
     let isScrubbing = false;
 
     const handleScrub = (e) => {
@@ -879,6 +1008,55 @@ if (timelineTracksContent) {
         if (e.target.closest('.timeline-clip')) return;
         handleScrub(e);
     });
+
+    // RESTORED DRAG & DROP FOR TIMELINE
+    timelineTracksContent.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    timelineTracksContent.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const videoSrc = e.dataTransfer.getData('videoSrc');
+        const audioSrc = e.dataTransfer.getData('audioSrc');
+        const prompt = e.dataTransfer.getData('videoPrompt');
+        const metadata = JSON.parse(e.dataTransfer.getData('videoMetadata') || '{}');
+        
+        const tracks = document.querySelectorAll('.timeline-track');
+        let targetTrack = tracks[0];
+        const rect = timelineTracksContent.getBoundingClientRect();
+
+        tracks.forEach(track => {
+            const r = track.getBoundingClientRect();
+            if (e.clientY >= r.top && e.clientY <= r.bottom) targetTrack = track;
+        });
+
+        if (videoSrc) {
+            const videoId = 'clip_' + Date.now() + '_V';
+            const audioId = 'clip_' + Date.now() + '_A';
+            
+            // Add video to V1
+            const vClip = addClipToTimeline(videoSrc, targetTrack, e.clientX, prompt, { ...metadata, clipId: videoId });
+            
+            // Add audio to A1
+            const audioTrack = document.querySelector('.timeline-track[data-track="A1"]');
+            if (audioTrack) {
+                const aClip = addClipToTimeline(videoSrc, audioTrack, e.clientX, prompt, { ...metadata, isAudioOnly: true, clipId: audioId });
+                
+                // Link them!
+                vClip.dataset.linkedTo = audioId;
+                aClip.dataset.linkedTo = videoId;
+                vClip.dataset.audioDetached = "false";
+                
+                // The video track should keep track of its muted state relative to the link
+                appendConsoleLine(`🎞️ Linked video & audio tracks added.`, 'system');
+            }
+        } else if (audioSrc) {
+            const audioTrack = document.querySelector('.timeline-track[data-track="A1"]');
+            addClipToTimeline(audioSrc, audioTrack || targetTrack, e.clientX, '', { isAudioOnly: true });
+            appendConsoleLine(`🎵 Added audio track to timeline: ${audioSrc.split('/').pop()}`, 'system');
+        }
+    });
 }
 
 // Función para refrescar la cache de clips (se llama cuando cambian)
@@ -889,6 +1067,7 @@ function refreshClipCache() {
         const w = clip.offsetWidth;
         const track = clip.parentElement.dataset.track || 'V1';
         const video = clip.querySelector('video');
+        const meta = JSON.parse(clip.dataset.metadata || '{}');
         return {
             element: clip,
             left: l,
@@ -896,9 +1075,10 @@ function refreshClipCache() {
             right: l + w,
             track: track,
             src: video ? video.src : null,
-            videoElement: video
+            videoElement: video,
+            isAudioOnly: !!meta.isAudioOnly
         };
-    }).sort((a, b) => b.track.localeCompare(a.track)); // Ordenar por track descending (V3 encima de V1)
+    }).sort((a, b) => b.track.localeCompare(a.track)); 
 }
 
 function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) {
@@ -906,7 +1086,7 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
     if (emptyMsg) emptyMsg.remove();
     const clip = document.createElement('div');
     clip.className = 'timeline-clip';
-    clip.dataset.clipId = 'clip_' + Date.now() + Math.random();
+    clip.dataset.clipId = metadata.clipId || ('clip_' + Date.now() + Math.random());
     clip.dataset.prompt = prompt;
     clip.dataset.metadata = typeof metadata === 'string' ? metadata : JSON.stringify(metadata);
 
@@ -914,45 +1094,104 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
     const rect = trackElement.getBoundingClientRect();
     clip.style.left = `${xPos - rect.left}px`;
     clip.style.width = '150px';
+
+    const isAudio = metadata.isAudioOnly === true;
+    if (isAudio) clip.classList.add('audio-clip');
+
     clip.innerHTML = `
         <div class="trim-handle trim-handle-left"></div>
-        <video src="${src}" muted preload="metadata" style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <video src="${src}" ${isAudio ? '' : 'muted'} preload="metadata" style="${isAudio ? 'display:none;' : 'width: 100%; height: 100%; object-fit: cover;'}"></video>
+        ${isAudio ? '<div class="audio-waveform-icon">🎵</div>' : ''}
         <div class="clip-info" style="position: absolute; bottom: 2px; left: 4px; pointer-events: none; text-shadow: 0 0 4px #000;"><span>${filename}</span></div>
         <div class="trim-handle trim-handle-right"></div>
-        <button class="regen-clip-btn" title="Regenerate this clip">↻</button>
-        <button class="remove-clip-btn" style="width: 20px; height: 20px; padding: 0;">×</button>
+        <div class="clip-actions-overlay">
+            ${(!isAudio) ? `
+                <button class="detach-audio-btn" title="Unlink Audio">🔗</button>
+                <button class="regen-clip-btn" title="Regenerate this clip">↻</button>
+            ` : ''}
+            <button class="remove-clip-btn" title="${isAudio ? 'Delete Audio' : 'Delete Clip'}">×</button>
+        </div>
     `;
-    setupClipInteractions(clip);
-    
-    clip.querySelector('.remove-clip-btn').addEventListener('click', () => { 
-        clip.remove(); 
-        refreshClipCache(); 
-        checkTimelineEmpty(); 
-    });
 
-    clip.querySelector('.regen-clip-btn').addEventListener('click', () => {
-        const p = clip.dataset.prompt;
-        const m = JSON.parse(clip.dataset.metadata || '{}');
-        if (!p) return appendConsoleLine('❌ No prompt available for regeneration', 'error');
-        
-        appendConsoleLine(`♻️ Regenerating clip: ${p.substring(0, 30)}...`, 'system');
-        addToQueue(p, m.imageFilename || null, { replaceClipId: clip.dataset.clipId });
+    if (!isAudio) {
+        clip.querySelector('.detach-audio-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const linkedId = clip.dataset.linkedTo;
+            if (linkedId) {
+                const linkedClip = document.querySelector(`[data-clip-id="${linkedId}"]`);
+                if (linkedClip) {
+                    delete clip.dataset.linkedTo;
+                    delete linkedClip.dataset.linkedTo;
+                    clip.dataset.audioDetached = "true";
+                    clip.querySelector('.detach-audio-btn').style.display = 'none';
+                    appendConsoleLine(`🔓 Audio unlinked and independent.`, 'system');
+                    refreshClipCache();
+                }
+            }
+        });
+
+        clip.querySelector('.regen-clip-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openRegenModal(clip);
+        });
+    }
+    setupClipInteractions(clip);
+
+    clip.querySelector('.remove-clip-btn').addEventListener('click', () => {
+        const linkedId = clip.dataset.linkedTo;
+        clip.remove();
+        if (linkedId) {
+            const linked = document.querySelector(`[data-clip-id="${linkedId}"]`);
+            if (linked) linked.remove();
+        }
+        refreshClipCache();
+        checkTimelineEmpty();
     });
 
     trackElement.appendChild(clip);
     calculateTimelineOverlaps();
     refreshClipCache();
+
+    // Evento de selección
+    clip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedClipElement) selectedClipElement.classList.remove('selected');
+        selectedClipElement = clip;
+        clip.classList.add('selected');
+    });
+
+    return clip;
 }
+
 
 function setupClipInteractions(clip) {
     let isDragging = false, isTrimmingLeft = false, isTrimmingRight = false;
     let startX, startLeft, startWidth;
 
     clip.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('remove-clip-btn')) return;
+        if (e.target.closest('button')) return;
+
+        // Selección automática al interactuar
+        if (selectedClipElement) selectedClipElement.classList.remove('selected');
+        selectedClipElement = clip;
+        clip.classList.add('selected');
+
         startX = e.clientX;
         startLeft = parseFloat(clip.style.left) || 0;
         startWidth = clip.offsetWidth;
+        
+        // Find linked clip if any
+        if (clip.dataset.linkedTo) {
+            const linked = document.querySelector(`[data-clip-id="${clip.dataset.linkedTo}"]`);
+            if (linked) {
+                clip._linkedClip = linked;
+                clip._linkedStartLeft = parseFloat(linked.style.left) || 0;
+                clip._linkedStartWidth = linked.offsetWidth;
+            }
+        } else {
+            clip._linkedClip = null;
+        }
+
         if (e.target.classList.contains('trim-handle-left')) isTrimmingLeft = true;
         else if (e.target.classList.contains('trim-handle-right')) isTrimmingRight = true;
         else isDragging = true;
@@ -962,32 +1201,47 @@ function setupClipInteractions(clip) {
     });
 
     function handleMouseMove(e) {
-        const deltaX = e.clientX - startX;
+        const delta = e.clientX - startX;
         if (isDragging) {
-            let nL = startLeft + deltaX;
-            clip.style.left = `${nL < 0 ? 0 : nL}px`;
+            clip.style.left = `${startLeft + delta}px`;
+            
+            if (clip._linkedClip) {
+                clip._linkedClip.style.left = `${clip._linkedStartLeft + delta}px`;
+            }
             const tracks = document.querySelectorAll('.timeline-track');
             tracks.forEach(track => {
                 const r = track.getBoundingClientRect();
                 if (e.clientY >= r.top && e.clientY <= r.bottom) track.appendChild(clip);
             });
         } else if (isTrimmingLeft) {
-            let nL = startLeft + deltaX, nW = startWidth - deltaX;
-            if (nW > 20 && nL >= 0) { clip.style.left = `${nL}px`; clip.style.width = `${nW}px`; }
+            let nL = startLeft + delta, nW = startWidth - delta;
+            if (nW > 20 && nL >= 0) {
+                clip.style.left = `${nL}px`; clip.style.width = `${nW}px`;
+                if (clip._linkedClip) {
+                    clip._linkedClip.style.left = `${clip._linkedStartLeft + delta}px`;
+                    clip._linkedClip.style.width = `${clip._linkedStartWidth - delta}px`;
+                }
+            }
         } else if (isTrimmingRight) {
-            let nW = startWidth + deltaX;
-            if (nW > 20) clip.style.width = `${nW}px`;
+            let nW = startWidth + delta;
+            if (nW > 20) {
+                clip.style.width = `${nW}px`;
+                if (clip._linkedClip) {
+                    clip._linkedClip.style.width = `${clip._linkedStartWidth + delta}px`;
+                }
+            }
         }
         checkAutoBlending(clip);
         refreshClipCache(); // Update cache during drag for smooth preview
         syncPreviewToTime(currentTlPos || parseFloat(clip.style.left));
     }
 
+
     function handleMouseUp() {
         isDragging = isTrimmingLeft = isTrimmingRight = false;
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
-        
+
         // Finalizar el movimiento, calcular transparencias
         calculateTimelineOverlaps();
         refreshClipCache();
@@ -1007,7 +1261,7 @@ function calculateTimelineOverlaps() {
         for (let j = i + 1; j < clips.length; j++) {
             const c2 = clips[j];
             const r2 = c2.getBoundingClientRect();
-            
+
             // Si hay solapamiento horizontal (sin importar el track para la visualización del editor)
             const overlap = !(r1.right < r2.left || r1.left > r2.right);
             if (overlap) {
@@ -1020,15 +1274,31 @@ function calculateTimelineOverlaps() {
     }
 }
 
-// Atajo de Barra Espaciadora para Play/Pause
+// Atajo de Barra Espaciadora para Play/Pause y Delete para borrar clips
 document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     if (e.code === 'Space') {
-        e.preventDefault(); 
+        e.preventDefault();
         const playBtn = document.getElementById('tlPlayBtn');
         if (playBtn) playBtn.click();
     }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedClipElement) {
+            appendConsoleLine(`🗑️ Clip deleted via shortcut`, 'system');
+            selectedClipElement.remove();
+            selectedClipElement = null;
+            refreshClipCache();
+            checkTimelineEmpty();
+        }
+    }
+
+    // Atajos para modos
+    if (e.key === 't' || e.key === 'T') document.getElementById('modeTrimBtn')?.click();
+    if (e.key === 's' || e.key === 'S') document.getElementById('modeStretchBtn')?.click();
 });
+
 
 function checkAutoBlending(activeClip) {
     const allClips = document.querySelectorAll('.timeline-clip');
@@ -1048,7 +1318,7 @@ function syncPreviewToTime(xPos, forceSeek = false) {
     const previewA = document.getElementById('timelinePreviewA');
     const previewB = document.getElementById('timelinePreviewB');
     const edPlaceholder = document.getElementById('editorPlaceholder');
-    
+
     if (!clipCache.length) {
         if (edPlaceholder) edPlaceholder.style.display = 'block';
         if (previewA) previewA.style.display = 'none';
@@ -1057,79 +1327,134 @@ function syncPreviewToTime(xPos, forceSeek = false) {
     }
 
     // Buscar clips que coincidan con la posición actual
+    // Diferenciamos clips de VIDEO (V1, V2...) de clips de AUDIO (A1, A2...)
     const activeClips = clipCache.filter(c => xPos >= c.left && xPos <= c.right);
+    const videoActiveClips = activeClips.filter(c => !c.isAudioOnly);
+    const audioActiveClips = activeClips.filter(c => c.isAudioOnly);
 
-    if (activeClips.length === 0) {
-        if (previewA) previewA.pause();
-        if (previewB) previewB.pause();
-        if (edPlaceholder) edPlaceholder.style.display = 'block';
-        return;
-    }
-
-    if (edPlaceholder) edPlaceholder.style.display = 'none';
-    if (previewA) previewA.style.display = 'block';
-
-    // Lógica de Interpolación (Crossfade)
-    if (activeClips.length >= 2) {
-        // Tenemos al menos 2 videos solapados
-        const v1 = activeClips[0];
-        const v2 = activeClips[1];
-
-        // Determinar rango de solapamiento
-        const overlapStart = Math.max(v1.left, v2.left);
-        const overlapEnd = Math.min(v1.right, v2.right);
-        const overlapDuration = overlapEnd - overlapStart;
-
-        // Calcular factor de mezcla (0 a 1)
-        let t = 0;
-        if (overlapDuration > 0) {
-            t = (xPos - overlapStart) / overlapDuration;
+    // --- MANEJO DE VIDEO (Monitor Dual) ---
+    if (videoActiveClips.length === 0) {
+        if (previewA) {
+            previewA.pause();
+            previewA.style.display = 'none';
         }
-
-        // Configurar Video A (Base / Saliente)
-        updateVideoPreview(previewA, v1, xPos, 1 - t, forceSeek);
-        
-        // Configurar Video B (Entrante)
         if (previewB) {
-            previewB.style.display = 'block';
-            updateVideoPreview(previewB, v2, xPos, t, forceSeek);
-        }
-    } else {
-        // Solo un video
-        const v = activeClips[0];
-        updateVideoPreview(previewA, v, xPos, 1.0, forceSeek);
-        if (previewB) {
-            previewB.style.display = 'none';
             previewB.pause();
+            previewB.style.display = 'none';
+        }
+        if (edPlaceholder) edPlaceholder.style.display = 'block';
+    } else {
+        if (edPlaceholder) edPlaceholder.style.display = 'none';
+        if (previewA) previewA.style.display = 'block';
+
+        if (videoActiveClips.length >= 2) {
+            const v1 = videoActiveClips[0];
+            const v2 = videoActiveClips[1];
+
+            const overlapStart = Math.max(v1.left, v2.left);
+            const overlapEnd = Math.min(v1.right, v2.right);
+            const overlapDuration = overlapEnd - overlapStart;
+
+            let t = 0;
+            if (overlapDuration > 0) {
+                t = (xPos - overlapStart) / overlapDuration;
+            }
+
+            updateVideoPreview(previewA, v1, xPos, 1 - t, forceSeek);
+            if (previewB) {
+                previewB.style.display = 'block';
+                updateVideoPreview(previewB, v2, xPos, t, forceSeek);
+            }
+        } else {
+            const v = videoActiveClips[0];
+            updateVideoPreview(previewA, v, xPos, 1.0, forceSeek);
+            if (previewB) {
+                previewB.style.display = 'none';
+                previewB.pause();
+            }
         }
     }
+
+    // --- MANEJO DE AUDIO (Directo desde el elemento del Timeline) ---
+    // Sincronizar y reproducir tracks de audio independientes
+    audioActiveClips.forEach(c => {
+        if (!c.videoElement) return;
+
+        let playbackRate = 1.0;
+        const metadata = JSON.parse(c.element.dataset.metadata || '{}');
+        const naturalFrames = metadata.videoLength || 121;
+        const naturalWidth = (naturalFrames / 121) * 150;
+
+        if (currentTimelineMode === 'stretch') {
+            playbackRate = naturalWidth / c.width;
+        }
+
+        const targetTime = (xPos - c.left) / (25 * playbackRate);
+        c.videoElement.playbackRate = playbackRate;
+
+        const drift = Math.abs(c.videoElement.currentTime - targetTime);
+        if (forceSeek || drift > 0.15) {
+            c.videoElement.currentTime = targetTime;
+        }
+
+        if (isPlayingTl && c.videoElement.paused) {
+            c.videoElement.play().catch(() => {});
+        }
+    });
+
+    // Pausar clips de audio que ya no están bajo el cabezal
+    clipCache.forEach(c => {
+        if (c.isAudioOnly && (xPos < c.left || xPos > c.right)) {
+            if (c.videoElement && !c.videoElement.paused) {
+                c.videoElement.pause();
+            }
+        }
+    });
 }
 
 function updateVideoPreview(video, clip, xPos, weight, forceSeek) {
-    const targetTime = (xPos - clip.left) / 25;
-    
+    // Si estamos en stretch mode, la velocidad cambia para que el video dure exactamente lo que mide el clip
+    // Asumimos que el video original dura 150px (6s) por defecto si no hay metadatos.
+    // En un sistema real usaríamos video.duration, pero aquí el 'length' en frames escalado apx sirve.
+
+    let playbackRate = 1.0;
+    const metadata = JSON.parse(clip.element.dataset.metadata || '{}');
+    const naturalFrames = metadata.videoLength || 121;
+    const naturalWidth = (naturalFrames / 121) * 150; // Aproximación de ancho base
+
+    if (currentTimelineMode === 'stretch') {
+        playbackRate = naturalWidth / clip.width;
+    }
+
+    const targetTime = (xPos - clip.left) / (25 * playbackRate);
+
     if (video.src !== clip.src) {
         video.src = clip.src;
         video.muted = false;
         video.currentTime = targetTime;
-        if (isPlayingTl) video.play().catch(() => {});
+        video.playbackRate = playbackRate;
+        if (isPlayingTl) video.play().catch(() => { });
     } else {
+        video.playbackRate = playbackRate;
         // Si el video ya está cargado pero no está reproduciendo y debería estarlo
         if (isPlayingTl && video.paused) {
             video.muted = false;
-            video.play().catch(() => {});
+            video.play().catch(() => { });
         }
     }
 
     // Aplicar interpolación visual y sonora
     video.style.opacity = weight;
-    video.volume = weight; // Interpolación de audio conforme al crossfade
+    const isDetached = clip.element.dataset.audioDetached === "true";
+    video.volume = isDetached ? 0 : weight; // Interpolación de audio o silencio si está extraído
+    video.muted = isDetached;
 
     const drift = Math.abs(video.currentTime - targetTime);
     if (forceSeek || drift > 0.15) {
         video.currentTime = targetTime;
     }
 }
+
 
 let lastTickTime = 0;
 
@@ -1145,7 +1470,7 @@ function playbackLoop() {
 
     if (playhead) playhead.style.left = `${currentTlPos}px`;
     syncPreviewToTime(currentTlPos, false);
-    
+
     if (timelineTracksContent && currentTlPos > timelineTracksContent.clientWidth + timelineTracksContent.scrollLeft - 100) {
         timelineTracksContent.scrollLeft += pixelsToMove;
     }
@@ -1159,12 +1484,20 @@ function startTimelinePlayback() {
     const playBtn = document.getElementById('tlPlayBtn');
     const playIcon = document.getElementById('playIcon');
     const playText = document.getElementById('playText');
-    
+
     if (playBtn) {
-        playBtn.style.background = '#f59e0b';
+        playBtn.style.background = 'var(--warning)';
         if (playIcon) playIcon.textContent = '⏸';
         if (playText) playText.textContent = 'PAUSE';
     }
+
+    // Play any active audio clips
+    const activeAudioClips = clipCache.filter(c => currentTlPos >= c.left && currentTlPos <= c.right && c.isAudioOnly);
+    activeAudioClips.forEach(c => {
+        if (c.videoElement) {
+            c.videoElement.play().catch(() => {});
+        }
+    });
 
     lastTickTime = performance.now();
     tlAnimationFrame = requestAnimationFrame(playbackLoop);
@@ -1182,11 +1515,11 @@ function stopTimelinePlayback() {
     const previewVideo = document.getElementById('timelinePreview');
 
     if (playBtn) {
-        playBtn.style.background = '#10b981';
+        playBtn.style.background = 'var(--accent)';
         if (playIcon) playIcon.textContent = '▶';
         if (playText) playText.textContent = 'PLAY';
     }
-    
+
     // PAUSE ALL PREVIEW VIDEOS
     const pA = document.getElementById('timelinePreviewA');
     const pB = document.getElementById('timelinePreviewB');
@@ -1219,8 +1552,49 @@ if (tlResetBtn) {
         if (playhead) playhead.style.left = '0px';
         syncPreviewToTime(0, true);
         if (timelineTracksContent) timelineTracksContent.scrollLeft = 0;
+        
+        // Pause and reset all local clip videos (audio)
+        clipCache.forEach(c => {
+            if (c.videoElement) {
+                c.videoElement.pause();
+                c.videoElement.currentTime = 0;
+            }
+        });
     });
 }
+
+// Logic for Timeline Mode Toolbar
+const modeTrimBtn = document.getElementById('modeTrimBtn');
+const modeStretchBtn = document.getElementById('modeStretchBtn');
+
+if (modeTrimBtn && modeStretchBtn) {
+    modeTrimBtn.addEventListener('click', () => {
+        currentTimelineMode = 'trim';
+        modeTrimBtn.classList.add('active');
+        modeStretchBtn.classList.remove('active');
+        appendConsoleLine('✂️ Timeline Mode: TRIM (Normal)', 'system');
+    });
+
+    modeStretchBtn.addEventListener('click', () => {
+        currentTimelineMode = 'stretch';
+        modeStretchBtn.classList.add('active');
+        modeTrimBtn.classList.remove('active');
+        appendConsoleLine('↔️ Timeline Mode: STRETCH (Rate)', 'system');
+    });
+}
+
+// Deseleccionar al hacer click en el fondo del timeline
+if (timelineTracksContent) {
+    timelineTracksContent.addEventListener('click', (e) => {
+        if (!e.target.closest('.timeline-clip')) {
+            if (selectedClipElement) {
+                selectedClipElement.classList.remove('selected');
+                selectedClipElement = null;
+            }
+        }
+    });
+}
+
 
 // ============================================
 // PREVIZ TAB LOGIC
@@ -1234,19 +1608,13 @@ if (previzTab) {
     subTabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetId = btn.dataset.sub;
-            subTabBtns.forEach(b => {
-                b.classList.remove('active');
-                b.style.background = 'transparent';
-                b.style.color = '#94a3b8';
-            });
+            subTabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            btn.style.background = '#6366f1';
-            btn.style.color = 'white';
 
             subTabContents.forEach(content => {
-                content.style.display = 'none';
+                content.classList.remove('active');
                 if (content.id === targetId) {
-                    content.style.display = (targetId === 'previz-monitor') ? 'flex' : 'block';
+                    content.classList.add('active');
                 }
             });
         });
@@ -1282,16 +1650,16 @@ function loadVideoToPreviz(src) {
     const previzImage = document.getElementById('previzImage');
     const previzPlaceholder = document.getElementById('previzPlaceholder');
     if (!previzVideo) return;
-    
-    if (previzImage) previzImage.style.display = 'none';
+
+    if (previzImage) previzImage.classList.add('hidden');
     previzVideo.src = src;
-    previzVideo.style.display = 'block';
-    if (previzPlaceholder) previzPlaceholder.style.display = 'none';
-    
+    previzVideo.classList.remove('hidden');
+    if (previzPlaceholder) previzPlaceholder.classList.add('hidden');
+
     // Mostrar información de metadatos detallada
     const filename = src.split('/').pop().split('?')[0];
     const metaContainer = document.getElementById('previzMetadata');
-    
+
     if (metaContainer) {
         metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
         fetch('/api/videos?t=' + Date.now())
@@ -1342,6 +1710,27 @@ function loadVideoToPreviz(src) {
     }
 
     previzVideo.play();
+}
+
+// RESTORED DRAG & DROP FOR PREVIZ
+const previzMonitor = document.getElementById('previz-monitor');
+if (previzMonitor) {
+    previzMonitor.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        previzMonitor.classList.add('drag-over');
+    });
+    previzMonitor.addEventListener('dragleave', () => {
+        previzMonitor.classList.remove('drag-over');
+    });
+    previzMonitor.addEventListener('drop', (e) => {
+        e.preventDefault();
+        previzMonitor.classList.remove('drag-over');
+        const src = e.dataTransfer.getData('videoSrc');
+        if (src) {
+            loadVideoToPreviz(src);
+            appendConsoleLine(`👁️ Video loaded into Previz via Drag&Drop`, 'system');
+        }
+    });
 }
 
 function loadImageToPreviz(src) {
@@ -1432,15 +1821,15 @@ function getTimelineData() {
     clips.forEach(clip => {
         const video = clip.querySelector('video');
         if (!video) return;
-        
+
         // El timeline funciona a 25px = 1s
         const startTime = parseFloat(clip.style.left) / 25;
         const duration = clip.offsetWidth / 25;
         const track = clip.parentElement.dataset.track || 'V1';
-        
+
         // Extraer nombre de archivo de la URL
         const filename = video.src.split('/').pop().split('?')[0];
-        
+
         data.push({
             filename,
             startTime,
@@ -1457,7 +1846,7 @@ if (exportBtn) {
     exportBtn.addEventListener('click', () => {
         const timelineData = getTimelineData();
         if (timelineData.length === 0) return alert("Timeline is empty!");
-        
+
         startRealExport(timelineData);
     });
 }
@@ -1470,7 +1859,7 @@ async function startRealExport(timelineData) {
     const exportConsole = document.getElementById('exportConsole');
     const viewBtn = document.getElementById('viewFinalVideo');
     const badge = document.getElementById('exportStatusBadge');
-    
+
     modal.style.display = 'flex';
     viewBtn.style.display = 'none';
     progressBar.style.width = '0%';
@@ -1478,20 +1867,20 @@ async function startRealExport(timelineData) {
     statusText.textContent = 'Enviando petición...';
     badge.textContent = 'PROCESAMIENTO';
     badge.style.background = 'rgba(99, 102, 241, 0.2)';
-    
+
     isExporting = true;
-    
+
     try {
         appendExportLog('> Solicitando exportación de ' + timelineData.length + ' clips...');
-        
+
         const response = await fetch('/api/export-timeline', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ clips: timelineData })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             appendExportLog('> Renderizado completado con éxito.');
             progressBar.style.width = '100%';
@@ -1499,7 +1888,7 @@ async function startRealExport(timelineData) {
             statusText.textContent = 'Listo para descargar';
             badge.textContent = 'COMPLETED';
             badge.style.background = '#10b981';
-            
+
             viewBtn.style.display = 'block';
             viewBtn.onclick = () => window.open(result.url, '_blank');
         } else {
@@ -1570,17 +1959,6 @@ function assembleBatchInTimeline(batchItems) {
 }
 
 // Initial Load
-document.querySelectorAll('.timeline-track').forEach(track => {
-    track.addEventListener('dragover', e => e.preventDefault());
-    track.addEventListener('drop', e => {
-        e.preventDefault();
-        const src = e.dataTransfer.getData('videoSrc');
-        const prompt = e.dataTransfer.getData('videoPrompt');
-        const meta = e.dataTransfer.getData('videoMetadata');
-        if (src) addClipToTimeline(src, track, e.clientX, prompt, meta);
-    });
-});
-
 loadExistingVideos();
 calculateTimelineOverlaps();
 
@@ -1588,7 +1966,150 @@ calculateTimelineOverlaps();
 // STORYBOARD LOGIC
 // ============================================
 
+// ============================================
+// REGEN MODAL LOGIC
+// ============================================
+
+const regenSettingsModal = document.getElementById('regenSettingsModal');
+const closeRegenModal = document.getElementById('closeRegenModal');
+const confirmRegenBtn = document.getElementById('confirmRegenBtn');
+
+function openRegenModal(clip) {
+    currentlyRegeneratingClipId = clip.dataset.clipId;
+    const prompt = clip.dataset.prompt || '';
+    const meta = JSON.parse(clip.dataset.metadata || '{}');
+
+    document.getElementById('regenPrompt').value = prompt;
+
+    // Configurar checkboxes de imagen
+    const useImgCheck = document.getElementById('regenUseImage');
+    const createImgCheck = document.getElementById('regenCreateImage');
+    const createImgLabel = document.getElementById('regenCreateImageLabel');
+
+    if (useImgCheck && createImgCheck) {
+        const hasImage = !!meta.imageFilename;
+        useImgCheck.checked = hasImage;
+        createImgCheck.checked = false;
+        createImgCheck.disabled = !hasImage;
+
+        if (createImgLabel) {
+            if (hasImage) createImgLabel.classList.remove('opacity-50');
+            else createImgLabel.classList.add('opacity-50');
+        }
+
+        if (!useImgCheck.dataset.hasListener) {
+            useImgCheck.addEventListener('change', () => {
+                createImgCheck.disabled = !useImgCheck.checked;
+                if (createImgLabel) {
+                    if (useImgCheck.checked) createImgLabel.classList.remove('opacity-50');
+                    else createImgLabel.classList.add('opacity-50');
+                }
+                if (!useImgCheck.checked) createImgCheck.checked = false;
+            });
+            useImgCheck.dataset.hasListener = 'true';
+        }
+    }
+
+    // Sliders
+    const sliders = [
+        { id: 'regenWidth', valId: 'regenWidthVal', key: 'videoWidth', def: 1280 },
+        { id: 'regenHeight', valId: 'regenHeightVal', key: 'videoHeight', def: 720 },
+        { id: 'regenSteps', valId: 'regenStepsVal', key: 'samplerSteps', def: 20 },
+        { id: 'regenCfg', valId: 'regenCfgVal', key: 'cfgScale', def: 4.0 }
+    ];
+
+    sliders.forEach(s => {
+        const el = document.getElementById(s.id);
+        const valEl = document.getElementById(s.valId);
+        const val = meta[s.key] || s.def;
+        el.value = val;
+        valEl.textContent = val;
+
+        // Ensure inputs update labels
+        if (!el.dataset.hasListener) {
+            el.addEventListener('input', () => valEl.textContent = el.value);
+            el.dataset.hasListener = 'true';
+        }
+    });
+
+    regenSettingsModal.style.display = 'flex';
+}
+
+if (closeRegenModal) {
+    closeRegenModal.onclick = () => {
+        regenSettingsModal.style.display = 'none';
+        currentlyRegeneratingClipId = null;
+    };
+}
+
+if (confirmRegenBtn) {
+    confirmRegenBtn.onclick = () => {
+        if (!currentlyRegeneratingClipId) return;
+
+        const clipQuery = `.timeline-clip[data-clip-id="${currentlyRegeneratingClipId}"]`;
+        const clip = document.querySelector(clipQuery);
+        if (!clip) return;
+
+        const newPrompt = document.getElementById('regenPrompt').value.trim();
+        if (!newPrompt) return alert('Prompt cannot be empty');
+
+        const metadata = JSON.parse(clip.dataset.metadata || '{}');
+        const newParams = {
+            ...metadata,
+            videoWidth: parseInt(document.getElementById('regenWidth').value),
+            videoHeight: parseInt(document.getElementById('regenHeight').value),
+            samplerSteps: parseInt(document.getElementById('regenSteps').value),
+            cfgScale: parseFloat(document.getElementById('regenCfg').value),
+            videoLength: metadata.videoLength || 121,
+            seed: -1
+        };
+
+        const useImage = document.getElementById('regenUseImage')?.checked;
+        const createNewImage = document.getElementById('regenCreateImage')?.checked;
+
+        appendConsoleLine(`♻️ Launching regeneration for clip ${currentlyRegeneratingClipId.substring(0, 8)}...`, 'system');
+
+        // Cierra el modal
+        regenSettingsModal.style.display = 'none';
+
+        // Redirigir a STAGE para ver progreso
+        const tabOutputBtn = document.getElementById('tabOutputBtn');
+        if (tabOutputBtn) tabOutputBtn.click();
+
+        if (useImage) {
+            if (createNewImage) {
+                // Flow: T2I -> I2V
+                addToStoryboardQueue(newPrompt, {
+                    autoVideo: true,
+                    replaceClipId: currentlyRegeneratingClipId,
+                    params: { ...newParams, storyboardSteps: parseInt(document.getElementById('storyboardSteps').value) }
+                });
+            } else {
+                // Flow: I2V using existing image
+                addToQueue(newPrompt, metadata.imageFilename || null, {
+                    status: 'pending',
+                    replaceClipId: currentlyRegeneratingClipId,
+                    params: newParams
+                });
+            }
+        } else {
+            // Flow: T2V (No reference image)
+            addToQueue(newPrompt, null, {
+                status: 'pending',
+                replaceClipId: currentlyRegeneratingClipId,
+                params: newParams
+            });
+        }
+
+        updateGlobalQueueUI();
+        checkGlobalQueue();
+
+        currentlyRegeneratingClipId = null;
+    };
+}
+
 function addToStoryboardQueue(prompt, options = {}) {
+
     const params = {
         videoWidth: parseInt(document.getElementById('videoWidth').value),
         videoHeight: parseInt(document.getElementById('videoHeight').value),
@@ -1610,7 +2131,7 @@ function addToStoryboardQueue(prompt, options = {}) {
 
 function handleStoryboardGenerated(message) {
     const existing = storyboardItems.find(item => item.storyboardIndex === message.storyboardIndex && item.batchId === message.batchId);
-    
+
     if (existing) {
         existing.url = message.url;
         existing.filename = message.filename;
@@ -1628,7 +2149,7 @@ function handleStoryboardGenerated(message) {
             params: message.params || {}
         });
     }
-    
+
     // Ordenar por storyboardIndex si existen
     storyboardItems.sort((a, b) => a.storyboardIndex - b.storyboardIndex);
     updateStoryboardUI();
@@ -1640,84 +2161,76 @@ function updateStoryboardUI() {
     if (!grid) return;
 
     if (storyboardItems.length > 0) {
-        if (placeholder) placeholder.style.display = 'none';
+        if (placeholder) placeholder.classList.add('hidden');
         grid.innerHTML = '';
-        
+
         storyboardItems.forEach((item, index) => {
             const div = document.createElement('div');
-            div.className = 'storyboard-item';
-            div.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease;';
-            
+            div.className = 'storyboard-card';
+
             div.innerHTML = `
-                <div style="position: relative; width: 100%; height: 200px; background: #000;">
-                    <img src="${item.url}?t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover;">
-                    <div style="position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.8); padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: bold; color: #818cf8;">Step ${index + 1}</div>
-                    
-                    <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;">
-                        <button class="view-sb-btn" title="View in Previz" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0;">👁️</button>
-                        <button class="regen-story-btn" title="Regenerate Image" style="background: #a855f7; border: none; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; box-sizing: border-box;">↻</button>
-                    </div>
-                    
-                    <button class="remove-story-btn" title="Remove" style="position: absolute; bottom: 10px; right: 10px; background: #ef4444; border: none; border-radius: 50%; width: 24px; height: 24px; min-width: 24px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; font-size: 0.8em; padding: 0; flex-shrink: 0; box-sizing: border-box;">×</button>
+                <div class="storyboard-media-box">
+                    <img src="${item.url}?t=${Date.now()}" loading="lazy">
+                    <div class="storyboard-index-badge">${index + 1}</div>
                 </div>
-                <div style="padding: 15px; flex: 1; display: flex; flex-direction: column; gap: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 0.7em; color: #64748b; font-weight: bold; text-transform: uppercase;">Prompt</span>
-                        <span style="font-size: 0.6em; background: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 6px; border-radius: 4px;">Flux: ${item.params?.storyboardSteps || '??'} steps</span>
+                <div class="storyboard-info-box">
+                    <div class="storyboard-prompt">${item.prompt}</div>
+                    <div class="storyboard-meta-row">
+                        <span class="sb-meta-tag">Flux</span>
+                        <span class="sb-meta-tag">${item.params?.storyboardSteps || '20'} Steps</span>
                     </div>
-                    <div style="font-size: 0.85em; color: #e2e8f0; line-height: 1.4; max-height: 4.5em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-                        ${item.prompt}
+                    <div class="storyboard-actions">
+                        <button class="sb-action-btn sb-btn-view" title="View in Previz">👁️</button>
+                        <button class="sb-action-btn sb-btn-video" title="Generate Video">🎬 VIDEO</button>
+                        <button class="sb-action-btn sb-btn-remove" title="Remove">×</button>
                     </div>
                 </div>
             `;
 
-            div.querySelector('.view-sb-btn').onclick = (e) => {
+            div.querySelector('.sb-btn-view').onclick = (e) => {
                 e.stopPropagation();
                 loadImageToPreviz(item.url);
-                const tabPrevizBtn = document.getElementById('tabPrevizBtn');
-                if (tabPrevizBtn) tabPrevizBtn.click();
-            };
-            
-            div.querySelector('.regen-story-btn').onclick = (e) => {
-                e.stopPropagation();
-                // Actualizar estado antes de relanzar
-                item.status = 'regenerating';
-                addToStoryboardQueue(item.prompt, { storyboardIndex: item.storyboardIndex, batchId: item.batchId });
-                appendConsoleLine(`♻️ Regenerating storyboard image ${index + 1}...`, 'system');
+                document.getElementById('tabPrevizBtn').click();
             };
 
-            div.querySelector('.remove-story-btn').onclick = (e) => {
+            div.querySelector('.sb-btn-video').onclick = (e) => {
+                e.stopPropagation();
+                const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
+                addToQueue(item.prompt, item.filename, { isAutoAssemble });
+                document.getElementById('tabOutputBtn').click();
+                appendConsoleLine(`🚀 Storyboard image #${index + 1} sent to Video pipeline`, 'system');
+            };
+
+            div.querySelector('.sb-btn-remove').onclick = (e) => {
                 e.stopPropagation();
                 storyboardItems = storyboardItems.filter(i => i.id !== item.id);
                 updateStoryboardUI();
             };
-            
+
             grid.appendChild(div);
         });
     } else {
         if (placeholder) {
             grid.innerHTML = '';
             grid.appendChild(placeholder);
-            placeholder.style.display = 'flex';
+            placeholder.classList.remove('hidden');
         }
     }
 }
 
 // Event Listeners for Storyboard Buttons
 document.getElementById('clearStoryboardBtn')?.addEventListener('click', () => {
-    if (confirm('Clear all storyboard images?')) {
-        storyboardItems = [];
-        updateStoryboardUI();
-        appendConsoleLine('🗑️ Storyboard cleared.', 'system');
-    }
+    storyboardItems = [];
+    updateStoryboardUI();
+    appendConsoleLine('🗑️ Storyboard cleared.', 'system');
 });
 
 document.getElementById('generateVidsFromStoryboardBtn')?.addEventListener('click', () => {
     if (storyboardItems.length === 0) return alert('No storyboard images to generate from');
-    
+
     if (confirm(`Generate ${storyboardItems.length} videos from these images?`)) {
         appendConsoleLine(`🚀 Transitioning storyboard to video pipeline (${storyboardItems.length} items)`, 'system');
-        
+
         const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
         const batchId = 'batch_vid_' + Date.now();
 
@@ -1725,7 +2238,7 @@ document.getElementById('generateVidsFromStoryboardBtn')?.addEventListener('clic
             // Usamos la imagen del storyboard como base para I2V
             addToQueue(item.prompt, item.filename, { isAutoAssemble, batchId });
         });
-        
+
         // Ir a Stage para ver progreso
         const tabOutputBtn = document.getElementById('tabOutputBtn');
         if (tabOutputBtn) tabOutputBtn.click();

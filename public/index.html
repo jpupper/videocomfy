@@ -16,237 +16,226 @@
     <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
-            <h1 style="font-size: 1.4em; margin-bottom: 25px; color: #fff; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <h1>
                 Studio Generator
                 <span id="comfyStatusDot" class="status-dot disconnected" title="ComfyUI Status"></span>
             </h1>
             
-            <h2 style="font-size: 0.85em; margin-bottom: 20px; color: #818cf8; text-transform: uppercase; letter-spacing: 1px;">⚡ Generative Flow</h2>
+            <h2>⚡ Generative Flow</h2>
 
-            <!-- Image Upload Section (Restored) -->
+            <!-- Image Upload Section -->
             <div class="image-upload-section">
-                <label>Reference Image <span style="float:right; font-size:0.8em; color:#a855f7;">(ACTIVATE I2V)</span></label>
+                <label>Reference Image <span class="badge-i2v">(ACTIVATE I2V)</span></label>
                 <div class="image-upload-area" id="imageUploadArea">
                     <div class="upload-placeholder" id="uploadPlaceholder">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 30px; opacity: 0.5;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <p style="font-size: 0.75em;">Drop image here</p>
+                        <p>Drop image here</p>
                     </div>
                 </div>
-                <div class="upload-status" id="uploadStatus" style="font-size: 0.7em; margin-top: 5px; opacity: 0.8;"></div>
-                <input type="file" id="imageUploadInput" accept="image/png,image/jpeg,image/webp,image/jpg" style="display: none;">
+                <div class="upload-status" id="uploadStatus"></div>
+                <input type="file" id="imageUploadInput" accept="image/png,image/jpeg,image/webp,image/jpg" class="hidden-input">
             </div>
 
-            <h2 style="font-size: 0.8em; margin-top: 15px; margin-bottom: 12px; color: #818cf8; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8;">⚙️ Generation Params</h2>
+            <h2 class="section-label">⚙️ Generation Params</h2>
             
-            <div class="params-grid" id="dimensionControls" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(99, 102, 241, 0.2); padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <button id="resetParamsBtn" style="padding: 4px; font-size: 0.6em; background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 4px; float: right; margin-top: -5px;">Reset</button>
-                    <label>Width <span id="videoWidthValue" style="float: right; color: #818cf8; font-weight: 800;">1280</span></label>
+            <div class="params-grid" id="dimensionControls">
+                <div class="form-group-param">
+                    <button id="resetParamsBtn" class="reset-params-btn">Reset</button>
+                    <label>Width <span id="videoWidthValue" class="value-label">1280</span></label>
                     <input type="range" id="videoWidth" min="512" max="1920" step="64" value="1280">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>Height <span id="videoHeightValue" style="float: right; color: #818cf8; font-weight: 800;">720</span></label>
+                <div class="form-group-param">
+                    <label>Height <span id="videoHeightValue" class="value-label">720</span></label>
                     <input type="range" id="videoHeight" min="512" max="1088" step="64" value="720">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>Frames <span id="videoLengthValue" style="float: right; color: #818cf8; font-weight: 800;">121</span></label>
+                <div class="form-group-param">
+                    <label>Frames <span id="videoLengthValue" class="value-label">121</span></label>
                     <input type="range" id="videoLength" min="25" max="481" step="8" value="121">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>Steps <span id="samplerStepsValue" style="float: right; color: #818cf8; font-weight: 800;">20</span></label>
+                <div class="form-group-param">
+                    <label>Steps <span id="samplerStepsValue" class="value-label">20</span></label>
                     <input type="range" id="samplerSteps" min="10" max="50" step="1" value="20">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>Flux Steps <span id="storyboardStepsValue" style="float: right; color: #a855f7; font-weight: 800;">25</span></label>
+                <div class="form-group-param">
+                    <label>Flux Steps <span id="storyboardStepsValue" class="value-label color-flux">25</span></label>
                     <input type="range" id="storyboardSteps" min="15" max="50" step="1" value="25">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>CFG Scale <span id="cfgScaleValue" style="float: right; color: #f59e0b; font-weight: 800;">4.0</span></label>
+                <div class="form-group-param">
+                    <label>CFG Scale <span id="cfgScaleValue" class="value-label color-cfg">4.0</span></label>
                     <input type="range" id="cfgScale" min="1" max="10" step="0.5" value="4.0">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;" id="refStrengthGroup">
-                    <label>Ref Strength <span id="refStrengthValue" style="float: right; color: #34d399; font-weight: 800;">1.00</span></label>
+                <div class="form-group-param" id="refStrengthGroup">
+                    <label>Ref Strength <span id="refStrengthValue" class="value-label color-ref">1.00</span></label>
                     <input type="range" id="refStrength" min="0.1" max="1.0" step="0.05" value="1.00">
                 </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label>Seed <span style="float: right; font-size: 0.7em;"><input type="checkbox" id="randomSeed" checked> Random</span></label>
-                    <input type="number" id="seed" value="0" style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; padding: 4px; font-size: 0.8em;">
+                <div class="form-group-param">
+                    <label>Seed <span class="seed-random-label"><input type="checkbox" id="randomSeed" checked> Random</span></label>
+                    <input type="number" id="seed" value="0" class="seed-input">
                 </div>
             </div>
 
-            <div style="margin-top: auto; padding-top: 20px;">
-                <div id="blendControls" class="blend-controls" style="margin-bottom: 10px; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.4); padding: 10px; border-radius: 8px; display: none;">
-                    <div id="blendInfo" style="font-size: 0.7em; color: #34d399; margin-bottom: 5px;">Selecciona videos...</div>
-                    <div class="form-group" style="margin-bottom: 5px;">
-                        <label style="font-size: 0.6em;">Transition (s) <span id="blendDurationValue">1.0</span></label>
-                        <input type="range" id="blendDuration" min="0.5" max="3" step="0.1" value="1.0" style="height: 2px;">
-                    </div>
-                    <button id="executeBlendButton" style="padding: 5px; font-size: 0.7em; background: #10b981; color: white;" disabled>Execute</button>
-                    <button id="cancelBlendButton" style="padding: 5px; font-size: 0.7em; background: #ef4444; color: white; margin-top: 5px;">Cancel</button>
-                </div>
-                <button id="blendModeButton" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); font-size: 0.8em; padding: 10px;">🎞️ Blending Tools</button>
-            </div>
         </aside>
 
         <!-- CENTER: MAIN WORKSPACE -->
         <main class="main-workspace">
             <header class="workspace-header">
-                <div style="display: flex; flex-direction: column; gap: 5px; width: 40%;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <h1 style="margin: 0; font-size: 1.2em;">VideoComfy Studio</h1>
-                        <div class="mode-indicator t2v" id="modeIndicator" style="margin: 0; padding: 4px 12px; font-size: 0.7em;">
+                <div class="header-title-container">
+                    <div class="header-title-row">
+                        <h1>VideoComfy Studio</h1>
+                        <div class="mode-indicator t2v" id="modeIndicator">
                             <span id="modeText">T2V ACTIVE</span>
                         </div>
                     </div>
                 </div>
-                <div class="tabs-container" style="margin: 0; border: none; padding: 0; gap: 5px;">
-                    <button class="tab-button" id="tabPrevizBtn" data-target="tabPreviz" style="padding: 8px 15px;">Previz</button>
-                    <button class="tab-button active" id="tabOutputBtn" data-target="tabOutput" style="padding: 8px 15px;">Stage</button>
-                    <button class="tab-button" id="tabPromptsBtn" data-target="tabPrompts" style="padding: 8px 15px;">Sequencer</button>
-                    <button class="tab-button" id="tabStoryboardBtn" data-target="tabStoryboard" style="padding: 8px 15px;">Storyboard</button>
-                    <button class="tab-button" id="tabEditorBtn" data-target="tabEditor" style="padding: 8px 15px;">Editor</button>
-                    <button class="tab-button" id="tabLogsBtn" data-target="tabLogs" style="padding: 8px 15px;">Engine Logs</button>
+                <div class="tabs-container">
+                    <button class="tab-button tab-button-std" id="tabPrevizBtn" data-target="tabPreviz">Previz</button>
+                    <button class="tab-button tab-button-std active" id="tabOutputBtn" data-target="tabOutput">Stage</button>
+                    <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">Sequencer</button>
+                    <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
+                    <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
+                    <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
                 </div>
             </header>
 
-            <div class="workspace-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="workspace-content">
                 <!-- TABS CONTENT -->
                 <div class="tab-content" id="tabPreviz">
-                    <div class="sub-tabs" style="display: flex; gap: 2px; margin-bottom: 10px; background: rgba(15, 23, 42, 0.5); padding: 4px; border-radius: 8px;">
-                        <button class="sub-tab-btn active" data-sub="previz-monitor" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: #6366f1; color: white; cursor: pointer; font-size: 0.75em; font-weight: bold;">VIDEO</button>
-                        <button class="sub-tab-btn" data-sub="previz-data" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.75em; font-weight: bold;">DATA</button>
+                    <div class="sub-tabs-container">
+                        <button class="sub-tab-btn active" data-sub="previz-monitor">VIDEO</button>
+                        <button class="sub-tab-btn" data-sub="previz-data">DATA</button>
                     </div>
 
-                    <div id="previz-monitor" class="sub-tab-content active" style="flex: 1; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 2px dashed #475569;">
-                        <video id="previzVideo" style="max-height: 100%; max-width: 100%; display: none;" controls autoplay loop></video>
-                        <img id="previzImage" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
-                        <div id="previzPlaceholder" style="position: absolute; color: #475569; text-align: center;">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 60px; margin-bottom: 10px; opacity: 0.3;">
+                    <div id="previz-monitor" class="sub-tab-content active monitor-main-container">
+                        <video id="previzVideo" class="monitor-media monitor-video-el hidden" controls autoplay loop></video>
+                        <img id="previzImage" class="monitor-media monitor-image-el hidden">
+                        <div id="previzPlaceholder" class="monitor-placeholder-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                             <p>DRAG VIDEO HERE</p>
-                            <button id="syncWithEditorBtn" style="margin-top: 15px; background: #6366f1; color: white; padding: 10px 20px; border-radius: 6px; font-size: 0.8em; width: auto;">VIEW EDITOR OUTPUT</button>
+                            <button id="syncWithEditorBtn" class="primary-btn-sm">VIEW EDITOR OUTPUT</button>
                         </div>
                     </div>
 
-                    <div id="previz-data" class="sub-tab-content" style="display: none; flex: 1; background: #0f172a; border-radius: 12px; padding: 20px; color: #cbd5e1; overflow-y: auto;">
+                    <div id="previz-data" class="sub-tab-content previz-data-panel">
                         <div id="previzInfo">
-                            <h3 style="font-size: 0.7em; color: #818cf8; text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 5px;">Generation Metadata</h3>
-                            <div id="previzMetadata" style="font-size: 0.9em; color: #e2e8f0; line-height: 1.8;">
-                                <p style="opacity: 0.5; text-align: center; margin-top: 50px;">No video loaded in Previz</p>
+                            <h3 class="data-panel-title">Generation Metadata</h3>
+                            <div id="previzMetadata" class="metadata-content">
+                                <p class="empty-msg">No video loaded in Previz</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="tab-content active" id="tabOutput">
-                    <!-- Progress Integrated in Stage -->
-                    <div class="progress-container" id="progressContainer" style="display: block; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <span id="progressText" style="font-size: 0.75em; color: #a5b4fc; font-weight: 600;">Ready for generation...</span>
-                            <span id="progressPct" style="font-size: 0.75em; color: #a5b4fc; font-weight: 800;">0%</span>
+                    <div class="progress-container-std" id="progressContainer">
+                        <div class="progress-header">
+                            <span id="progressText" class="progress-label">Ready for generation...</span>
+                            <span id="progressPct" class="progress-pct-label">0%</span>
                         </div>
-                        <div class="progress-bar" style="height: 8px; border-radius: 4px; background: rgba(30, 41, 59, 0.8);">
-                            <div class="progress-fill" id="progressFill" style="width: 0%; height: 100%; border-radius: 4px;"></div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progressFill"></div>
                         </div>
                     </div>
 
-                    <div id="videoContainer" style="flex: 1; min-height: 300px; display: flex; align-items: center; justify-content: center; background: #000; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid #334155;">
-                        <!-- Monitor principal Generativo -->
-                        <div id="placeholder" style="color: #475569; font-weight: bold; opacity: 0.5;">MONITOR STAGE</div>
+                    <div id="videoContainer" class="monitor-container">
+                        <div id="placeholder" class="monitor-label-placeholder">MONITOR STAGE</div>
                     </div>
                     
-                    <div class="quick-prompt-area" style="margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155;">
-                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." style="width: 100%; height: 60px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: inherit; resize: none; margin-bottom: 10px;"></textarea>
-                        <textarea id="negativePromptStage" placeholder="Negative prompt (Optional): blurry, low quality..." style="width: 100%; height: 40px; background: #0f172a; border: 1px solid #334155; color: #94a3b8; padding: 8px; border-radius: 6px; font-family: inherit; font-size: 0.75em; resize: none;"></textarea>
-                        <div class="controls" style="margin-top: 10px; display: flex; gap: 10px;">
-                            <button id="generateButton" style="flex: 3; height: 40px; font-size: 0.9em; background: linear-gradient(135deg, #6366f1, #a855f7); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🚀 LAUNCH</button>
-                            <button id="stopButton" style="flex: 1; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; display: none; font-weight: bold;">🛑 STOP</button>
+                    <div class="quick-prompt-card">
+                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." class="quick-prompt-textarea"></textarea>
+                        <div class="export-actions-row">
+                            <button id="generateButton" class="generate-btn-main">🚀 LAUNCH</button>
+                            <button id="stopButton" class="stop-btn-main">🛑 STOP</button>
                         </div>
                     </div>
 
-                    <!-- Integrated Global Queue -->
-                    <div id="globalQueueContainer" style="margin-top: 20px; display: none; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <span style="font-size: 0.8em; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Generation Queue</span>
-                            <span id="queueCount" style="background: #6366f1; padding: 2px 10px; border-radius: 20px; font-size: 0.7em; font-weight: 800; box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);">0</span>
+                    <div id="globalQueueContainer" class="inline-queue-card hidden">
+
+                        <div class="inline-queue-header">
+                            <span class="inline-queue-title">Generation Queue</span>
+                            <span id="queueCount" class="inline-queue-badge">0</span>
                         </div>
-                        <div id="queueList" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px;"></div>
+                        <div id="queueList" class="inline-queue-list"></div>
                     </div>
                 </div>
 
                 <div class="tab-content" id="tabPrompts">
-                    <div class="prompts-scroller" style="flex: 1; overflow-y: auto; padding: 10px;">
-                        <select id="promptModeSelect" class="prompt-mode-select">
-                            <option value="single">Single Prompt Mode</option>
-                            <option value="batch">Batch / Sequence Mode</option>
-                        </select>
-
-                        <div id="simplePromptContainer">
-                            <label style="display: block; margin-bottom: 10px; color: #94a3b8; font-size: 0.8em; text-transform: uppercase;">Main Prompt</label>
-                            <textarea id="prompt" placeholder="Write your prompt..." style="width: 100%; min-height: 150px; background: #1e293b; border: 1px solid #334155; color: white; padding: 15px; border-radius: 8px; font-family: inherit; margin-bottom: 20px;"></textarea>
-                        </div>
-                        <div id="advancedMode" class="advanced-panel" style="display: none;">
-                            <div style="display: flex; gap: 6px; margin-bottom: 12px; align-items: center;">
-                                <button id="importJsonBtn" style="flex: 1; padding: 10px; font-size: 0.75em; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">📥 IMPORT JSON</button>
-                                <button id="jsonExampleBtn" title="Copy JSON Example" style="width: 40px; height: 40px; padding: 0; font-size: 1em; background: rgba(15, 23, 42, 0.6); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">📋</button>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <label style="margin: 0; color: #94a3b8; font-size: 0.7em; text-transform: uppercase; font-weight: bold;">Global Style / Master</label>
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <input type="checkbox" id="autoAssembleCheck" style="width: 14px; height: 14px; cursor: pointer; accent-color: #10b981;">
-                                        <label for="autoAssembleCheck" style="margin: 0; font-size: 0.7em; color: #10b981; font-weight: 700; cursor: pointer; text-transform: uppercase;">Auto-assemble</label>
+                    <div class="sequencer-scroller">
+                        <div class="sequencer-toolbar">
+                            <div class="toolbar-header">
+                                <label class="sequencer-label">Workflow Assistant</label>
+                                <div class="checks-row">
+                                    <div class="check-item">
+                                        <input type="checkbox" id="autoAssembleCheck" class="green-check">
+                                        <label for="autoAssembleCheck" class="color-green-bold">Auto-assemble</label>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <input type="checkbox" id="autoRenderCheck" style="width: 14px; height: 14px; cursor: pointer; accent-color: #f59e0b;">
-                                        <label for="autoRenderCheck" style="margin: 0; font-size: 0.7em; color: #f59e0b; font-weight: 700; cursor: pointer; text-transform: uppercase;">Auto-render</label>
+                                    <div class="check-item">
+                                        <input type="checkbox" id="autoRenderCheck" class="orange-check">
+                                        <label for="autoRenderCheck" class="color-orange-bold">Auto-render</label>
                                     </div>
                                 </div>
                             </div>
-                            <textarea id="promptGeneral" class="prompt-general-textarea" placeholder="Style to apply to all steps..." style="width: 100%; height: 80px; background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 10px; border-radius: 8px; margin-bottom: 10px;"></textarea>
-                            <label style="display: block; margin-bottom: 8px; color: #ef4444; font-size: 0.7em; text-transform: uppercase; font-weight: bold; opacity: 0.7;">Global Negative Style</label>
-                            <textarea id="negativePromptGeneral" placeholder="Negative words for all steps..." style="width: 100%; height: 50px; background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.8em;"></textarea>
+                            <div class="toolbar-actions-row">
+                                <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
+                                <button id="jsonExampleBtn" title="Copy JSON Example" class="icon-btn-std">📋</button>
+                                <select id="promptModeSelect" class="prompt-mode-select-sm">
+                                    <option value="single">Single Prompt Mode</option>
+                                    <option value="batch">Batch / Sequence Mode</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="simplePromptContainer" class="margin-top-20">
+                            <label class="sequencer-sub-label">Focus Prompt</label>
+                            <textarea id="prompt" placeholder="Write your main prompt..." class="sequencer-textarea"></textarea>
+                        </div>
+
+                        <div id="advancedMode" class="advanced-panel hidden margin-top-20">
+                            <div class="sequencer-settings-header">
+                                <label class="sequencer-sub-label">Global Style / Master</label>
+                            </div>
+                            <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
+                            <!-- Negative Prompt General removido a petición del usuario -->
                             
-                            
-                            
-                            <!-- Area para importar JSON (TextField en vez de prompt) -->
-                            <div id="jsonImportArea" style="display: none; margin-bottom: 15px; background: rgba(15, 23, 42, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #6366f1;">
-                                <label style="display: block; margin-bottom: 8px; color: #818cf8; font-size: 0.7em; font-weight: bold; text-transform: uppercase;">Paste JSON Sequence</label>
-                                <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' style="width: 100%; height: 120px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.8em; margin-bottom: 10px; resize: vertical;"></textarea>
-                                <div style="display: flex; gap: 10px;">
-                                    <button id="confirmJsonImport" style="flex: 1; padding: 8px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold;">IMPORT</button>
-                                    <button id="cancelJsonImport" style="flex: 1; padding: 8px; background: #475569; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold;">CANCEL</button>
+                            <!-- Area para importar JSON -->
+                            <div id="jsonImportArea" class="json-import-panel hidden">
+
+                                <label class="sequencer-sub-label color-index">Paste JSON Sequence</label>
+                                <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' class="json-textarea-field"></textarea>
+                                <div class="export-actions-row">
+                                    <button id="confirmJsonImport" class="confirm-btn-sm">IMPORT</button>
+                                    <button id="cancelJsonImport" class="cancel-btn-sm">CANCEL</button>
                                 </div>
                             </div>
 
                             <div id="promptSequence"></div>
 
-                            <button id="addPromptButton" class="add-prompt-btn" style="width: 100%; padding: 10px; background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px dashed #818cf8; border-radius: 8px; cursor: pointer; margin: 10px 0;">+ Add Sequence Step</button>
+                            <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Sequence Step</button>
                         </div>
                     </div>
-                    <div class="controls" style="margin-top: 10px; padding: 10px; display: flex; gap: 10px;">
-                        <button id="generateVideoFromSequencer" class="generate-from-prompts" style="flex: 1; height: 45px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">DIRECT TO VIDEO</button>
-                        <button id="generateFullAutoBtn" style="flex: 1; height: 45px; background: linear-gradient(135deg, #a855f7, #6366f1); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4); text-transform: uppercase;">FULL AUTO: T2I + I2V</button>
-                        <button id="generateStoryboardFromSequencer" style="flex: 1; height: 45px; background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid #a855f7; border-radius: 8px; cursor: pointer; font-weight: bold;">GENERATE STORYBOARD (T2I)</button>
+                    <div class="sequencer-controls-row">
+                        <button id="generateVideoFromSequencer" class="generate-btn-sequencer">DIRECT TO VIDEO</button>
+                        <button id="generateFullAutoBtn" class="generate-btn-fullauto">FULL AUTO: T2I + I2V</button>
+                        <button id="generateStoryboardFromSequencer" class="generate-btn-storyboard">GENERATE STORYBOARD (T2I)</button>
                     </div>
                 </div>
 
                 <div class="tab-content" id="tabStoryboard">
-                    <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px; height: 100%;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="margin: 0; font-size: 1.2em; color: #818cf8;">Visual Storyboard</h2>
-                            <div style="display: flex; gap: 10px;">
-                                <button id="clearStoryboardBtn" style="padding: 8px 15px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; font-size: 0.8em; font-weight: bold; cursor: pointer;">CLEAR ALL</button>
-                                <button id="generateVidsFromStoryboardBtn" style="padding: 8px 15px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 0.8em; font-weight: bold; cursor: pointer;">🚀 GENERATE VIDEOS FROM STORYBOARD</button>
+                    <div class="storyboard-view-container">
+                        <div class="storyboard-header-row">
+                            <h2 class="storyboard-title">Visual Storyboard</h2>
+                            <div class="export-actions-row">
+                                <button id="clearStoryboardBtn" class="danger-btn-outline">CLEAR ALL</button>
+                                <button id="generateVidsFromStoryboardBtn" class="primary-btn-std">🚀 GENERATE VIDEOS FROM STORYBOARD</button>
                             </div>
                         </div>
-                        <div id="storyboardGrid" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 10px; background: rgba(15, 23, 42, 0.3); border-radius: 12px; border: 1px dashed rgba(99, 102, 241, 0.2);">
+                        <div id="storyboardGrid" class="storyboard-grid-container">
                             <!-- Storyboard items will be added here -->
-                            <div id="storyboardPlaceholder" style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 100px; color: #475569; gap: 15px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 60px; opacity: 0.3;">
+                            <div id="storyboardPlaceholder" class="storyboard-placeholder-msg">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 <p>Generate images from Sequencer to see them here</p>
@@ -256,49 +245,58 @@
                 </div>
 
                 <div class="tab-content" id="tabEditor">
-                    <!-- Monitor de Previsualización Dual (interpolado) -->
-                    <div id="editorMonitor" style="flex: 1; min-height: 400px; background: #000; border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border: 1px solid #1e293b;">
-                        <video id="timelinePreviewA" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" preload="auto"></video>
-                        <video id="timelinePreviewB" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 2; opacity: 0;" preload="auto"></video>
-                        <div id="editorPlaceholder" style="position: absolute; color: #475569; z-index: 0; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; opacity: 0.5;">Preview Monitor</div>
+                    <!-- Monitor de Previsualización Dual -->
+                    <div id="editorMonitor" class="editor-monitor-container">
+                        <video id="timelinePreviewA" class="timeline-preview-v" preload="auto"></video>
+                        <video id="timelinePreviewB" class="timeline-preview-v ghost" preload="auto"></video>
+                        <div id="editorPlaceholder" class="editor-monitor-placeholder">Preview Monitor</div>
                     </div>
-                    <div class="editor-controls" style="padding: 10px; display: flex; justify-content: center; gap: 20px; background: rgba(15, 23, 42, 0.5);">
-                         <div style="display: flex; gap: 10px; align-items: center;">
-                            <button id="tlPlayBtn" style="background: #10b981; color: white; border: none; padding: 8px 30px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <span id="playIcon">▶</span> <span id="playText">PLAY</span>
-                            </button>
-                            <button id="tlResetBtn" title="Reset to start" style="background: #475569; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; width: 40px;">⏮</button>
-                         </div>
-                    </div>
+
                 </div>
 
                 <div class="tab-content" id="tabLogs">
-                    <div class="logs-container" style="flex: 1; background: #020617; border-radius: 12px; padding: 20px; font-family: 'Courier New', Courier, monospace; overflow-y: auto;">
-                        <div id="extendedLogs" style="color: #34d399; font-size: 0.85em; line-height: 1.6;">
-                            <div style="color: #64748b;">[SYSTEM] Studio Engine initialized. Waiting for commands...</div>
+                    <div class="logs-container">
+                        <div id="extendedLogs" class="logs-display">
+                            <div class="log-system-msg">[SYSTEM] Studio Engine initialized. Waiting for commands...</div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- THE PROFESSIONAL TIMELINE -->
+
+            <!-- THE PROFESSIONAL TIMELINE (Fixed Placement) -->
             <div class="timeline-editor-wrapper" id="masterTimeline">
-                <div class="timeline-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; background: #1e293b;">
-                    <span style="font-size: 0.7em; font-weight: bold; color: #6366f1; text-transform: uppercase;">Timeline Maestro v1.1</span>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <div id="activeExportWidget" style="display: none; background: rgba(99, 102, 241, 0.2); border: 1px solid #6366f1; padding: 4px 10px; border-radius: 4px; font-size: 0.6em; cursor: pointer; animation: pulse 2s infinite;">
+                <div class="timeline-toolbar">
+                    <div class="timeline-toolbar-left">
+                        <span class="timeline-toolbar-title">Timeline Maestro</span>
+                        <button id="tlPlayBtn" class="play-btn-timeline">
+                            <span id="playIcon">▶</span> <span id="playText">PLAY</span>
+                        </button>
+                    </div>
+                    <div class="timeline-toolbar-actions">
+                        <div id="activeExportWidget" class="export-rendering-badge hidden">
                             ⚡ RENDERING IN PROGRESS...
                         </div>
-                        <button id="exportProjectBtn" style="width: auto; padding: 4px 12px; font-size: 0.7em; background: #059669; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;">EXPORT FINAL VIDEO</button>
+                        <button id="exportProjectBtn" class="export-final-btn">EXPORT FINAL VIDEO</button>
                     </div>
                 </div>
                 <div class="timeline-scroll-area">
-                    <div class="timeline-track-content-wrapper" style="position: relative; display: flex;">
-                        <div class="timeline-track-headers" style="width: 80px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155;">
-                            <div class="track-header" style="height: 40px; border-bottom: 1px solid #0f172a; font-size: 0.6em; display: flex; align-items: center; justify-content: center; color: #94a3b8;">V1</div>
+                    <div class="timeline-track-content-wrapper">
+                        <div class="timeline-track-headers">
+                            <div class="track-header">
+                                <span>V1</span>
+                                <div class="timeline-mode-toolbar">
+                                    <button id="modeTrimBtn" class="tl-mode-btn active" title="Trim Mode (T)">✂️</button>
+                                    <button id="modeStretchBtn" class="tl-mode-btn" title="Stretch Mode (S)">↔️</button>
+                                </div>
+                            </div>
+                            <div class="track-header track-header-audio">
+                                <span>A1</span>
+                            </div>
                         </div>
-                        <div class="timeline-tracks-content" id="editorTimeline" style="flex: 1; position: relative; height: 160px; overflow-x: auto; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 50px 40px;">
-                            <div class="timeline-track" data-track="V1" style="height: 40px; border-bottom: 1px solid #1e293b; position: relative;"></div>
-                            <div class="timeline-empty-msg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #334155; pointer-events: none; font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px;">Drag Assets Here</div>
+
+                        <div class="timeline-tracks-content" id="editorTimeline">
+                            <div class="timeline-track" data-track="V1"></div>
+                            <div class="timeline-track timeline-track-audio" data-track="A1"></div>
                         </div>
                     </div>
                 </div>
@@ -307,46 +305,108 @@
 
         <!-- RIGHT SIDEBAR: ASSETS ONLY -->
         <aside class="sidebar-right">
-            <h2 style="font-size: 0.85em; margin-bottom: 15px; color: #a855f7; text-transform: uppercase; letter-spacing: 1px;">📦 Studio Assets</h2>
+            <h2>📦 Studio Assets</h2>
             
-            <div class="asset-tabs" style="display: flex; gap: 5px; margin-bottom: 15px; background: rgba(15, 23, 42, 0.5); padding: 4px; border-radius: 8px;">
-                <button class="asset-tab-btn active" data-type="videos" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: #6366f1; color: white; cursor: pointer; font-size: 0.7em; font-weight: bold; transition: all 0.2s;">VIDEOS</button>
-                <button class="asset-tab-btn" data-type="images" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 0.7em; font-weight: bold; transition: all 0.2s;">IMAGES</button>
+            <div class="asset-tabs-container">
+                <button class="asset-tab-btn asset-tab-btn-std active" data-type="videos">VIDEOS</button>
+                <button class="asset-tab-btn asset-tab-btn-std" data-type="images">IMAGES</button>
+                <button class="asset-tab-btn asset-tab-btn-std" data-type="audio">AUDIO</button>
             </div>
 
-            <div class="gallery-scroll-container" style="flex: 1; overflow-y: auto; padding-right: 5px; margin-top: 10px;">
+            <div class="gallery-scroll-container">
                 <div id="videoGallery" class="asset-gallery-grid"></div>
-                <div id="imageGallery" class="asset-gallery-grid" style="display: none;"></div>
+                <div id="imageGallery" class="asset-gallery-grid hidden"></div>
+                <div id="audioGallery" class="asset-gallery-grid hidden"></div>
             </div>
+
         </aside>
+
     </div>
 
-    <!-- EXPORT MODAL -->
-    <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
-        <div style="width: 500px; background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 30px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); position: relative;">
-            <button id="closeExportBtnTop" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.5em; width: auto; padding: 0;">&times;</button>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-right: 20px;">
-                <h2 style="color: #fff; font-size: 1.4em;">Rendering Project</h2>
-                <div id="exportStatusBadge" style="font-size: 0.7em; background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 4px 10px; border-radius: 4px;">INITIALIZING</div>
+    <!-- MODALS -->
+    <div id="exportModal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="closeExportBtnTop" class="close-modal-btn absolute-top-right">&times;</button>
+            <div class="modal-header">
+                <h2 class="modal-title">Rendering Project</h2>
+                <div id="exportStatusBadge" class="export-status-badge">INITIALIZING</div>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span id="exportProgressText" style="font-size: 0.8em; color: #94a3b8;">Preparing frames...</span>
-                    <span id="exportProgressPct" style="font-size: 0.8em; color: #fff; font-weight: bold;">0%</span>
+            <div class="margin-bottom-20">
+                <div class="progress-details-row">
+                    <span id="exportProgressText" class="progress-label">Preparing frames...</span>
+                    <span id="exportProgressPct" class="progress-pct-label">0%</span>
                 </div>
-                <div style="width: 100%; height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden;">
-                    <div id="exportProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); transition: width 0.3s;"></div>
+                <div class="progress-bar-bg">
+                    <div id="exportProgressBar" class="progress-bar-fill"></div>
                 </div>
             </div>
 
-            <div id="exportConsole" style="background: #020617; height: 120px; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 0.7em; color: #34d399; overflow-y: auto; margin-bottom: 20px; border: 1px solid #334155;">
+            <div id="exportConsole" class="export-console-log">
                 > Export task started.
             </div>
 
-            <div style="display: flex; gap: 10px;">
-                <button id="closeExportModal" style="flex: 1; padding: 12px; background: #334155; color: white; border: none; border-radius: 8px; cursor: pointer; display: none;">CANCEL</button>
-                <button id="viewFinalVideo" style="flex: 2; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; display: none; font-weight: bold;">VIEW & DOWNLOAD</button>
+            <div class="export-actions-row">
+                <button id="closeExportModal" class="modal-cancel-btn">CANCEL</button>
+                <button id="viewFinalVideo" class="modal-action-btn">VIEW & DOWNLOAD</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="regenSettingsModal" class="modal-overlay">
+        <div class="modal-content modal-content-premium">
+            <div class="modal-header">
+                <div class="header-with-subtitle">
+                    <h3 class="modal-title">Regenerate Clip</h3>
+                    <p class="modal-subtitle">AI Parameter Refinement</p>
+                </div>
+                <button id="closeRegenModal" class="close-modal-btn">&times;</button>
+            </div>
+            
+            <div class="regen-form">
+                <div class="form-group">
+                    <label class="sequencer-sub-label">Focus Prompt (Update if needed)</label>
+                    <textarea id="regenPrompt" class="regen-textarea-premium" placeholder="A cinematic shot of..."></textarea>
+                </div>
+                
+                <div class="regen-params-card">
+                    <div class="regen-input-grid">
+                        <div class="form-group-param">
+                            <label>Steps <span id="regenStepsVal" class="value-label color-primary">20</span></label>
+                            <input type="range" id="regenSteps" min="10" max="50" step="1">
+                        </div>
+                        <div class="form-group-param">
+                            <label>CFG Scale <span id="regenCfgVal" class="value-label color-cfg">4.0</span></label>
+                            <input type="range" id="regenCfg" min="1" max="10" step="0.5">
+                        </div>
+                    </div>
+
+                    <div class="regen-input-grid margin-top-10">
+                        <div class="form-group-param">
+                            <label>Width <span id="regenWidthVal" class="value-label">1280</span></label>
+                            <input type="range" id="regenWidth" min="512" max="1920" step="64">
+                        </div>
+                        <div class="form-group-param">
+                            <label>Height <span id="regenHeightVal" class="value-label">720</span></label>
+                            <input type="range" id="regenHeight" min="512" max="1088" step="64">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="checks-row margin-top-10">
+                    <div class="check-item">
+                        <input type="checkbox" id="regenUseImage" class="secondary-check">
+                        <label for="regenUseImage" class="color-secondary-bold">Use Reference Image</label>
+                    </div>
+                    <div class="check-item">
+                        <input type="checkbox" id="regenCreateImage" class="green-check" disabled>
+                        <label for="regenCreateImage" id="regenCreateImageLabel" class="color-green-bold opacity-50">Create new image (T2I)</label>
+                    </div>
+                </div>
+
+                <div class="modal-actions-row">
+                    <button id="confirmRegenBtn" class="generate-btn-main-premium">🚀 REGENERATE THIS CLIP</button>
+                </div>
             </div>
         </div>
     </div>
