@@ -245,6 +245,15 @@
                 </div>
 
                 <div class="tab-content" id="tabEditor">
+                    <!-- Navigación de Proyectos (Sessions) -->
+                    <div id="projectTabsNav" class="project-tabs-nav">
+                        <div id="projectTabsList" class="project-tabs-list">
+                            <!-- Tabs dynamically added here -->
+                        </div>
+                        <button id="newProjectBtn" class="new-project-btn-nav" title="New Session">+</button>
+                        <button id="saveProjectBtn" class="save-project-btn-nav" title="Save Project">💾</button>
+                    </div>
+
                     <!-- Monitor de Previsualización Dual -->
                     <div id="editorMonitor" class="editor-monitor-container">
                         <video id="timelinePreviewA" class="timeline-preview-v" preload="auto"></video>
@@ -308,15 +317,17 @@
             <h2>📦 Studio Assets</h2>
             
             <div class="asset-tabs-container">
-                <button class="asset-tab-btn asset-tab-btn-std active" data-type="videos">VIDEOS</button>
-                <button class="asset-tab-btn asset-tab-btn-std" data-type="images">IMAGES</button>
-                <button class="asset-tab-btn asset-tab-btn-std" data-type="audio">AUDIO</button>
+                <button class="asset-tab-btn active" data-type="videos">VIDEOS</button>
+                <button class="asset-tab-btn" data-type="images">IMAGES</button>
+                <button class="asset-tab-btn" data-type="audio">AUDIO</button>
+                <button class="asset-tab-btn" data-type="projects">PROJECTS</button>
             </div>
 
             <div class="gallery-scroll-container">
                 <div id="videoGallery" class="asset-gallery-grid"></div>
                 <div id="imageGallery" class="asset-gallery-grid hidden"></div>
                 <div id="audioGallery" class="asset-gallery-grid hidden"></div>
+                <div id="projectGallery" class="asset-gallery-grid hidden"></div>
             </div>
 
         </aside>

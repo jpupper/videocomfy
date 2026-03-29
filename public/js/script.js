@@ -286,6 +286,376 @@ function updateMode() {
 }
 
 // ============================================
+// PROJECT & SESSION MANAGEMENT
+// ============================================
+
+let openProjects = []; // { id, name, data }
+let activeProjectId = null;
+
+const projectTabsList = document.getElementById('projectTabsList');
+const projectGallery = document.getElementById('projectGallery');
+
+function getProjectData() {
+    // Capturar el estado completo del editor y sequencer
+    return {
+        timeline: getTimelineData(),
+        sequencer: {
+            mode: document.getElementById('promptModeSelect')?.value || 'single',
+            simplePrompt: document.getElementById('prompt')?.value || '',
+            globalPrompt: document.getElementById('promptGeneral')?.value || '',
+            sequence: Array.from(document.querySelectorAll('.sequence-prompt-textarea')).map(el => el.value),
+            autoAssemble: document.getElementById('autoAssembleCheck')?.checked || false,
+            autoRender: document.getElementById('autoRenderCheck')?.checked || false
+        },
+        params: {
+            width: document.getElementById('videoWidth')?.value,
+            height: document.getElementById('videoHeight')?.value,
+            length: document.getElementById('videoLength')?.value,
+            steps: document.getElementById('samplerSteps')?.value,
+            fluxSteps: document.getElementById('storyboardSteps')?.value,
+            cfg: document.getElementById('cfgScale')?.value,
+            refStrength: document.getElementById('refStrength')?.value,
+            randomSeed: document.getElementById('randomSeed')?.checked,
+            seed: document.getElementById('seed')?.value
+        },
+        storyboard: [...storyboardItems],
+        uploadedImage: uploadedImageFilename,
+        creationTime: Date.now()
+    };
+}
+
+function applyProjectData(data) {
+    if (!data) return;
+
+    // 1. Limpiar Timeline
+    const tracks = document.querySelectorAll('.timeline-track');
+    tracks.forEach(t => t.innerHTML = '');
+    
+    // 2. Restaurar Clips
+    if (data.timeline && Array.isArray(data.timeline)) {
+        data.timeline.forEach(clipData => {
+            const track = document.querySelector(`.timeline-track[data-track="${clipData.track}"]`);
+            if (track) {
+                // Re-crear el clip visualmente
+                const left = clipData.startTime * 25; // 25px/s
+                addClipToTimeline(`/${clipData.track.startsWith('A') ? 'audio' : 'videos'}/${clipData.filename}`, track, left + track.getBoundingClientRect().left, clipData.prompt || '', clipData.metadata || {});
+            }
+        });
+    }
+
+    // 3. Restaurar Sequencer
+    if (data.sequencer) {
+        if (document.getElementById('promptModeSelect')) {
+            document.getElementById('promptModeSelect').value = data.sequencer.mode;
+            document.getElementById('promptModeSelect').dispatchEvent(new Event('change'));
+        }
+        if (document.getElementById('prompt')) document.getElementById('prompt').value = data.sequencer.simplePrompt || '';
+        if (document.getElementById('promptGeneral')) document.getElementById('promptGeneral').value = data.sequencer.globalPrompt || '';
+        
+        const seqContainer = document.getElementById('promptSequence');
+        if (seqContainer) {
+            seqContainer.innerHTML = '';
+            if (data.sequencer.sequence) {
+                data.sequencer.sequence.forEach(val => addPromptStep(val));
+            } else {
+                addPromptStep();
+            }
+        }
+        
+        if (document.getElementById('autoAssembleCheck')) document.getElementById('autoAssembleCheck').checked = data.sequencer.autoAssemble;
+        if (document.getElementById('autoRenderCheck')) document.getElementById('autoRenderCheck').checked = data.sequencer.autoRender;
+    }
+
+    // 4. Restaurar Parámetros
+    if (data.params) {
+        if (document.getElementById('videoWidth')) document.getElementById('videoWidth').value = data.params.width;
+        if (document.getElementById('videoHeight')) document.getElementById('videoHeight').value = data.params.height;
+        if (document.getElementById('videoLength')) document.getElementById('videoLength').value = data.params.length;
+        if (document.getElementById('samplerSteps')) document.getElementById('samplerSteps').value = data.params.steps;
+        if (document.getElementById('storyboardSteps')) document.getElementById('storyboardSteps').value = data.params.fluxSteps;
+        if (document.getElementById('cfgScale')) document.getElementById('cfgScale').value = data.params.cfg;
+        if (document.getElementById('refStrength')) document.getElementById('refStrength').value = data.params.refStrength;
+        if (document.getElementById('randomSeed')) document.getElementById('randomSeed').checked = data.params.randomSeed;
+        if (document.getElementById('seed')) document.getElementById('seed').value = data.params.seed;
+        
+        // Actualizar labels
+        sliders.forEach(s => {
+            const el = document.getElementById(s.id);
+            const valEl = document.getElementById(s.valueId);
+            if (el && valEl) valEl.textContent = el.value;
+        });
+    }
+
+    // 5. Storyboard
+    storyboardItems = data.storyboard ? [...data.storyboard] : [];
+    updateStoryboardUI();
+
+    // 6. Image Upload
+    uploadedImageFilename = data.uploadedImage || null;
+    if (uploadedImageFilename) {
+        showImagePreview(`/uploads/${uploadedImageFilename}`, uploadedImageFilename);
+    } else {
+        removeImage();
+    }
+    
+    updateMode();
+    appendConsoleLine(`📂 Project applied.`, 'system');
+}
+
+function createNewProject(name, initialData = null) {
+    const id = 'proj_' + Date.now();
+    const project = {
+        id,
+        name: name || `Project ${openProjects.length + 1}`,
+        data: initialData || getProjectData()
+    };
+    openProjects.push(project);
+    switchProject(id);
+    renderProjectTabs();
+    return id;
+}
+
+function switchProject(id) {
+    if (activeProjectId === id) return;
+
+    // Guardar estado del proyecto actual antes de cambiar
+    if (activeProjectId) {
+        const current = openProjects.find(p => p.id === activeProjectId);
+        if (current) {
+            current.data = getProjectData();
+            appendConsoleLine(`💾 Autosaved ${current.name}`, 'debug');
+        }
+    }
+
+    stopTimelinePlayback(); // Pausar todo al cambiar
+
+    activeProjectId = id;
+    const project = openProjects.find(p => p.id === id);
+    if (project) {
+        applyProjectData(project.data);
+    }
+
+    renderProjectTabs();
+}
+
+function closeProject(id, e) {
+    if (e) e.stopPropagation();
+    
+    const index = openProjects.findIndex(p => p.id === id);
+    if (index === -1) return;
+
+    const proj = openProjects[index];
+    if (confirm(`Save changes to "${proj.name}" before closing?`)) {
+        saveProjectToFile(proj.name, proj.data);
+    }
+
+    openProjects.splice(index, 1);
+    
+    if (activeProjectId === id) {
+        if (openProjects.length > 0) {
+            switchProject(openProjects[0].id);
+        } else {
+            activeProjectId = null;
+            // Podríamos crear uno vacío o dejarlo limpio
+            createNewProject("Project 1");
+        }
+    }
+    
+    renderProjectTabs();
+}
+
+function renderProjectTabs() {
+    if (!projectTabsList) return;
+    projectTabsList.innerHTML = '';
+    
+    openProjects.forEach(proj => {
+        const tab = document.createElement('div');
+        tab.className = `project-tab-item ${proj.id === activeProjectId ? 'active' : ''}`;
+        tab.innerHTML = `
+            <span class="tab-name">${proj.name}</span>
+            <span class="close-tab-btn">×</span>
+        `;
+        
+        const nameSpan = tab.querySelector('.tab-name');
+        
+        // Renombrado con doble click
+        nameSpan.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = proj.name;
+            input.className = 'tab-name-input';
+            
+            nameSpan.replaceWith(input);
+            input.focus();
+            input.select();
+            
+            const saveRename = () => {
+                const newName = input.value.trim();
+                if (newName && newName !== proj.name) {
+                    proj.name = newName;
+                    renderProjectTabs();
+                    appendConsoleLine(`✏️ Project renamed to: ${newName}`, 'system');
+                } else {
+                    input.replaceWith(nameSpan);
+                }
+            };
+            
+            input.onblur = saveRename;
+            input.onkeydown = (ev) => {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    saveRename();
+                }
+                if (ev.key === 'Escape') {
+                    ev.preventDefault();
+                    input.replaceWith(nameSpan);
+                }
+            };
+        });
+
+        tab.onclick = () => switchProject(proj.id);
+        tab.querySelector('.close-tab-btn').onclick = (e) => closeProject(proj.id, e);
+        projectTabsList.appendChild(tab);
+    });
+}
+
+async function saveProjectToFile(name, dataOverride = null) {
+    const data = dataOverride || getProjectData();
+    try {
+        const response = await fetch('/api/projects/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, data })
+        });
+        const result = await response.json();
+        if (result.success) {
+            appendConsoleLine(`✅ Project "${name}" saved to storage.`, 'system');
+            loadProjectsList();
+        }
+    } catch (e) {
+        console.error('Save project error:', e);
+    }
+}
+
+async function loadProjectsList() {
+    if (!projectGallery) return;
+    try {
+        const response = await fetch('/api/projects');
+        const projects = await response.json();
+        projectGallery.innerHTML = '';
+        
+        projects.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'project-item-card';
+            card.draggable = true;
+            
+            const date = new Date(p.mtime).toLocaleDateString();
+            
+            card.innerHTML = `
+                <div class="project-card-header">
+                    <div class="project-icon-box">📂</div>
+                    <div class="project-card-info">
+                        <span class="project-card-name">${p.name}</span>
+                        <span class="project-card-meta">Saved: ${date}</span>
+                    </div>
+                </div>
+                <div class="project-card-actions">
+                    <button class="project-action-btn btn-delete-project">Delete</button>
+                    <button class="project-action-btn primary-btn-std btn-open-project">Open</button>
+                </div>
+            `;
+            
+            card.onclick = () => {
+                // No abrir si se hace click en las acciones
+            };
+
+            card.querySelector('.btn-open-project').onclick = () => openStoredProject(p.name);
+            card.querySelector('.btn-delete-project').onclick = (e) => {
+                e.stopPropagation();
+                if (confirm(`Delete project "${p.name}"?`)) deleteProject(p.name);
+            };
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('projectName', p.name);
+                card.style.opacity = '0.5';
+            });
+            card.addEventListener('dragend', () => card.style.opacity = '1');
+            
+            projectGallery.appendChild(card);
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function openStoredProject(name) {
+    // Si ya está abierto, solo cambiar
+    const existing = openProjects.find(p => p.name === name);
+    if (existing) {
+        switchProject(existing.id);
+        document.getElementById('tabEditorBtn').click();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/projects/${name}`);
+        const data = await response.json();
+        const id = createNewProject(name, data);
+        document.getElementById('tabEditorBtn').click();
+        appendConsoleLine(`📂 Project "${name}" loaded.`, 'system');
+    } catch (e) {
+        console.error('Load project error:', e);
+    }
+}
+
+async function deleteProject(name) {
+    try {
+        const response = await fetch(`/api/projects/${name}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (result.success) {
+            appendConsoleLine(`🗑️ Project "${name}" deleted.`, 'system');
+            loadProjectsList();
+        }
+    } catch (e) { console.error(e); }
+}
+
+document.getElementById('newProjectBtn')?.addEventListener('click', () => {
+    // Generar nombre automático sin prompt
+    const count = openProjects.length + 1;
+    createNewProject(`Project ${count}`);
+});
+
+document.getElementById('saveProjectBtn')?.addEventListener('click', () => {
+    const current = openProjects.find(p => p.id === activeProjectId);
+    if (current) {
+        saveProjectToFile(current.name);
+    } else {
+        alert("No active project to save.");
+    }
+});
+
+// Drag & Drop Project into Editor
+const tabEditor = document.getElementById('tabEditor');
+if (tabEditor) {
+    tabEditor.addEventListener('dragover', (e) => {
+        if (e.dataTransfer.types.includes('projectName')) e.preventDefault();
+    });
+    tabEditor.addEventListener('drop', (e) => {
+        const name = e.dataTransfer.getData('projectName');
+        if (name) {
+            e.preventDefault();
+            openStoredProject(name);
+        }
+    });
+}
+
+// Initial Session
+setTimeout(() => {
+    if (openProjects.length === 0) {
+        createNewProject("Project 1");
+    }
+}, 500);
+
+// ============================================
 // CORE UI LOGIC (TABS & CONSOLE)
 // ============================================
 
@@ -544,6 +914,10 @@ function handleSequencerGenerate(type) {
             if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
             else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
             else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
+
+            // Crear un NUEVO PROYECTO para este Batch
+            const batchName = `Batch ${new Date().toLocaleTimeString()}`;
+            createNewProject(batchName);
         }
     }
 
@@ -908,7 +1282,7 @@ async function loadExistingAudio() {
 // Main Workspace Tab Switching
 document.querySelectorAll('.tab-button-std').forEach(btn => {
     btn.addEventListener('click', () => {
-        const target = btn.dataset.tab;
+        const target = btn.dataset.target;
         if (!target) return;
 
         document.querySelectorAll('.tab-button-std').forEach(b => b.classList.remove('active'));
@@ -946,20 +1320,22 @@ document.querySelectorAll('.asset-tab-btn').forEach(btn => {
         });
         btn.classList.add('active');
 
+        document.getElementById('videoGallery')?.classList.add('hidden');
+        document.getElementById('imageGallery')?.classList.add('hidden');
+        document.getElementById('audioGallery')?.classList.add('hidden');
+        document.getElementById('projectGallery')?.classList.add('hidden');
+
         if (type === 'videos') {
             document.getElementById('videoGallery')?.classList.remove('hidden');
-            document.getElementById('imageGallery')?.classList.add('hidden');
-            document.getElementById('audioGallery')?.classList.add('hidden');
         } else if (type === 'images') {
-            document.getElementById('videoGallery')?.classList.add('hidden');
             document.getElementById('imageGallery')?.classList.remove('hidden');
-            document.getElementById('audioGallery')?.classList.add('hidden');
             loadExistingImages();
         } else if (type === 'audio') {
-            document.getElementById('videoGallery')?.classList.add('hidden');
-            document.getElementById('imageGallery')?.classList.add('hidden');
             document.getElementById('audioGallery')?.classList.remove('hidden');
             loadExistingAudio();
+        } else if (type === 'projects') {
+            document.getElementById('projectGallery')?.classList.remove('hidden');
+            loadProjectsList();
         }
     });
 });
@@ -1031,29 +1407,32 @@ if (timelineTracksContent) {
             if (e.clientY >= r.top && e.clientY <= r.bottom) targetTrack = track;
         });
 
+        const videoTracks = Array.from(tracks).filter(t => t.dataset.track.startsWith('V'));
+        const audioTracks = Array.from(tracks).filter(t => t.dataset.track.startsWith('A'));
+
         if (videoSrc) {
             const videoId = 'clip_' + Date.now() + '_V';
             const audioId = 'clip_' + Date.now() + '_A';
             
-            // Add video to V1
-            const vClip = addClipToTimeline(videoSrc, targetTrack, e.clientX, prompt, { ...metadata, clipId: videoId });
+            // For videos, targetTrack MUST be a video track
+            let finalVideoTrack = targetTrack.dataset.track.startsWith('V') ? targetTrack : (videoTracks[0] || targetTrack);
+            
+            // Add video to V track
+            const vClip = addClipToTimeline(videoSrc, finalVideoTrack, e.clientX, prompt, { ...metadata, clipId: videoId });
             
             // Add audio to A1
             const audioTrack = document.querySelector('.timeline-track[data-track="A1"]');
             if (audioTrack) {
                 const aClip = addClipToTimeline(videoSrc, audioTrack, e.clientX, prompt, { ...metadata, isAudioOnly: true, clipId: audioId });
-                
-                // Link them!
                 vClip.dataset.linkedTo = audioId;
                 aClip.dataset.linkedTo = videoId;
                 vClip.dataset.audioDetached = "false";
-                
-                // The video track should keep track of its muted state relative to the link
                 appendConsoleLine(`🎞️ Linked video & audio tracks added.`, 'system');
             }
         } else if (audioSrc) {
-            const audioTrack = document.querySelector('.timeline-track[data-track="A1"]');
-            addClipToTimeline(audioSrc, audioTrack || targetTrack, e.clientX, '', { isAudioOnly: true });
+            // For pure audio drops, only allow A tracks
+            let finalAudioTrack = targetTrack.dataset.track.startsWith('A') ? targetTrack : (audioTracks[0] || targetTrack);
+            addClipToTimeline(audioSrc, finalAudioTrack, e.clientX, '', { isAudioOnly: true });
             appendConsoleLine(`🎵 Added audio track to timeline: ${audioSrc.split('/').pop()}`, 'system');
         }
     });
@@ -1208,10 +1587,19 @@ function setupClipInteractions(clip) {
             if (clip._linkedClip) {
                 clip._linkedClip.style.left = `${clip._linkedStartLeft + delta}px`;
             }
+
+            const isAudioOnly = clip.classList.contains('audio-clip');
             const tracks = document.querySelectorAll('.timeline-track');
+            
             tracks.forEach(track => {
                 const r = track.getBoundingClientRect();
-                if (e.clientY >= r.top && e.clientY <= r.bottom) track.appendChild(clip);
+                if (e.clientY >= r.top && e.clientY <= r.bottom) {
+                    const isAudioTrack = track.dataset.track.startsWith('A');
+                    // Solo permitir si el track y el clip coinciden en tipo
+                    if (isAudioOnly === isAudioTrack) {
+                        track.appendChild(clip);
+                    }
+                }
             });
         } else if (isTrimmingLeft) {
             let nL = startLeft + delta, nW = startWidth - delta;
@@ -1397,8 +1785,10 @@ function syncPreviewToTime(xPos, forceSeek = false) {
             c.videoElement.currentTime = targetTime;
         }
 
-        if (isPlayingTl && c.videoElement.paused) {
-            c.videoElement.play().catch(() => {});
+        if (isPlayingTl) {
+            if (c.videoElement.paused) c.videoElement.play().catch(() => {});
+        } else {
+            if (!c.videoElement.paused) c.videoElement.pause();
         }
     });
 
@@ -1525,6 +1915,15 @@ function stopTimelinePlayback() {
     const pB = document.getElementById('timelinePreviewB');
     if (pA) pA.pause();
     if (pB) pB.pause();
+
+    // Pause all audio track clips
+    if (clipCache) {
+        clipCache.forEach(c => {
+            if (c.isAudioOnly && c.videoElement && !c.videoElement.paused) {
+                c.videoElement.pause();
+            }
+        });
+    }
 }
 
 const tlPlayBtn = document.getElementById('tlPlayBtn');
@@ -2250,4 +2649,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Studio initialized. Loading assets...');
     loadExistingVideos();
     loadExistingImages();
+    loadExistingAudio();
+    loadProjectsList();
 });

@@ -22,8 +22,12 @@ app.use(bodyParser.json());
 
 // Configurar multer para upload de imágenes
 const uploadDir = path.join(__dirname, 'public', 'uploads');
+const projectsDir = path.join(__dirname, 'public', 'projects');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(projectsDir)) {
+    fs.mkdirSync(projectsDir, { recursive: true });
 }
 const upload = multer({ dest: uploadDir });
 
@@ -532,6 +536,75 @@ app.post('/api/export-timeline', async (req, res) => {
 
     } catch (error) {
         console.error('Error exporting timeline:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// PROJECTS API
+// ============================================
+
+app.get('/api/projects', (req, res) => {
+    if (!fs.existsSync(projectsDir)) return res.json([]);
+    
+    fs.readdir(projectsDir, (err, files) => {
+        if (err) return res.json([]);
+        const projects = files
+            .filter(file => file.endsWith('.json'))
+            .map(file => {
+                const stats = fs.statSync(path.join(projectsDir, file));
+                return { 
+                    name: file.replace('.json', ''),
+                    filename: file,
+                    mtime: stats.mtime.getTime()
+                };
+            })
+            .sort((a, b) => b.mtime - a.mtime);
+        res.json(projects);
+    });
+});
+
+app.post('/api/projects/save', (req, res) => {
+    try {
+        const { name, data } = req.body;
+        if (!name) return res.status(400).json({ error: 'Project name required' });
+        
+        const filename = `${name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+        const filePath = path.join(projectsDir, filename);
+        
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        console.log(`[PROJECT] ✅ Guardado: ${name} -> ${filename}`);
+        res.json({ success: true, filename });
+    } catch (error) {
+        console.error('Error saving project:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/projects/:name', (req, res) => {
+    try {
+        const name = req.params.name;
+        const filePath = path.join(projectsDir, `${name}.json`);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Project not found' });
+        
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/projects/:name', (req, res) => {
+    try {
+        const name = req.params.name;
+        const filePath = path.join(projectsDir, `${name}.json`);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Project not found' });
+        }
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
