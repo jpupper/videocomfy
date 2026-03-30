@@ -117,11 +117,15 @@ ws.onmessage = (event) => {
                         // AUTO-RENDER LOGIC
                         const isAutoRender = batchItems.some(i => i.isAutoRender);
                         if (isAutoRender) {
-                            appendConsoleLine(`🎬 Auto-render triggered for batch: ${item.batchId}`, 'system');
-                            setTimeout(() => {
-                                const timelineData = getTimelineData();
-                                if (timelineData.length > 0) startRealExport(timelineData);
-                            }, 1000);
+                            const targetProjectId = autoBatch[0].projectId;
+                            const project = openProjects.find(p => p.id === targetProjectId);
+                            
+                            if (project && project.data.timeline && project.data.timeline.length > 0) {
+                                appendConsoleLine(`🎬 Auto-render triggered for project: ${project.name}`, 'system');
+                                setTimeout(() => {
+                                    startRealExport(project.data.timeline);
+                                }, 1500);
+                            }
                         }
 
                         // Clean batchId from queue to avoid repeating
@@ -704,7 +708,8 @@ const sliders = [
     { id: 'samplerSteps', valueId: 'samplerStepsValue' },
     { id: 'storyboardSteps', valueId: 'storyboardStepsValue' },
     { id: 'cfgScale', valueId: 'cfgScaleValue' },
-    { id: 'refStrength', valueId: 'refStrengthValue' }
+    { id: 'refStrength', valueId: 'refStrengthValue' },
+    { id: 'autoOverlapSlider', valueId: 'autoOverlapValue' }
 ];
 
 sliders.forEach(slider => {
@@ -712,7 +717,7 @@ sliders.forEach(slider => {
     const valEl = document.getElementById(slider.valueId);
     if (el && valEl) {
         el.addEventListener('input', () => {
-            valEl.textContent = el.value;
+            valEl.textContent = el.value + (slider.id.includes('Overlap') ? '%' : '');
         });
     }
 });
@@ -884,6 +889,7 @@ function handleSequencerGenerate(type) {
 
         const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
         const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
+        const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
         const batchId = 'batch_' + Date.now();
 
         sequencePrompts.forEach((el, index) => {
@@ -893,7 +899,7 @@ function handleSequencerGenerate(type) {
                 const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
 
                 if (type === 'storyboard') {
-                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index });
+                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, autoOverlap });
                 } else if (type === 'full-auto') {
                     // Full Auto: Image then Video
                     addToStoryboardQueue(finalPrompt, {
@@ -902,9 +908,10 @@ function handleSequencerGenerate(type) {
                         autoVideo: true,
                         isAutoAssemble,
                         isAutoRender,
+                        autoOverlap
                     });
                 } else {
-                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId });
+                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
                 }
                 addedCount++;
             }
@@ -917,7 +924,13 @@ function handleSequencerGenerate(type) {
 
             // Crear un NUEVO PROYECTO para este Batch
             const batchName = `Batch ${new Date().toLocaleTimeString()}`;
-            createNewProject(batchName);
+            const batchProjectId = createNewProject(batchName);
+
+            // Re-asociar los items recién añadidos a ESTE proyecto recién creado
+            // ya que addToQueue usó el 'activeProjectId' anterior o el que estaba antes de crearlo
+            globalGenerationQueue.forEach(item => {
+                if (item.batchId === batchId) item.projectId = batchProjectId;
+            });
         }
     }
 
@@ -1083,6 +1096,7 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
         params,
         imageFilename: forcedImage !== null ? forcedImage : uploadedImageFilename,
         status: 'pending',
+        projectId: activeProjectId,
         ...options // replaceClipId, isAutoAssemble, batchId, etc.
     });
 
@@ -1471,7 +1485,7 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
 
     const filename = src.split('/').pop().split('?')[0];
     const rect = trackElement.getBoundingClientRect();
-    clip.style.left = `${xPos - rect.left}px`;
+    clip.style.left = `${Math.max(0, xPos - rect.left)}px`;
     clip.style.width = '150px';
 
     const isAudio = metadata.isAudioOnly === true;
@@ -1582,10 +1596,13 @@ function setupClipInteractions(clip) {
     function handleMouseMove(e) {
         const delta = e.clientX - startX;
         if (isDragging) {
-            clip.style.left = `${startLeft + delta}px`;
+            let nL = Math.max(0, startLeft + delta);
+            clip.style.left = `${nL}px`;
             
             if (clip._linkedClip) {
-                clip._linkedClip.style.left = `${clip._linkedStartLeft + delta}px`;
+                // El linkeado se mueve relativo al clip principal limitado a 0
+                const linkedDelta = nL - startLeft;
+                clip._linkedClip.style.left = `${Math.max(0, clip._linkedStartLeft + linkedDelta)}px`;
             }
 
             const isAudioOnly = clip.classList.contains('audio-clip');
@@ -2229,11 +2246,20 @@ function getTimelineData() {
         // Extraer nombre de archivo de la URL
         const filename = video.src.split('/').pop().split('?')[0];
 
+        // Determinar si debemos incluir el audio de este clip específico
+        // Si es un track de video y tiene un audio linkeado (no desvinculado), entonces el track de video va muteado
+        // Porque el audio ya está en el track A1
+        const isAudioOnly = !!(JSON.parse(clip.dataset.metadata || '{}').isAudioOnly);
+        const isDetached = clip.dataset.audioDetached === "true";
+        const isMuted = !isAudioOnly && !isDetached && !!clip.dataset.linkedTo;
+
         data.push({
             filename,
             startTime,
             duration,
-            track
+            track,
+            muted: isMuted,
+            metadata: JSON.parse(clip.dataset.metadata || '{}')
         });
     });
     // Ordenar por tiempo de inicio
@@ -2338,23 +2364,61 @@ if (activeExportWidget) {
 }
 
 function assembleBatchInTimeline(batchItems) {
-    const track = document.querySelector('.timeline-track[data-track="V1"]');
-    if (!track) return;
+    // Tomamos el projectId del primer item del batch
+    const targetProjectId = batchItems[0]?.projectId;
+    const overlap = batchItems[0]?.autoOverlap !== undefined ? batchItems[0].autoOverlap : 0.15;
+    if (!targetProjectId) return;
 
+    // 1. Calcular los clips a añadir
     let currentX = 0;
-    const clipWidth = 150; // Default width in pixels
-    const overlap = 0.15; // 15% overlap
-    const step = clipWidth * (1 - overlap); // Distance between starts
-
-    batchItems.forEach((item, idx) => {
+    const clipWidth = 150;
+    // Ahora el overlap es la "distancia de inicio" del siguiente clip
+    // 0 = mismo punto, 100 = consecutivo
+    const step = clipWidth * overlap; 
+    
+    const newClipsRaw = [];
+    batchItems.forEach((item) => {
         if (item.resultUrl) {
-            addClipToTimeline(item.resultUrl, track, currentX + track.getBoundingClientRect().left, item.prompt, item.params);
+            const filename = item.resultUrl.split('/').pop().split('?')[0];
+            newClipsRaw.push({
+                filename,
+                startTime: currentX / 25,
+                duration: 6, // 150px / 25px/s
+                track: 'V1',
+                prompt: item.prompt,
+                metadata: item.params
+            });
             currentX += step;
         }
     });
 
-    appendConsoleLine(`🎬 Auto-assembled ${batchItems.length} clips in timeline.`, 'system');
-    document.getElementById('tabEditorBtn').click(); // Ir al editor para ver el resultado
+    // 2. Actualizar el proyecto en MEMORIA
+    const project = openProjects.find(p => p.id === targetProjectId);
+    if (project) {
+        if (!project.data.timeline) project.data.timeline = [];
+        // Añadir clips al timeline del proyecto (podríamos pisarlo o añadirlo al final)
+        // Por consistencia con "assemble", solemos limpiar o empezar desde el final
+        // Aquí vamos a AÑADIRLOS al timeline existente del proyecto
+        let startFrom = 0;
+        if (project.data.timeline.length > 0) {
+            const last = project.data.timeline.sort((a,b) => b.startTime - a.startTime)[0];
+            startFrom = last.startTime + (6 * (1-overlap));
+        }
+
+        newClipsRaw.forEach(c => {
+            project.data.timeline.push({
+                ...c,
+                startTime: c.startTime + startFrom
+            });
+        });
+    }
+
+    // 3. SI es el proyecto activo, refrescar el DOM
+    if (activeProjectId === targetProjectId) {
+        applyProjectData(project.data);
+    }
+
+    appendConsoleLine(`🎬 Auto-assembled ${batchItems.length} clips in project ${project?.name || targetProjectId}.`, 'system');
 }
 
 // Initial Load
@@ -2521,6 +2585,7 @@ function addToStoryboardQueue(prompt, options = {}) {
         params,
         type: 'storyboard',
         status: 'pending',
+        projectId: activeProjectId,
         ...options
     });
 

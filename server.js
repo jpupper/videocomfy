@@ -492,9 +492,9 @@ app.post('/api/export-timeline', async (req, res) => {
                 videoInputsCount++;
             }
 
-            // --- AUDIO (En cualquier clip que lo tenga) ---
+            // --- AUDIO (En cualquier clip que lo tenga y NO este muteado) ---
             const hasAudio = await checkAudio(clipPath);
-            if (hasAudio) {
+            if (hasAudio && !c.muted) {
                 filterComplex += `[${i}:a]atrim=0:${c.duration},asetpts=PTS-STARTPTS,adelay=${offsetMs}:all=1[a${i}];`;
                 audioLabels.push(`[a${i}]`);
             }

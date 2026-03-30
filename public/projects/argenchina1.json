@@ -1,0 +1,127 @@
+{
+  "timeline": [
+    {
+      "filename": "export_1774838069202.mp4",
+      "startTime": 5.28,
+      "duration": 6,
+      "track": "V1",
+      "muted": true,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "clipId": "clip_1774844749275_V"
+      }
+    },
+    {
+      "filename": "export_1774838069202.mp4",
+      "startTime": 5.28,
+      "duration": 6,
+      "track": "A1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "isAudioOnly": true,
+        "clipId": "clip_1774844749275_A"
+      }
+    },
+    {
+      "filename": "LTX2_i2v_00091_.mp4",
+      "startTime": 11.32,
+      "duration": 6,
+      "track": "V1",
+      "muted": true,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 401,
+        "samplerSteps": 40,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "negativePrompt": "",
+        "clipId": "clip_1774844754888_V"
+      }
+    },
+    {
+      "filename": "LTX2_i2v_00091_.mp4",
+      "startTime": 11.32,
+      "duration": 6,
+      "track": "A1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 401,
+        "samplerSteps": 40,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "negativePrompt": "",
+        "isAudioOnly": true,
+        "clipId": "clip_1774844754888_A"
+      }
+    },
+    {
+      "filename": "LTX2_i2v_00090_.mp4",
+      "startTime": 17.24,
+      "duration": 6,
+      "track": "V1",
+      "muted": true,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 401,
+        "samplerSteps": 40,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "negativePrompt": "",
+        "clipId": "clip_1774844756542_V"
+      }
+    },
+    {
+      "filename": "LTX2_i2v_00090_.mp4",
+      "startTime": 17.24,
+      "duration": 6,
+      "track": "A1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 401,
+        "samplerSteps": 40,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "negativePrompt": "",
+        "isAudioOnly": true,
+        "clipId": "clip_1774844756542_A"
+      }
+    }
+  ],
+  "sequencer": {
+    "mode": "single",
+    "simplePrompt": "",
+    "globalPrompt": "",
+    "sequence": [
+      ""
+    ],
+    "autoAssemble": false,
+    "autoRender": false
+  },
+  "params": {
+    "width": "1280",
+    "height": "704",
+    "length": "121",
+    "steps": "20",
+    "fluxSteps": "25",
+    "cfg": "4",
+    "refStrength": "1",
+    "randomSeed": true,
+    "seed": "0"
+  },
+  "storyboard": [],
+  "uploadedImage": null,
+  "creationTime": 1774844777685
+}
