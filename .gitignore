@@ -35,3 +35,7 @@ video_ltx2_i2v_api.json
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Projects directory
+public/projects/
+public/projects/**/*

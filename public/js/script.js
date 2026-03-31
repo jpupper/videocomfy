@@ -300,12 +300,10 @@ const projectTabsList = document.getElementById('projectTabsList');
 const projectGallery = document.getElementById('projectGallery');
 
 function getProjectData() {
-    // Capturar el estado completo del editor y sequencer
+    // Capturar el estado completo del editor y prompting
     return {
         timeline: getTimelineData(),
-        sequencer: {
-            mode: document.getElementById('promptModeSelect')?.value || 'single',
-            simplePrompt: document.getElementById('prompt')?.value || '',
+        prompting: {
             globalPrompt: document.getElementById('promptGeneral')?.value || '',
             sequence: Array.from(document.querySelectorAll('.sequence-prompt-textarea')).map(el => el.value),
             autoAssemble: document.getElementById('autoAssembleCheck')?.checked || false,
@@ -347,27 +345,23 @@ function applyProjectData(data) {
         });
     }
 
-    // 3. Restaurar Sequencer
-    if (data.sequencer) {
-        if (document.getElementById('promptModeSelect')) {
-            document.getElementById('promptModeSelect').value = data.sequencer.mode;
-            document.getElementById('promptModeSelect').dispatchEvent(new Event('change'));
-        }
-        if (document.getElementById('prompt')) document.getElementById('prompt').value = data.sequencer.simplePrompt || '';
-        if (document.getElementById('promptGeneral')) document.getElementById('promptGeneral').value = data.sequencer.globalPrompt || '';
+    // 3. Restaurar Prompting (unificado - siempre secuencia)
+    if (data.prompting || data.sequencer) {
+        const promptingData = data.prompting || data.sequencer; // backward compatibility
+        if (document.getElementById('promptGeneral')) document.getElementById('promptGeneral').value = promptingData.globalPrompt || '';
         
         const seqContainer = document.getElementById('promptSequence');
         if (seqContainer) {
             seqContainer.innerHTML = '';
-            if (data.sequencer.sequence) {
-                data.sequencer.sequence.forEach(val => addPromptStep(val));
+            if (promptingData.sequence) {
+                promptingData.sequence.forEach(val => addPromptStep(val));
             } else {
                 addPromptStep();
             }
         }
         
-        if (document.getElementById('autoAssembleCheck')) document.getElementById('autoAssembleCheck').checked = data.sequencer.autoAssemble;
-        if (document.getElementById('autoRenderCheck')) document.getElementById('autoRenderCheck').checked = data.sequencer.autoRender;
+        if (document.getElementById('autoAssembleCheck')) document.getElementById('autoAssembleCheck').checked = promptingData.autoAssemble;
+        if (document.getElementById('autoRenderCheck')) document.getElementById('autoRenderCheck').checked = promptingData.autoRender;
     }
 
     // 4. Restaurar Parámetros
@@ -836,25 +830,13 @@ if (generateBtn) {
     });
 }
 
-const generateSequencerBtn = document.querySelector('.generate-from-prompts');
-const promptModeSelect = document.getElementById('promptModeSelect');
-const simplePromptContainer = document.getElementById('simplePromptContainer');
-const advancedMode = document.getElementById('advancedMode');
+const promptModeSelect = null; // Removed - now unified prompting interface
+const simplePromptContainer = null; // Removed
+const advancedMode = null; // Removed - always show sequence
 
-if (promptModeSelect) {
-    promptModeSelect.addEventListener('change', () => {
-        if (promptModeSelect.value === 'single') {
-            simplePromptContainer.classList.remove('hidden');
-            advancedMode.classList.add('hidden');
-        } else {
-            simplePromptContainer.classList.add('hidden');
-            advancedMode.classList.remove('hidden');
-        }
-    });
-}
-
-if (generateSequencerBtn) {
-    generateSequencerBtn.addEventListener('click', () => {
+const generateVideoFromSequencer = document.getElementById('generateVideoFromSequencer');
+if (generateVideoFromSequencer) {
+    generateVideoFromSequencer.addEventListener('click', () => {
         handleSequencerGenerate('video');
     });
 }
@@ -874,70 +856,63 @@ if (generateFullAutoBtn) {
 }
 
 function handleSequencerGenerate(type) {
-    const mode = promptModeSelect ? promptModeSelect.value : 'single';
-    console.log(`Generating ${type} in mode:`, mode);
+    console.log(`Generating ${type} in unified prompting mode`);
 
-    if (mode === 'single') {
-        const promptVal = document.getElementById('prompt').value.trim();
-        if (promptVal) {
-            if (type === 'storyboard') addToStoryboardQueue(promptVal);
-            else if (type === 'full-auto') addToStoryboardQueue(promptVal, { autoVideo: true });
-            else addToQueue(promptVal);
-        }
-        else alert("Please enter a prompt");
-    } else {
-        const promptGeneral = document.getElementById('promptGeneral').value.trim();
-        const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
-        let addedCount = 0;
+    // Always use sequence mode - get prompts from sequence steps
+    const promptGeneral = document.getElementById('promptGeneral')?.value.trim() || '';
+    const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
+    let addedCount = 0;
 
-        const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
-        const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
-        const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
-        const batchId = 'batch_' + Date.now();
+    const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
+    const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
+    const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
+    const batchId = 'batch_' + Date.now();
 
-        sequencePrompts.forEach((el, index) => {
-            const val = el.value.trim();
-            if (val) {
-                // Prioridad Estilo Global antes del clip prompt
-                const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
+    sequencePrompts.forEach((el, index) => {
+        const val = el.value.trim();
+        if (val) {
+            // Global style prefix + step prompt
+            const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
 
-                if (type === 'storyboard') {
-                    addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, autoOverlap });
-                } else if (type === 'full-auto') {
-                    // Full Auto: Image then Video
-                    addToStoryboardQueue(finalPrompt, {
-                        batchId,
-                        storyboardIndex: index,
-                        autoVideo: true,
-                        isAutoAssemble,
-                        isAutoRender,
-                        autoOverlap
-                    });
-                } else {
-                    addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
-                }
-                addedCount++;
+            if (type === 'storyboard') {
+                addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, autoOverlap });
+            } else if (type === 'full-auto') {
+                // Full Auto: Image then Video
+                addToStoryboardQueue(finalPrompt, {
+                    batchId,
+                    storyboardIndex: index,
+                    autoVideo: true,
+                    isAutoAssemble,
+                    isAutoRender,
+                    autoOverlap
+                });
+            } else {
+                addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
             }
-        });
-        if (addedCount === 0) alert("Please enter at least one sequence step");
-        else {
-            if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
-            else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
-            else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
-
-            // Crear un NUEVO PROYECTO para este Batch (Limpio de storyboard y timeline previos)
-            const batchName = `Batch ${new Date().toLocaleTimeString()}`;
-            const freshData = getProjectData();
-            freshData.storyboard = [];
-            freshData.timeline = [];
-            const batchProjectId = createNewProject(batchName, freshData);
-            
-            // Re-asociar los items recién añadidos a ESTE proyecto recién creado
-            globalGenerationQueue.forEach(item => {
-                if (item.batchId === batchId) item.projectId = batchProjectId;
-            });
+            addedCount++;
         }
+    });
+
+    if (addedCount === 0) {
+        alert("Please enter at least one prompt step");
+        return;
     }
+
+    if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
+    else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
+    else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
+
+    // Create a NEW PROJECT for this Batch (Clean of storyboard and timeline previos)
+    const batchName = `Batch ${new Date().toLocaleTimeString()}`;
+    const freshData = getProjectData();
+    freshData.storyboard = [];
+    freshData.timeline = [];
+    const batchProjectId = createNewProject(batchName, freshData);
+    
+    // Re-asociar los items recién añadidos a ESTE proyecto recién creado
+    globalGenerationQueue.forEach(item => {
+        if (item.batchId === batchId) item.projectId = batchProjectId;
+    });
 
     // Redirigir a la pestaña correspondiente
     if (type === 'storyboard') document.getElementById('tabStoryboardBtn').click();
@@ -1023,14 +998,6 @@ if (jsonExampleBtn) {
 if (importJsonBtn) {
     importJsonBtn.addEventListener('click', () => {
         const area = document.getElementById('jsonImportArea');
-
-        // El area de importación vive dentro de advancedMode, 
-        // así que debemos asegurarnos de que el modo Batch esté activo.
-        if (promptModeSelect) {
-            promptModeSelect.value = 'batch';
-            promptModeSelect.dispatchEvent(new Event('change'));
-        }
-
         if (area) area.classList.remove('hidden');
     });
 }

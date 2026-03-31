@@ -92,7 +92,7 @@
                 <div class="tabs-container">
                     <button class="tab-button tab-button-std" id="tabPrevizBtn" data-target="tabPreviz">Previz</button>
                     <button class="tab-button tab-button-std active" id="tabOutputBtn" data-target="tabOutput">Stage</button>
-                    <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">Sequencer</button>
+                    <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">Prompting</button>
                     <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
@@ -175,7 +175,7 @@
                     <div class="sequencer-scroller">
                         <div class="sequencer-toolbar">
                             <div class="toolbar-header">
-                                <label class="sequencer-label">Workflow Assistant</label>
+                                <label class="sequencer-label">Prompting Interface</label>
                                 <div class="checks-row">
                                     <div class="check-item">
                                         <input type="checkbox" id="autoAssembleCheck" class="green-check">
@@ -195,40 +195,17 @@
                             <div class="toolbar-actions-row">
                                 <button id="jsonExampleBtn" title="Copy JSON Example" class="icon-btn-std">📋</button>
                                 <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
-                                <select id="promptModeSelect" class="prompt-mode-select-sm">
-                                    <option value="single">Single Prompt Mode</option>
-                                    <option value="batch">Batch / Sequence Mode</option>
-                                </select>
                             </div>
                         </div>
 
-                        <div id="simplePromptContainer" class="margin-top-20">
-                            <label class="sequencer-sub-label">Focus Prompt</label>
-                            <textarea id="prompt" placeholder="Write your main prompt..." class="sequencer-textarea"></textarea>
+                        <div class="sequencer-settings-header">
+                            <label class="sequencer-sub-label">Global Style / Master</label>
                         </div>
+                        <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
+                        
+                        <div id="promptSequence"></div>
 
-                        <div id="advancedMode" class="advanced-panel hidden">
-                            <!-- Area para importar JSON -->
-                            <div id="jsonImportArea" class="json-import-panel hidden">
-
-                                <label class="sequencer-sub-label color-index">Paste JSON Sequence</label>
-                                <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' class="json-textarea-field"></textarea>
-                                <div class="export-actions-row">
-                                    <button id="confirmJsonImport" class="confirm-btn-sm">IMPORT</button>
-                                    <button id="cancelJsonImport" class="cancel-btn-sm">CANCEL</button>
-                                </div>
-                            </div>
-
-                            <div class="sequencer-settings-header">
-                                <label class="sequencer-sub-label">Global Style / Master</label>
-                            </div>
-                            <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
-                            <!-- Negative Prompt General removido a petición del usuario -->
-                            
-                            <div id="promptSequence"></div>
-
-                            <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Sequence Step</button>
-                        </div>
+                        <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Prompt Step</button>
                     </div>
                     <div class="sequencer-controls-row">
                         <button id="generateVideoFromSequencer" class="generate-btn-sequencer">DIRECT TO VIDEO</button>
