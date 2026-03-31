@@ -925,26 +925,44 @@ function addPromptStep(val = '', mode = 't2i2v') {
         <div class="prompt-header">
             <div class="prompt-header-left">
                 <div class="prompt-number">${count}</div>
-                <span class="prompt-status-text">PROMPT ${count}</span>
+                <span class="prompt-status-text">PROMPT</span>
             </div>
-            <div class="prompt-mode-select">
-                <select class="step-mode-select">
-                    <option value="t2v" ${mode === 't2v' ? 'selected' : ''}>🎬 T2V (Video)</option>
-                    <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>🖼️ T2I (Image)</option>
+            <div class="prompt-header-right">
+                <select class="step-mode-select-compact" title="Generation mode">
+                    <option value="t2v" ${mode === 't2v' ? 'selected' : ''}>🎬 T2V</option>
+                    <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>🖼️ T2I</option>
                     <option value="t2i2v" ${mode === 't2i2v' ? 'selected' : ''}>🔄 T2I→I2V</option>
                 </select>
+                <button class="remove-prompt-btn" title="Remove prompt">×</button>
             </div>
-            <button class="remove-prompt-btn">×</button>
         </div>
-        <textarea class="sequence-prompt-textarea" placeholder="Step description...">${val}</textarea>
+        <div class="prompt-content collapsed">
+            <textarea class="sequence-prompt-textarea" placeholder="Step description...">${val}</textarea>
+            <button class="expand-prompt-btn" title="Expand/collapse prompt">▼</button>
+        </div>
     `;
+
+    const header = div.querySelector('.prompt-header');
+    const content = div.querySelector('.prompt-content');
+    const expandBtn = div.querySelector('.expand-prompt-btn');
+
+    // Toggle expand/collapse
+    header.addEventListener('click', (e) => {
+        if (e.target.closest('.step-mode-select-compact') || e.target.closest('.remove-prompt-btn')) return;
+        content.classList.toggle('collapsed');
+        expandBtn.textContent = content.classList.contains('collapsed') ? '▼' : '▲';
+    });
+
+    expandBtn.addEventListener('click', () => {
+        content.classList.toggle('collapsed');
+        expandBtn.textContent = content.classList.contains('collapsed') ? '▼' : '▲';
+    });
 
     div.querySelector('.remove-prompt-btn').addEventListener('click', () => {
         div.remove();
         // Update numbers
         container.querySelectorAll('.prompt-item').forEach((item, idx) => {
             item.querySelector('.prompt-number').textContent = idx + 1;
-            item.querySelector('.prompt-status-text').textContent = `PROMPT ${idx + 1}`;
         });
     });
 

@@ -310,13 +310,13 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
 
 .margin-top-20 { margin-top: 20px; }
 
-/* SEQUENCE ITEMS */
+/* SEQUENCE ITEMS - Redesigned Compact */
 .prompt-item {
     background: rgba(30, 41, 59, 0.3);
     border: 1px solid var(--border);
-    border-radius: 15px;
-    padding: 15px;
-    margin-bottom: 15px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 10px;
     transition: all 0.3s;
 }
 .prompt-item:hover {
@@ -327,17 +327,23 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    padding: 10px 12px;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.3);
+    transition: background 0.2s;
+}
+.prompt-header:hover {
+    background: rgba(99, 102, 241, 0.1);
 }
 .prompt-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 .prompt-number {
     background: var(--primary);
     color: white;
-    width: 24px;
+    min-width: 24px;
     height: 24px;
     border-radius: 6px;
     display: flex;
@@ -347,10 +353,17 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     font-size: 0.75em;
 }
 .prompt-status-text {
-    font-size: 0.7em;
+    font-size: 0.75em;
     font-weight: 800;
     color: var(--text-muted);
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.prompt-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .remove-prompt-btn {
     background: rgba(239, 68, 68, 0.1);
@@ -362,39 +375,84 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     align-items: center;
     justify-content: center;
     font-weight: 900;
+    font-size: 1.1em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 .remove-prompt-btn:hover {
     background: var(--danger);
     color: white;
 }
 
-/* Step Mode Selector */
-.prompt-mode-select {
-    margin-right: 10px;
-}
-.step-mode-select {
+/* Compact Mode Selector */
+.step-mode-select-compact {
     background: var(--bg-input);
     border: 1px solid var(--border);
     color: white;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 6px;
-    font-size: 0.75em;
+    font-size: 0.7em;
     font-weight: 700;
     cursor: pointer;
     outline: none;
     transition: all 0.2s;
+    min-width: 70px;
 }
-.step-mode-select:hover {
+.step-mode-select-compact:hover {
     border-color: var(--primary);
 }
-.step-mode-select:focus {
+.step-mode-select-compact:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 2px var(--primary-glow);
 }
-.step-mode-select option {
+.step-mode-select-compact option {
     background: var(--bg-card);
     color: white;
     font-weight: 600;
+}
+
+/* Collapsible Prompt Content */
+.prompt-content {
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    max-height: 300px;
+    overflow: hidden;
+}
+.prompt-content.collapsed {
+    max-height: 0;
+}
+.prompt-content .sequence-prompt-textarea {
+    width: 100%;
+    min-height: 80px;
+    background: var(--bg-input);
+    border: none;
+    border-top: 1px solid var(--border);
+    color: #f1f5f9;
+    padding: 12px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+.prompt-content .sequence-prompt-textarea:focus {
+    outline: none;
+    background: rgba(30, 41, 59, 0.8);
+}
+.expand-prompt-btn {
+    background: rgba(15, 23, 42, 0.6);
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px;
+    font-size: 0.7em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.expand-prompt-btn:hover {
+    background: var(--primary);
+    color: white;
 }
 
 /* Global Mode Selector in Toolbar */
@@ -422,19 +480,6 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     background: var(--bg-card);
     color: white;
     font-weight: 600;
-}
-
-.sequence-prompt-textarea {
-    width: 100%;
-    min-height: 60px;
-    background: var(--bg-input);
-    border: 1px solid transparent;
-    color: #f1f5f9;
-    padding: 10px;
-    border-radius: 8px;
-    resize: vertical;
-    font-family: inherit;
-    font-size: 0.9em;
 }
 
 /* SEQUENCER CONTROLS */
