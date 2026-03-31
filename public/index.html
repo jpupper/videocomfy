@@ -153,14 +153,6 @@
                         <div id="placeholder" class="monitor-label-placeholder">MONITOR STAGE</div>
                     </div>
                     
-                    <div class="quick-prompt-card">
-                        <textarea id="promptStage" placeholder="Quick prompt: A cinematic shot of..." class="quick-prompt-textarea"></textarea>
-                        <div class="export-actions-row">
-                            <button id="generateButton" class="generate-btn-main">🚀 LAUNCH</button>
-                            <button id="stopButton" class="stop-btn-main">🛑 STOP</button>
-                        </div>
-                    </div>
-
                     <div id="globalQueueContainer" class="inline-queue-card hidden">
 
                         <div class="inline-queue-header">
@@ -201,6 +193,17 @@
                         <div class="sequencer-settings-header">
                             <label class="sequencer-sub-label">Global Style / Master</label>
                         </div>
+
+                        <!-- JSON Import Panel -->
+                        <div id="jsonImportArea" class="json-import-panel hidden">
+                            <label class="sequencer-sub-label color-index">Paste JSON Sequence</label>
+                            <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' class="json-textarea-field"></textarea>
+                            <div class="export-actions-row">
+                                <button id="confirmJsonImport" class="confirm-btn-sm">IMPORT</button>
+                                <button id="cancelJsonImport" class="cancel-btn-sm">CANCEL</button>
+                            </div>
+                        </div>
+
                         <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
                         
                         <div id="promptSequence"></div>
@@ -208,9 +211,7 @@
                         <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Prompt Step</button>
                     </div>
                     <div class="sequencer-controls-row">
-                        <button id="generateVideoFromSequencer" class="generate-btn-sequencer">DIRECT TO VIDEO</button>
-                        <button id="generateFullAutoBtn" class="generate-btn-fullauto">FULL AUTO: T2I + I2V</button>
-                        <button id="generateStoryboardFromSequencer" class="generate-btn-storyboard">GENERATE STORYBOARD (T2I)</button>
+                        <button id="generateFromPrompting" class="generate-btn-main">🚀 GENERATE FROM PROMPTS</button>
                     </div>
                 </div>
 

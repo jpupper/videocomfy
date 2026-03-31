@@ -367,6 +367,36 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     background: var(--danger);
     color: white;
 }
+
+/* Step Mode Selector */
+.prompt-mode-select {
+    margin-right: 10px;
+}
+.step-mode-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75em;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+.step-mode-select:hover {
+    border-color: var(--primary);
+}
+.step-mode-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--primary-glow);
+}
+.step-mode-select option {
+    background: var(--bg-card);
+    color: white;
+    font-weight: 600;
+}
+
 .sequence-prompt-textarea {
     width: 100%;
     min-height: 60px;

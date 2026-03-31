@@ -305,7 +305,10 @@ function getProjectData() {
         timeline: getTimelineData(),
         prompting: {
             globalPrompt: document.getElementById('promptGeneral')?.value || '',
-            sequence: Array.from(document.querySelectorAll('.sequence-prompt-textarea')).map(el => el.value),
+            sequence: Array.from(document.querySelectorAll('.prompt-item')).map(el => ({
+                prompt: el.querySelector('.sequence-prompt-textarea')?.value || '',
+                mode: el.querySelector('.step-mode-select')?.value || 't2v'
+            })),
             autoAssemble: document.getElementById('autoAssembleCheck')?.checked || false,
             autoRender: document.getElementById('autoRenderCheck')?.checked || false
         },
@@ -353,8 +356,15 @@ function applyProjectData(data) {
         const seqContainer = document.getElementById('promptSequence');
         if (seqContainer) {
             seqContainer.innerHTML = '';
-            if (promptingData.sequence) {
-                promptingData.sequence.forEach(val => addPromptStep(val));
+            if (promptingData.sequence && Array.isArray(promptingData.sequence)) {
+                promptingData.sequence.forEach(step => {
+                    if (typeof step === 'object' && step !== null) {
+                        addPromptStep(step.prompt || '', step.mode || 't2v');
+                    } else {
+                        // backward compatibility: old format was just strings
+                        addPromptStep(step || '', 't2v');
+                    }
+                });
             } else {
                 addPromptStep();
             }
@@ -818,66 +828,48 @@ function checkGlobalQueue() {
     appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
 }
 
-// Botón de Lanzamiento (Stage)
-const generateBtn = document.getElementById('generateButton');
-if (generateBtn) {
-    generateBtn.addEventListener('click', () => {
-        const promptText = document.getElementById('promptStage').value.trim();
-        if (!promptText) return alert('Please enter a prompt');
-
-        addToQueue(promptText);
-        document.getElementById('promptStage').value = '';
-    });
-}
+// Botón de Lanzamiento (Stage) - REMOVED, now all generation is from Prompting tab
+// const generateBtn = document.getElementById('generateButton');
 
 const promptModeSelect = null; // Removed - now unified prompting interface
 const simplePromptContainer = null; // Removed
 const advancedMode = null; // Removed - always show sequence
 
-const generateVideoFromSequencer = document.getElementById('generateVideoFromSequencer');
+const generateVideoFromSequencer = document.getElementById('generateFromPrompting');
 if (generateVideoFromSequencer) {
     generateVideoFromSequencer.addEventListener('click', () => {
-        handleSequencerGenerate('video');
+        handleSequencerGenerate();
     });
 }
 
-const generateStoryboardBtn = document.getElementById('generateStoryboardFromSequencer');
-if (generateStoryboardBtn) {
-    generateStoryboardBtn.addEventListener('click', () => {
-        handleSequencerGenerate('storyboard');
-    });
-}
+function handleSequencerGenerate() {
+    console.log('Generating from unified prompting interface');
 
-const generateFullAutoBtn = document.getElementById('generateFullAutoBtn');
-if (generateFullAutoBtn) {
-    generateFullAutoBtn.addEventListener('click', () => {
-        handleSequencerGenerate('full-auto');
-    });
-}
-
-function handleSequencerGenerate(type) {
-    console.log(`Generating ${type} in unified prompting mode`);
-
-    // Always use sequence mode - get prompts from sequence steps
-    const promptGeneral = document.getElementById('promptGeneral')?.value.trim() || '';
-    const sequencePrompts = document.querySelectorAll('.sequence-prompt-textarea');
+    // Get all prompt steps
+    const promptItems = document.querySelectorAll('.prompt-item');
     let addedCount = 0;
 
     const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
     const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
     const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
     const batchId = 'batch_' + Date.now();
+    const promptGeneral = document.getElementById('promptGeneral')?.value.trim() || '';
 
-    sequencePrompts.forEach((el, index) => {
-        const val = el.value.trim();
+    promptItems.forEach((item, index) => {
+        const textarea = item.querySelector('.sequence-prompt-textarea');
+        const modeSelect = item.querySelector('.step-mode-select');
+        const val = textarea?.value.trim();
+        const mode = modeSelect?.value || 't2v';
+
         if (val) {
             // Global style prefix + step prompt
             const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
 
-            if (type === 'storyboard') {
+            if (mode === 't2i') {
+                // Text to Image only (Storyboard)
                 addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, autoOverlap });
-            } else if (type === 'full-auto') {
-                // Full Auto: Image then Video
+            } else if (mode === 't2i2v') {
+                // Text to Image then Image to Video
                 addToStoryboardQueue(finalPrompt, {
                     batchId,
                     storyboardIndex: index,
@@ -887,6 +879,7 @@ function handleSequencerGenerate(type) {
                     autoOverlap
                 });
             } else {
+                // Text to Video directly (t2v)
                 addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
             }
             addedCount++;
@@ -898,9 +891,7 @@ function handleSequencerGenerate(type) {
         return;
     }
 
-    if (type === 'storyboard') appendConsoleLine(`🎨 Added ${addedCount} prompts to Storyboard queue`, 'system');
-    else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
-    else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
+    appendConsoleLine(`🎬 Added ${addedCount} prompts to generation queue`, 'system');
 
     // Create a NEW PROJECT for this Batch (Clean of storyboard and timeline previos)
     const batchName = `Batch ${new Date().toLocaleTimeString()}`;
@@ -914,27 +905,34 @@ function handleSequencerGenerate(type) {
         if (item.batchId === batchId) item.projectId = batchProjectId;
     });
 
-    // Redirigir a la pestaña correspondiente
-    if (type === 'storyboard') document.getElementById('tabStoryboardBtn').click();
-    else document.getElementById('tabOutputBtn').click();
+    // Redirigir a Stage
+    document.getElementById('tabOutputBtn').click();
 }
 
 document.getElementById('addPromptButton')?.addEventListener('click', () => {
     addPromptStep();
 });
 
-function addPromptStep(val = '') {
+function addPromptStep(val = '', mode = 't2v') {
     const container = document.getElementById('promptSequence');
     if (!container) return;
 
     const count = container.querySelectorAll('.prompt-item').length + 1;
     const div = document.createElement('div');
     div.className = 'prompt-item';
+    div.dataset.mode = mode;
     div.innerHTML = `
         <div class="prompt-header">
             <div class="prompt-header-left">
                 <div class="prompt-number">${count}</div>
                 <span class="prompt-status-text">PROMPT ${count}</span>
+            </div>
+            <div class="prompt-mode-select">
+                <select class="step-mode-select">
+                    <option value="t2v" ${mode === 't2v' ? 'selected' : ''}>🎬 T2V (Video)</option>
+                    <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>🖼️ T2I (Image)</option>
+                    <option value="t2i2v" ${mode === 't2i2v' ? 'selected' : ''}>🔄 T2I→I2V</option>
+                </select>
             </div>
             <button class="remove-prompt-btn">×</button>
         </div>
