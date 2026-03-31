@@ -476,7 +476,7 @@ function renderProjectTabs() {
         const tab = document.createElement('div');
         tab.className = `project-tab-item ${proj.id === activeProjectId ? 'active' : ''}`;
         tab.innerHTML = `
-            <span class="tab-name">${proj.name}</span>
+            <span class="tab-name tab-name-text">${proj.name}</span>
             <span class="close-tab-btn">×</span>
         `;
         
@@ -623,9 +623,12 @@ async function deleteProject(name) {
 }
 
 document.getElementById('newProjectBtn')?.addEventListener('click', () => {
-    // Generar nombre automático sin prompt
     const count = openProjects.length + 1;
-    createNewProject(`Project ${count}`);
+    const fresh = getProjectData();
+    fresh.timeline = [];
+    fresh.storyboard = [];
+    fresh.uploadedImage = null;
+    createNewProject(`Project ${count}`, fresh);
 });
 
 document.getElementById('saveProjectBtn')?.addEventListener('click', () => {
@@ -922,12 +925,14 @@ function handleSequencerGenerate(type) {
             else if (type === 'full-auto') appendConsoleLine(`⚡ FULL AUTO: Added ${addedCount} prompts for T2I + I2V pipeline${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
             else if (isAutoAssemble) appendConsoleLine(`📦 Added batch for auto-assembly (${addedCount} clips)${isAutoRender ? ' (with Auto-render)' : ''}`, 'system');
 
-            // Crear un NUEVO PROYECTO para este Batch
+            // Crear un NUEVO PROYECTO para este Batch (Limpio de storyboard y timeline previos)
             const batchName = `Batch ${new Date().toLocaleTimeString()}`;
-            const batchProjectId = createNewProject(batchName);
-
+            const freshData = getProjectData();
+            freshData.storyboard = [];
+            freshData.timeline = [];
+            const batchProjectId = createNewProject(batchName, freshData);
+            
             // Re-asociar los items recién añadidos a ESTE proyecto recién creado
-            // ya que addToQueue usó el 'activeProjectId' anterior o el que estaba antes de crearlo
             globalGenerationQueue.forEach(item => {
                 if (item.batchId === batchId) item.projectId = batchProjectId;
             });
@@ -2413,12 +2418,22 @@ function assembleBatchInTimeline(batchItems) {
         });
     }
 
-    // 3. SI es el proyecto activo, refrescar el DOM
-    if (activeProjectId === targetProjectId) {
+    // 3. Cambiar al proyecto del batch y abrir el Editor
+    if (activeProjectId !== targetProjectId) {
+        // Cambiar al proyecto del batch
+        switchProject(targetProjectId);
+    } else {
+        // Si ya es el proyecto activo, solo refrescar
         applyProjectData(project.data);
     }
+    
+    // 4. Abrir automáticamente la pestaña del Editor
+    const editorTabBtn = document.getElementById('tabEditorBtn');
+    if (editorTabBtn) {
+        editorTabBtn.click();
+    }
 
-    appendConsoleLine(`🎬 Auto-assembled ${batchItems.length} clips in project ${project?.name || targetProjectId}.`, 'system');
+    appendConsoleLine(`🎬 Auto-assembled ${batchItems.length} clips in project ${project?.name || targetProjectId}. Editor opened.`, 'system');
 }
 
 // Initial Load
@@ -2594,29 +2609,42 @@ function addToStoryboardQueue(prompt, options = {}) {
 }
 
 function handleStoryboardGenerated(message) {
-    const existing = storyboardItems.find(item => item.storyboardIndex === message.storyboardIndex && item.batchId === message.batchId);
+    // 1. Encontrar el proyecto de origen para esta generación
+    const queueItem = globalGenerationQueue.find(qi => (qi.id === currentExecutingId) || (message.prompt_id && qi.prompt_id === message.prompt_id));
+    const targetProjectId = queueItem ? queueItem.projectId : activeProjectId;
+    const project = openProjects.find(p => p.id === targetProjectId);
+
+    if (!project) return console.warn('[STORYBOARD] No target project found for generated item');
+    if (!project.data.storyboard) project.data.storyboard = [];
+    
+    const projStoryboard = project.data.storyboard;
+    const existing = projStoryboard.find(item => item.storyboardIndex === message.storyboardIndex && item.batchId === message.batchId);
+
+    const newItemData = {
+        id: existing ? existing.id : ('sb_' + Date.now() + Math.random()),
+        url: message.url,
+        filename: message.filename,
+        prompt: message.prompt,
+        storyboardIndex: message.storyboardIndex !== undefined ? message.storyboardIndex : projStoryboard.length,
+        batchId: message.batchId || 'default',
+        status: 'ready',
+        params: message.params || {}
+    };
 
     if (existing) {
-        existing.url = message.url;
-        existing.filename = message.filename;
-        existing.status = 'ready';
-        existing.params = message.params || {};
+        Object.assign(existing, newItemData);
     } else {
-        storyboardItems.push({
-            id: 'sb_' + Date.now() + Math.random(),
-            url: message.url,
-            filename: message.filename,
-            prompt: message.prompt,
-            storyboardIndex: message.storyboardIndex || storyboardItems.length,
-            batchId: message.batchId || 'default',
-            status: 'ready',
-            params: message.params || {}
-        });
+        projStoryboard.push(newItemData);
     }
 
-    // Ordenar por storyboardIndex si existen
-    storyboardItems.sort((a, b) => a.storyboardIndex - b.storyboardIndex);
-    updateStoryboardUI();
+    // 2. Si este es el proyecto activo, sincronizamos y refrescamos
+    if (targetProjectId === activeProjectId) {
+        storyboardItems = [...projStoryboard];
+        storyboardItems.sort((a, b) => a.storyboardIndex - b.storyboardIndex);
+        updateStoryboardUI();
+    }
+    
+    appendConsoleLine(`💾 Storyboard item updated in project ${project.name}`, 'debug');
 }
 
 function updateStoryboardUI() {
@@ -2645,6 +2673,7 @@ function updateStoryboardUI() {
                     </div>
                     <div class="storyboard-actions">
                         <button class="sb-action-btn sb-btn-view" title="View in Previz">👁️</button>
+                        <button class="sb-action-btn sb-btn-regen" title="Regenerate Image">↻</button>
                         <button class="sb-action-btn sb-btn-video" title="Generate Video">🎬 VIDEO</button>
                         <button class="sb-action-btn sb-btn-remove" title="Remove">×</button>
                     </div>
@@ -2655,6 +2684,17 @@ function updateStoryboardUI() {
                 e.stopPropagation();
                 loadImageToPreviz(item.url);
                 document.getElementById('tabPrevizBtn').click();
+            };
+
+            div.querySelector('.sb-btn-regen').onclick = (e) => {
+                e.stopPropagation();
+                // Usamos la misma función de storyboard queue con los parámetros originales para que REEMPLACE al terminar
+                appendConsoleLine(`♻️ Regenerating storyboard image #${index + 1}...`, 'system');
+                addToStoryboardQueue(item.prompt, { 
+                    storyboardIndex: item.storyboardIndex, 
+                    batchId: item.batchId 
+                });
+                document.getElementById('tabOutputBtn').click();
             };
 
             div.querySelector('.sb-btn-video').onclick = (e) => {

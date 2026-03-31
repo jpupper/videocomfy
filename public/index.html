@@ -98,6 +98,15 @@
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
                 </div>
             </header>
+            
+            <!-- Global Project Sessions Navigation -->
+            <div id="projectTabsNav" class="project-tabs-nav">
+                <div id="projectTabsList" class="project-tabs-list">
+                    <!-- Tabs dynamically added here -->
+                </div>
+                <button id="newProjectBtn" class="new-project-btn-nav" title="New Session">+</button>
+                <button id="saveProjectBtn" class="save-project-btn-nav" title="Save Project">💾</button>
+            </div>
 
             <div class="workspace-content">
                 <!-- TABS CONTENT -->
@@ -112,7 +121,7 @@
                         <img id="previzImage" class="monitor-media monitor-image-el hidden">
                         <div id="previzPlaceholder" class="monitor-placeholder-content">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-4.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                             <p>DRAG VIDEO HERE</p>
                             <button id="syncWithEditorBtn" class="primary-btn-sm">VIEW EDITOR OUTPUT</button>
@@ -178,14 +187,14 @@
                                     </div>
                                     <div class="check-item overlap-box" style="margin-left: 15px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
                                         <label style="font-size: 0.65em; color: #64748b; margin-right: 8px; font-weight: 800;">OVERLAP:</label>
-                                        <input type="range" id="autoOverlapSlider" min="0" max="100" value="15" style="width: 70px; height: 4px; cursor: pointer;">
-                                        <span id="autoOverlapValue" style="font-size: 0.7em; color: var(--primary); font-weight: 900; margin-left: 5px; min-width: 25px;">15%</span>
+                                        <input type="range" id="autoOverlapSlider" min="0" max="100" value="85" style="width: 70px; height: 4px; cursor: pointer;">
+                                        <span id="autoOverlapValue" style="font-size: 0.7em; color: var(--primary); font-weight: 900; margin-left: 5px; min-width: 25px;">85%</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="toolbar-actions-row">
-                                <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
                                 <button id="jsonExampleBtn" title="Copy JSON Example" class="icon-btn-std">📋</button>
+                                <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
                                 <select id="promptModeSelect" class="prompt-mode-select-sm">
                                     <option value="single">Single Prompt Mode</option>
                                     <option value="batch">Batch / Sequence Mode</option>
@@ -198,13 +207,7 @@
                             <textarea id="prompt" placeholder="Write your main prompt..." class="sequencer-textarea"></textarea>
                         </div>
 
-                        <div id="advancedMode" class="advanced-panel hidden margin-top-20">
-                            <div class="sequencer-settings-header">
-                                <label class="sequencer-sub-label">Global Style / Master</label>
-                            </div>
-                            <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
-                            <!-- Negative Prompt General removido a petición del usuario -->
-                            
+                        <div id="advancedMode" class="advanced-panel hidden">
                             <!-- Area para importar JSON -->
                             <div id="jsonImportArea" class="json-import-panel hidden">
 
@@ -216,6 +219,12 @@
                                 </div>
                             </div>
 
+                            <div class="sequencer-settings-header">
+                                <label class="sequencer-sub-label">Global Style / Master</label>
+                            </div>
+                            <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
+                            <!-- Negative Prompt General removido a petición del usuario -->
+                            
                             <div id="promptSequence"></div>
 
                             <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Sequence Step</button>
@@ -250,14 +259,7 @@
                 </div>
 
                 <div class="tab-content" id="tabEditor">
-                    <!-- Navigación de Proyectos (Sessions) -->
-                    <div id="projectTabsNav" class="project-tabs-nav">
-                        <div id="projectTabsList" class="project-tabs-list">
-                            <!-- Tabs dynamically added here -->
-                        </div>
-                        <button id="newProjectBtn" class="new-project-btn-nav" title="New Session">+</button>
-                        <button id="saveProjectBtn" class="save-project-btn-nav" title="Save Project">💾</button>
-                    </div>
+                    <!-- Navigación de Proyectos movida a nivel global -->
 
                     <!-- Monitor de Previsualización Dual -->
                     <div id="editorMonitor" class="editor-monitor-container">
