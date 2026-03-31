@@ -913,7 +913,7 @@ document.getElementById('addPromptButton')?.addEventListener('click', () => {
     addPromptStep();
 });
 
-function addPromptStep(val = '', mode = 't2v') {
+function addPromptStep(val = '', mode = 't2i2v') {
     const container = document.getElementById('promptSequence');
     if (!container) return;
 
@@ -1031,12 +1031,15 @@ if (confirmJsonImport) {
                 promptGeneral.value = data.global;
             }
 
-            // Cargar pasos
+            // Get default mode from global selector
+            const defaultMode = document.getElementById('defaultPromptMode')?.value || 't2i2v';
+
+            // Cargar pasos con el modo por defecto seleccionado
             data.steps.forEach(stepText => {
-                addPromptStep(stepText);
+                addPromptStep(stepText, defaultMode);
             });
 
-            appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added.`, 'system');
+            appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added (${defaultMode} mode).`, 'system');
 
             // Cerrar el area
             document.getElementById('jsonImportArea').classList.add('hidden');
