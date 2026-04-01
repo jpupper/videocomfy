@@ -153,16 +153,31 @@ ws.onmessage = (event) => {
 
                     // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
                     if (item.autoVideo) {
-                        // Use message.prompt to be absolutely sure we use the correct prompt returned by the server
-                        const generationPrompt = message.prompt || item.prompt;
+                        // Use videoPrompt if specifically set for this I2V step, else fallback to storyboard prompt
+                        const generationPrompt = item.videoPrompt || message.prompt || item.prompt;
                         appendConsoleLine(`🎬 Auto-transitioning to Video for: ${generationPrompt.substring(0, 30)}...`, 'system');
-                        addToQueue(generationPrompt, message.filename, {
-                            isAutoAssemble: item.isAutoAssemble,
-                            isAutoRender: item.isAutoRender,
-                            batchId: item.batchId || ('batch_v_' + Date.now()),
-                            replaceClipId: item.replaceClipId
-                        });
+                        
+                        // Find the waiting I2V item and activate it
+                        const waitingI2V = globalGenerationQueue.find(q => 
+                            q.status === 'waiting' && 
+                            q.waitingForStoryboardId === item.id
+                        );
+                        
+                        if (waitingI2V) {
+                            waitingI2V.status = 'pending';
+                            waitingI2V.imageFilename = message.filename;
+                            appendConsoleLine(`✅ I2V item activated with generated image: ${message.filename}`, 'debug');
+                        } else {
+                            // Fallback: add directly if not pre-added
+                            addToQueue(generationPrompt, message.filename, {
+                                isAutoAssemble: item.isAutoAssemble,
+                                isAutoRender: item.isAutoRender,
+                                batchId: item.batchId || ('batch_v_' + Date.now()),
+                                replaceClipId: item.replaceClipId
+                            });
+                        }
                     }
+
 
                     updateGlobalQueueUI();
                 }
@@ -306,8 +321,9 @@ function getProjectData() {
         prompting: {
             globalPrompt: document.getElementById('promptGeneral')?.value || '',
             sequence: Array.from(document.querySelectorAll('.prompt-item')).map(el => ({
-                prompt: el.querySelector('.sequence-prompt-textarea')?.value || '',
-                mode: el.querySelector('.step-mode-select')?.value || 't2v'
+                prompt: el.querySelector('.image-prompt')?.value || '',
+                videoPrompt: el.querySelector('.video-prompt')?.value || '',
+                mode: el.querySelector('.step-mode-select-compact')?.value || 't2i2v'
             })),
             autoAssemble: document.getElementById('autoAssembleCheck')?.checked || false,
             autoRender: document.getElementById('autoRenderCheck')?.checked || false
@@ -359,10 +375,10 @@ function applyProjectData(data) {
             if (promptingData.sequence && Array.isArray(promptingData.sequence)) {
                 promptingData.sequence.forEach(step => {
                     if (typeof step === 'object' && step !== null) {
-                        addPromptStep(step.prompt || '', step.mode || 't2v');
+                        addPromptStep(step, step.mode || 't2i2v');
                     } else {
                         // backward compatibility: old format was just strings
-                        addPromptStep(step || '', 't2v');
+                        addPromptStep(step || '', 't2i2v');
                     }
                 });
             } else {
@@ -765,7 +781,55 @@ function updateGlobalQueueUI() {
         }
     }
 
+    // Calculate counters for images and videos (including waiting items)
+    const imgItems = activeItems.filter(i => i.type === 'storyboard');
+    const videoItems = activeItems.filter(i => i.type !== 'storyboard');
+    const imgCompleted = globalGenerationQueue.filter(i => i.type === 'storyboard' && i.status === 'completed').length;
+    const videoCompleted = globalGenerationQueue.filter(i => i.type !== 'storyboard' && i.status === 'completed').length;
+    const totalImg = imgItems.length + imgCompleted;
+    const totalVideo = videoItems.length + videoCompleted;
+
     if (queueCount) queueCount.textContent = activeItems.length;
+    
+    // Update or create counters
+    let countersDiv = document.getElementById('queueCounters');
+    if (!countersDiv) {
+        countersDiv = document.createElement('div');
+        countersDiv.id = 'queueCounters';
+        countersDiv.style.cssText = `
+            display: flex;
+            gap: 20px;
+            padding: 12px 15px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.85em;
+            font-weight: 700;
+        `;
+        queueList.parentElement.insertBefore(countersDiv, queueList);
+    }
+    
+    if (totalImg > 0 || totalVideo > 0) {
+        countersDiv.style.display = 'flex';
+        countersDiv.innerHTML = '';
+        
+        if (totalImg > 0) {
+            const imgCounter = document.createElement('div');
+            imgCounter.style.cssText = 'color: #818cf8;';
+            imgCounter.innerHTML = `🖼️ IMG remaining: <span style="color: #f59e0b;">${imgItems.length}/${totalImg}</span>`;
+            countersDiv.appendChild(imgCounter);
+        }
+        
+        if (totalVideo > 0) {
+            const videoCounter = document.createElement('div');
+            videoCounter.style.cssText = 'color: #34d399;';
+            videoCounter.innerHTML = `🎬 Video remaining: <span style="color: #f59e0b;">${videoItems.length}/${totalVideo}</span>`;
+            countersDiv.appendChild(videoCounter);
+        }
+    } else {
+        countersDiv.style.display = 'none';
+    }
+
     queueList.innerHTML = '';
 
     activeItems.forEach((item, idx) => {
@@ -785,16 +849,22 @@ function updateGlobalQueueUI() {
         `;
 
         let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
-        if (item.type === 'storyboard') modeLabel = 'STORYBOARD (T2I)';
+        if (item.type === 'storyboard') modeLabel = 'T2I';
+        if (item.status === 'waiting') modeLabel = 'I2V (waiting for image)';
 
         const progressIndicator = item.status === 'generating' ?
             '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' :
+            item.status === 'waiting' ?
+            '<span style="color: #64748b;">⏸️ WAITING</span>' :
             '<span style="color: #94a3b8;">⏳ QUEUED</span>';
+
+        // Show batch info if available
+        const batchInfo = item.batchId ? `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;">${item.batchId.substring(0, 12)}...</span>` : '';
 
         div.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: start;">
                 <div style="font-weight: 700; color: #818cf8; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;">
-                    Item #${idx + 1} <span style="margin: 0 5px; opacity: 0.3;">|</span> ${modeLabel}
+                    Item #${idx + 1} <span style="margin: 0 5px; opacity: 0.3;">|</span> ${modeLabel} ${batchInfo}
                 </div>
                 <div style="font-size: 0.7em; font-weight: 800;">${progressIndicator}</div>
             </div>
@@ -856,35 +926,66 @@ function handleSequencerGenerate() {
     const promptGeneral = document.getElementById('promptGeneral')?.value.trim() || '';
 
     promptItems.forEach((item, index) => {
-        const textarea = item.querySelector('.sequence-prompt-textarea');
-        const modeSelect = item.querySelector('.step-mode-select');
-        const val = textarea?.value.trim();
-        const mode = modeSelect?.value || 't2v';
+        const tImg = item.querySelector('.image-prompt');
+        const tVid = item.querySelector('.video-prompt');
+        const modeSelect = item.querySelector('.step-mode-select-compact');
+        
+        const valImg = tImg?.value.trim();
+        const valVid = tVid?.value.trim();
+        const mode = modeSelect?.value || 't2i2v';
 
-        if (val) {
-            // Global style prefix + step prompt
-            const finalPrompt = promptGeneral ? `${promptGeneral}, ${val}` : val;
+        if (valImg || valVid) {
+            // Global style prefix
+            const finalImgPrompt = valImg ? (promptGeneral ? `${promptGeneral}, ${valImg}` : valImg) : '';
+            const finalVidPrompt = valVid ? (promptGeneral ? `${promptGeneral}, ${valVid}` : valVid) : '';
 
             if (mode === 't2i') {
-                // Text to Image only (Storyboard)
-                addToStoryboardQueue(finalPrompt, { batchId, storyboardIndex: index, autoOverlap });
+                addToStoryboardQueue(finalImgPrompt || finalVidPrompt, { batchId, storyboardIndex: index, autoOverlap });
             } else if (mode === 't2i2v') {
-                // Text to Image then Image to Video
-                addToStoryboardQueue(finalPrompt, {
+                const storyboardId = 'sb_' + Date.now() + '_' + index + Math.random();
+                
+                // Add T2I (storyboard) item
+                addToStoryboardQueue(finalImgPrompt, {
                     batchId,
                     storyboardIndex: index,
                     autoVideo: true,
+                    videoPrompt: finalVidPrompt,
                     isAutoAssemble,
                     isAutoRender,
+                    autoOverlap,
+                    id: storyboardId
+                });
+                
+                // Immediately add I2V item with 'waiting' status
+                globalGenerationQueue.push({
+                    id: Date.now() + Math.random() + 0.5,
+                    prompt: finalVidPrompt,
+                    params: {
+                        videoWidth: parseInt(document.getElementById('videoWidth').value),
+                        videoHeight: parseInt(document.getElementById('videoHeight').value),
+                        videoLength: parseInt(document.getElementById('videoLength').value),
+                        samplerSteps: parseInt(document.getElementById('samplerSteps').value),
+                        cfgScale: parseFloat(document.getElementById('cfgScale').value),
+                        refStrength: parseFloat(document.getElementById('refStrength').value),
+                        seed: document.getElementById('randomSeed').checked ? -1 : parseInt(document.getElementById('seed').value)
+                    },
+                    imageFilename: null, // Will be set when T2I completes
+                    status: 'waiting',
+                    waitingForStoryboardId: storyboardId,
+                    projectId: activeProjectId,
+                    isAutoAssemble,
+                    isAutoRender,
+                    batchId,
                     autoOverlap
                 });
             } else {
                 // Text to Video directly (t2v)
-                addToQueue(finalPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
+                addToQueue(finalVidPrompt || finalImgPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
             }
             addedCount++;
         }
     });
+
 
     if (addedCount === 0) {
         alert("Please enter at least one prompt step");
@@ -917,6 +1018,18 @@ function addPromptStep(val = '', mode = 't2i2v') {
     const container = document.getElementById('promptSequence');
     if (!container) return;
 
+    // Handle val as string or object
+    let promptImg = '';
+    let promptVid = '';
+    
+    if (typeof val === 'object' && val !== null) {
+        promptImg = val['PROMPT IMAGE'] || val.promptImage || val.prompt || '';
+        promptVid = val['VIDEO IMAGE'] || val.videoImage || val.video || '';
+    } else {
+        promptImg = val;
+        promptVid = val;
+    }
+
     const count = container.querySelectorAll('.prompt-item').length + 1;
     const div = document.createElement('div');
     div.className = 'prompt-item';
@@ -925,7 +1038,7 @@ function addPromptStep(val = '', mode = 't2i2v') {
         <div class="prompt-header">
             <div class="prompt-header-left">
                 <div class="prompt-number">${count}</div>
-                <span class="prompt-status-text">PROMPT</span>
+                <span class="prompt-status-text">STEP</span>
             </div>
             <div class="prompt-header-right">
                 <select class="step-mode-select-compact" title="Generation mode">
@@ -937,7 +1050,17 @@ function addPromptStep(val = '', mode = 't2i2v') {
             </div>
         </div>
         <div class="prompt-content collapsed">
-            <textarea class="sequence-prompt-textarea" placeholder="Step description...">${val}</textarea>
+            <div class="prompt-inputs-container">
+                <div class="prompt-split-label image" id="labelImg_${count}">
+                    <span>PROMPT IMAGE (DESCRIPTION)</span>
+                </div>
+                <textarea class="sequence-prompt-textarea image-prompt" placeholder="Visual description of the frame...">${promptImg}</textarea>
+                
+                <div class="prompt-split-label video" id="labelVid_${count}">
+                    <span>VIDEO IMAGE (ANIMATION & PLOT)</span>
+                </div>
+                <textarea class="sequence-prompt-textarea video-prompt" placeholder="Animation details and plot...">${promptVid}</textarea>
+            </div>
             <button class="expand-prompt-btn" title="Expand/collapse prompt">▼</button>
         </div>
     `;
@@ -945,8 +1068,60 @@ function addPromptStep(val = '', mode = 't2i2v') {
     const header = div.querySelector('.prompt-header');
     const content = div.querySelector('.prompt-content');
     const expandBtn = div.querySelector('.expand-prompt-btn');
+    const modeSelect = div.querySelector('.step-mode-select-compact');
+    const tImg = div.querySelector('.image-prompt');
+    const tVid = div.querySelector('.video-prompt');
+    const lImg = div.querySelector('.prompt-split-label.image');
+    const lVid = div.querySelector('.prompt-split-label.video');
 
-    // Toggle expand/collapse
+    function updateVisibility() {
+        const currentMode = modeSelect.value;
+        if (currentMode === 't2i2v') {
+            lImg.style.display = 'flex';
+            tImg.style.display = 'block';
+            lVid.style.display = 'flex';
+            tVid.style.display = 'block';
+            lImg.querySelector('span').textContent = 'PROMPT IMAGE (STATIC)';
+        } else if (currentMode === 't2i') {
+            lImg.style.display = 'flex';
+            tImg.style.display = 'block';
+            lVid.style.display = 'none';
+            tVid.style.display = 'none';
+            lImg.querySelector('span').textContent = 'PROMPT IMAGE';
+        } else {
+            // T2V
+            lImg.style.display = 'none';
+            tImg.style.display = 'none';
+            lVid.style.display = 'flex';
+            lVid.querySelector('span').textContent = 'PROMPT VIDEO';
+            tVid.style.display = 'block';
+        }
+    }
+
+    modeSelect.addEventListener('change', updateVisibility);
+    updateVisibility();
+
+    // Auto-resize function
+    function autoResize(el) {
+        if (!el || el.style.display === 'none') return;
+        el.style.height = 'auto';
+        el.style.height = Math.max(80, Math.min(el.scrollHeight, 600)) + 'px';
+    }
+
+    [tImg, tVid].forEach(t => {
+        t.addEventListener('input', () => autoResize(t));
+    });
+
+    // Also resize when expanding
+    const observer = new MutationObserver(() => {
+        if (!content.classList.contains('collapsed')) {
+            setTimeout(() => { autoResize(tImg); autoResize(tVid); }, 50);
+        }
+    });
+    observer.observe(content, { attributes: true, attributeFilter: ['class'] });
+
+    if (promptImg || promptVid) setTimeout(() => { autoResize(tImg); autoResize(tVid); }, 0);
+
     header.addEventListener('click', (e) => {
         if (e.target.closest('.step-mode-select-compact') || e.target.closest('.remove-prompt-btn')) return;
         content.classList.toggle('collapsed');
@@ -960,7 +1135,6 @@ function addPromptStep(val = '', mode = 't2i2v') {
 
     div.querySelector('.remove-prompt-btn').addEventListener('click', () => {
         div.remove();
-        // Update numbers
         container.querySelectorAll('.prompt-item').forEach((item, idx) => {
             item.querySelector('.prompt-number').textContent = idx + 1;
         });
@@ -968,6 +1142,7 @@ function addPromptStep(val = '', mode = 't2i2v') {
 
     container.appendChild(div);
 }
+
 
 // Initial step
 if (document.getElementById('promptSequence') && document.getElementById('promptSequence').children.length === 0) {
@@ -983,19 +1158,45 @@ const importJsonBtn = document.getElementById('importJsonBtn');
 
 if (jsonExampleBtn) {
     jsonExampleBtn.addEventListener('click', () => {
-        const example = {
-            global: "cinematic style, 4k, highly detailed, masterwork",
-            steps: [
-                "a futuristic city at night",
-                "a forest with glowing plants",
-                "a space station orbiting a blue planet"
+        // Get current prompts from the sequencer
+        const promptItems = document.querySelectorAll('.prompt-item');
+        const globalPrompt = document.getElementById('promptGeneral')?.value.trim() || '';
+        
+        const steps = [];
+        promptItems.forEach(item => {
+            const imgPrompt = item.querySelector('.image-prompt')?.value.trim() || '';
+            const vidPrompt = item.querySelector('.video-prompt')?.value.trim() || '';
+            const mode = item.querySelector('.step-mode-select-compact')?.value || 't2i2v';
+            
+            if (imgPrompt || vidPrompt) {
+                const step = {};
+                if (mode === 't2i2v') {
+                    step["PROMPT IMAGE"] = imgPrompt;
+                    step["VIDEO IMAGE"] = vidPrompt;
+                } else if (mode === 't2i') {
+                    step["PROMPT IMAGE"] = imgPrompt || vidPrompt;
+                } else {
+                    step["VIDEO IMAGE"] = vidPrompt || imgPrompt;
+                }
+                steps.push(step);
+            }
+        });
+        
+        const jsonData = {
+            global: globalPrompt,
+            steps: steps.length > 0 ? steps : [
+                {
+                    "PROMPT IMAGE": "a futuristic city at night",
+                    "VIDEO IMAGE": "the camera pans slowly over the skyscrapers with flying vehicles"
+                }
             ]
         };
-        const jsonStr = JSON.stringify(example, null, 2);
+        
+        const jsonStr = JSON.stringify(jsonData, null, 2);
 
         // Copiar al portapapeles
         navigator.clipboard.writeText(jsonStr).then(() => {
-            appendConsoleLine('📋 JSON Example copied to clipboard!', 'system');
+            appendConsoleLine(`📋 JSON copied to clipboard! (${steps.length} steps)`, 'system');
             // Notify visually change button color temporarily
             const originalText = jsonExampleBtn.textContent;
             jsonExampleBtn.textContent = '✅';
@@ -1006,7 +1207,7 @@ if (jsonExampleBtn) {
             }, 1500);
         }).catch(err => {
             console.error('Failed to copy JSON:', err);
-            alert('Example JSON:\n\n' + jsonStr);
+            alert('JSON:\n\n' + jsonStr);
         });
     });
 }
@@ -1052,9 +1253,9 @@ if (confirmJsonImport) {
             // Get default mode from global selector
             const defaultMode = document.getElementById('defaultPromptMode')?.value || 't2i2v';
 
-            // Cargar pasos con el modo por defecto seleccionado
-            data.steps.forEach(stepText => {
-                addPromptStep(stepText, defaultMode);
+            // Cargar pasos
+            data.steps.forEach(step => {
+                addPromptStep(step, defaultMode);
             });
 
             appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added (${defaultMode} mode).`, 'system');
@@ -1209,6 +1410,17 @@ async function loadExistingImages() {
                 uploadedImageFilename = image.filename;
                 updateMode();
                 appendConsoleLine(`🖼️ Loaded image as reference: ${image.filename}`, 'system');
+            });
+
+            // Drag & Drop support
+            galleryItem.draggable = true;
+            galleryItem.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('imageSrc', image.url);
+                e.dataTransfer.setData('imageFilename', image.filename);
+                galleryItem.style.opacity = '0.5';
+            });
+            galleryItem.addEventListener('dragend', () => {
+                galleryItem.style.opacity = '1';
             });
 
             gallery.appendChild(galleryItem);
@@ -2132,10 +2344,15 @@ if (previzMonitor) {
     previzMonitor.addEventListener('drop', (e) => {
         e.preventDefault();
         previzMonitor.classList.remove('drag-over');
-        const src = e.dataTransfer.getData('videoSrc');
-        if (src) {
-            loadVideoToPreviz(src);
+        const videoSrc = e.dataTransfer.getData('videoSrc');
+        const imageSrc = e.dataTransfer.getData('imageSrc');
+        
+        if (videoSrc) {
+            loadVideoToPreviz(videoSrc);
             appendConsoleLine(`👁️ Video loaded into Previz via Drag&Drop`, 'system');
+        } else if (imageSrc) {
+            loadImageToPreviz(imageSrc);
+            appendConsoleLine(`👁️ Image loaded into Previz via Drag&Drop`, 'system');
         }
     });
 }
@@ -2148,11 +2365,11 @@ function loadImageToPreviz(src) {
 
     if (previzVideo) {
         previzVideo.pause();
-        previzVideo.style.display = 'none';
+        previzVideo.classList.add('hidden');
     }
     previzImage.src = src;
-    previzImage.style.display = 'block';
-    if (previzPlaceholder) previzPlaceholder.style.display = 'none';
+    previzImage.classList.remove('hidden');
+    if (previzPlaceholder) previzPlaceholder.classList.add('hidden');
 
     // Mostrar información de metadatos detallada
     const filename = src.split('/').pop().split('?')[0];
@@ -2443,34 +2660,45 @@ function openRegenModal(clip) {
     const prompt = clip.dataset.prompt || '';
     const meta = JSON.parse(clip.dataset.metadata || '{}');
 
-    document.getElementById('regenPrompt').value = prompt;
+    // Cargar prompts separados (imagen y video)
+    const imagePrompt = meta.imagePrompt || prompt;
+    const videoPrompt = meta.videoPrompt || prompt;
+    
+    document.getElementById('regenImagePrompt').value = imagePrompt;
+    document.getElementById('regenVideoPrompt').value = videoPrompt;
 
-    // Configurar checkboxes de imagen
-    const useImgCheck = document.getElementById('regenUseImage');
-    const createImgCheck = document.getElementById('regenCreateImage');
-    const createImgLabel = document.getElementById('regenCreateImageLabel');
+    // Configurar checkboxes de regeneración
+    const keepImageCheck = document.getElementById('regenKeepImage');
+    const regenBothCheck = document.getElementById('regenBoth');
 
-    if (useImgCheck && createImgCheck) {
+    if (keepImageCheck && regenBothCheck) {
         const hasImage = !!meta.imageFilename;
-        useImgCheck.checked = hasImage;
-        createImgCheck.checked = false;
-        createImgCheck.disabled = !hasImage;
+        
+        // Si tiene imagen, por defecto mantenerla
+        keepImageCheck.checked = hasImage;
+        regenBothCheck.checked = false;
+        
+        // Deshabilitar opciones si no hay imagen
+        keepImageCheck.disabled = !hasImage;
+        regenBothCheck.disabled = !hasImage;
 
-        if (createImgLabel) {
-            if (hasImage) createImgLabel.classList.remove('opacity-50');
-            else createImgLabel.classList.add('opacity-50');
-        }
-
-        if (!useImgCheck.dataset.hasListener) {
-            useImgCheck.addEventListener('change', () => {
-                createImgCheck.disabled = !useImgCheck.checked;
-                if (createImgLabel) {
-                    if (useImgCheck.checked) createImgLabel.classList.remove('opacity-50');
-                    else createImgLabel.classList.add('opacity-50');
+        // Listener para que sean mutuamente excluyentes
+        if (!keepImageCheck.dataset.hasListener) {
+            keepImageCheck.addEventListener('change', () => {
+                if (keepImageCheck.checked) {
+                    regenBothCheck.checked = false;
                 }
-                if (!useImgCheck.checked) createImgCheck.checked = false;
             });
-            useImgCheck.dataset.hasListener = 'true';
+            keepImageCheck.dataset.hasListener = 'true';
+        }
+        
+        if (!regenBothCheck.dataset.hasListener) {
+            regenBothCheck.addEventListener('change', () => {
+                if (regenBothCheck.checked) {
+                    keepImageCheck.checked = false;
+                }
+            });
+            regenBothCheck.dataset.hasListener = 'true';
         }
     }
 
@@ -2514,8 +2742,10 @@ if (confirmRegenBtn) {
         const clip = document.querySelector(clipQuery);
         if (!clip) return;
 
-        const newPrompt = document.getElementById('regenPrompt').value.trim();
-        if (!newPrompt) return alert('Prompt cannot be empty');
+        const imagePrompt = document.getElementById('regenImagePrompt').value.trim();
+        const videoPrompt = document.getElementById('regenVideoPrompt').value.trim();
+        
+        if (!videoPrompt) return alert('Video prompt cannot be empty');
 
         const metadata = JSON.parse(clip.dataset.metadata || '{}');
         const newParams = {
@@ -2525,11 +2755,14 @@ if (confirmRegenBtn) {
             samplerSteps: parseInt(document.getElementById('regenSteps').value),
             cfgScale: parseFloat(document.getElementById('regenCfg').value),
             videoLength: metadata.videoLength || 121,
-            seed: -1
+            seed: -1,
+            imagePrompt: imagePrompt,
+            videoPrompt: videoPrompt
         };
 
-        const useImage = document.getElementById('regenUseImage')?.checked;
-        const createNewImage = document.getElementById('regenCreateImage')?.checked;
+        const keepImage = document.getElementById('regenKeepImage')?.checked;
+        const regenBoth = document.getElementById('regenBoth')?.checked;
+        const hasImage = !!metadata.imageFilename;
 
         appendConsoleLine(`♻️ Launching regeneration for clip ${currentlyRegeneratingClipId.substring(0, 8)}...`, 'system');
 
@@ -2540,25 +2773,35 @@ if (confirmRegenBtn) {
         const tabOutputBtn = document.getElementById('tabOutputBtn');
         if (tabOutputBtn) tabOutputBtn.click();
 
-        if (useImage) {
-            if (createNewImage) {
-                // Flow: T2I -> I2V
-                addToStoryboardQueue(newPrompt, {
-                    autoVideo: true,
-                    replaceClipId: currentlyRegeneratingClipId,
-                    params: { ...newParams, storyboardSteps: parseInt(document.getElementById('storyboardSteps').value) }
-                });
-            } else {
-                // Flow: I2V using existing image
-                addToQueue(newPrompt, metadata.imageFilename || null, {
-                    status: 'pending',
-                    replaceClipId: currentlyRegeneratingClipId,
-                    params: newParams
-                });
-            }
+        if (hasImage && keepImage) {
+            // Mantener imagen existente, regenerar solo video
+            appendConsoleLine(`🖼️ Keeping existing image, regenerating video only`, 'system');
+            addToQueue(videoPrompt, metadata.imageFilename, {
+                status: 'pending',
+                replaceClipId: currentlyRegeneratingClipId,
+                params: newParams
+            });
+        } else if (hasImage && regenBoth) {
+            // Regenerar ambos: imagen y video
+            appendConsoleLine(`🔄 Regenerating both image and video`, 'system');
+            if (!imagePrompt) return alert('Image prompt cannot be empty when regenerating both');
+            addToStoryboardQueue(imagePrompt, {
+                autoVideo: true,
+                videoPrompt: videoPrompt,
+                replaceClipId: currentlyRegeneratingClipId,
+                params: { ...newParams, storyboardSteps: parseInt(document.getElementById('storyboardSteps').value) }
+            });
+        } else if (!hasImage) {
+            // No tiene imagen, generar T2V directo
+            appendConsoleLine(`🎬 Generating T2V (no reference image)`, 'system');
+            addToQueue(videoPrompt, null, {
+                status: 'pending',
+                replaceClipId: currentlyRegeneratingClipId,
+                params: newParams
+            });
         } else {
-            // Flow: T2V (No reference image)
-            addToQueue(newPrompt, null, {
+            // Caso por defecto: mantener imagen si existe
+            addToQueue(videoPrompt, metadata.imageFilename || null, {
                 status: 'pending',
                 replaceClipId: currentlyRegeneratingClipId,
                 params: newParams
@@ -2611,6 +2854,7 @@ function handleStoryboardGenerated(message) {
         url: message.url,
         filename: message.filename,
         prompt: message.prompt,
+        videoPrompt: queueItem ? (queueItem.videoPrompt || '') : (existing ? (existing.videoPrompt || '') : ''),
         storyboardIndex: message.storyboardIndex !== undefined ? message.storyboardIndex : projStoryboard.length,
         batchId: message.batchId || 'default',
         status: 'ready',
@@ -2678,7 +2922,8 @@ function updateStoryboardUI() {
                 appendConsoleLine(`♻️ Regenerating storyboard image #${index + 1}...`, 'system');
                 addToStoryboardQueue(item.prompt, { 
                     storyboardIndex: item.storyboardIndex, 
-                    batchId: item.batchId 
+                    batchId: item.batchId,
+                    videoPrompt: item.videoPrompt 
                 });
                 document.getElementById('tabOutputBtn').click();
             };
@@ -2686,7 +2931,7 @@ function updateStoryboardUI() {
             div.querySelector('.sb-btn-video').onclick = (e) => {
                 e.stopPropagation();
                 const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
-                addToQueue(item.prompt, item.filename, { isAutoAssemble });
+                addToQueue(item.videoPrompt || item.prompt, item.filename, { isAutoAssemble });
                 document.getElementById('tabOutputBtn').click();
                 appendConsoleLine(`🚀 Storyboard image #${index + 1} sent to Video pipeline`, 'system');
             };
@@ -2725,13 +2970,73 @@ document.getElementById('generateVidsFromStoryboardBtn')?.addEventListener('clic
         const batchId = 'batch_vid_' + Date.now();
 
         storyboardItems.forEach((item, index) => {
-            // Usamos la imagen del storyboard como base para I2V
-            addToQueue(item.prompt, item.filename, { isAutoAssemble, batchId });
+            // Usamos la imagen del storyboard como base para I2V, y el videoPrompt si existe
+            addToQueue(item.videoPrompt || item.prompt, item.filename, { isAutoAssemble, batchId });
         });
 
         // Ir a Stage para ver progreso
         const tabOutputBtn = document.getElementById('tabOutputBtn');
         if (tabOutputBtn) tabOutputBtn.click();
+    }
+});
+
+// STORYBOARD IMAGE UPLOAD
+document.getElementById('uploadStoryboardImageBtn')?.addEventListener('click', () => {
+    document.getElementById('storyboardImageInput')?.click();
+});
+
+document.getElementById('storyboardImageInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const prompt = window.prompt('Enter a video prompt for this image (optional):') || 'Camera movement';
+    
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+        const result = await response.json();
+        
+        if (result.success) {
+            const newItem = {
+                id: 'sb_upload_' + Date.now(),
+                url: `/uploads/${result.filename}`,
+                filename: result.filename,
+                prompt: file.name,
+                videoPrompt: prompt,
+                storyboardIndex: storyboardItems.length,
+                batchId: 'manual_upload',
+                status: 'ready',
+                params: {}
+            };
+            
+            storyboardItems.push(newItem);
+            updateStoryboardUI();
+            appendConsoleLine(`📤 Image uploaded to storyboard: ${result.filename}`, 'system');
+        }
+    } catch (error) {
+        appendConsoleLine(`❌ Error uploading image: ${error.message}`, 'error');
+    }
+    
+    e.target.value = '';
+});
+
+// STOP QUEUE BUTTON
+document.getElementById('stopQueueBtn')?.addEventListener('click', () => {
+    if (confirm('⚠️ Stop all pending generations? This will clear the queue.')) {
+        // Clear all pending items
+        globalGenerationQueue = globalGenerationQueue.filter(i => i.status === 'completed');
+        isGeneratingGlobal = false;
+        currentExecutingId = null;
+        
+        updateGlobalQueueUI();
+        appendConsoleLine('⏹ Queue stopped. All pending items cleared.', 'system');
+        
+        if (progressText) {
+            progressText.textContent = '⏹ Queue stopped by user';
+            if (progressFill) progressFill.style.width = '0%';
+            if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '0%';
+        }
     }
 });
 

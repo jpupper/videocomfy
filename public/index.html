@@ -156,8 +156,11 @@
                     <div id="globalQueueContainer" class="inline-queue-card hidden">
 
                         <div class="inline-queue-header">
-                            <span class="inline-queue-title">Generation Queue</span>
-                            <span id="queueCount" class="inline-queue-badge">0</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="inline-queue-title">Generation Queue</span>
+                                <span id="queueCount" class="inline-queue-badge">0</span>
+                            </div>
+                            <button id="stopQueueBtn" class="danger-btn-outline" style="padding: 6px 16px; font-size: 0.8em; font-weight: 700;">⏹ STOP ALL</button>
                         </div>
                         <div id="queueList" class="inline-queue-list"></div>
                     </div>
@@ -225,10 +228,12 @@
                         <div class="storyboard-header-row">
                             <h2 class="storyboard-title">Visual Storyboard</h2>
                             <div class="export-actions-row">
+                                <button id="uploadStoryboardImageBtn" class="primary-btn-outline">📤 UPLOAD IMAGE</button>
                                 <button id="clearStoryboardBtn" class="danger-btn-outline">CLEAR ALL</button>
                                 <button id="generateVidsFromStoryboardBtn" class="primary-btn-std">🚀 GENERATE VIDEOS FROM STORYBOARD</button>
                             </div>
                         </div>
+                        <input type="file" id="storyboardImageInput" accept="image/png,image/jpeg,image/webp,image/jpg" class="hidden-input">
                         <div id="storyboardGrid" class="storyboard-grid-container">
                             <!-- Storyboard items will be added here -->
                             <div id="storyboardPlaceholder" class="storyboard-placeholder-msg">
@@ -366,8 +371,13 @@
             
             <div class="regen-form">
                 <div class="form-group">
-                    <label class="sequencer-sub-label">Focus Prompt (Update if needed)</label>
-                    <textarea id="regenPrompt" class="regen-textarea-premium" placeholder="A cinematic shot of..."></textarea>
+                    <label class="sequencer-sub-label">Image Prompt (T2I)</label>
+                    <textarea id="regenImagePrompt" class="regen-textarea-premium" placeholder="A cinematic shot of..." style="min-height: 60px;"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="sequencer-sub-label">Video Prompt (I2V)</label>
+                    <textarea id="regenVideoPrompt" class="regen-textarea-premium" placeholder="Camera movement and animation..." style="min-height: 60px;"></textarea>
                 </div>
                 
                 <div class="regen-params-card">
@@ -396,12 +406,12 @@
 
                 <div class="checks-row margin-top-10">
                     <div class="check-item">
-                        <input type="checkbox" id="regenUseImage" class="secondary-check">
-                        <label for="regenUseImage" class="color-secondary-bold">Use Reference Image</label>
+                        <input type="radio" name="regenMode" id="regenKeepImage" class="secondary-check" value="keepImage" checked>
+                        <label for="regenKeepImage" class="color-secondary-bold">Keep existing image (regenerate video only)</label>
                     </div>
                     <div class="check-item">
-                        <input type="checkbox" id="regenCreateImage" class="green-check" disabled>
-                        <label for="regenCreateImage" id="regenCreateImageLabel" class="color-green-bold opacity-50">Create new image (T2I)</label>
+                        <input type="radio" name="regenMode" id="regenBoth" class="green-check" value="regenBoth">
+                        <label for="regenBoth" class="color-green-bold">Regenerate both image & video</label>
                     </div>
                 </div>
 

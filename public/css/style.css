@@ -280,17 +280,20 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
 .sequencer-toolbar {
     background: rgba(15, 23, 42, 0.4);
     border: 1px solid var(--border);
-    padding: 20px;
+    padding: 15px 20px;
     border-radius: 18px;
     margin-bottom: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 .toolbar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 20px;
+}
+.toolbar-all-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 .toolbar-actions-row {
     display: flex;
@@ -417,7 +420,7 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    max-height: 300px;
+    max-height: 600px;
     overflow: hidden;
 }
 .prompt-content.collapsed {
@@ -425,21 +428,62 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
 }
 .prompt-content .sequence-prompt-textarea {
     width: 100%;
-    min-height: 80px;
+    min-height: 120px;
+    max-height: 500px;
     background: var(--bg-input);
     border: none;
     border-top: 1px solid var(--border);
     color: #f1f5f9;
     padding: 12px;
-    resize: vertical;
+    resize: none;
     font-family: inherit;
     font-size: 0.85em;
-    line-height: 1.5;
+    line-height: 1.6;
+    overflow-y: auto;
 }
 .prompt-content .sequence-prompt-textarea:focus {
     outline: none;
     background: rgba(30, 41, 59, 0.8);
 }
+
+/* Split Prompt Styles */
+.prompt-inputs-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.prompt-split-label {
+    font-size: 0.6em;
+    text-transform: uppercase;
+    font-weight: 800;
+    padding: 6px 15px;
+    background: rgba(15, 23, 42, 0.4);
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.prompt-split-label.video {
+    color: var(--secondary);
+    border-top: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.prompt-split-label.image {
+    color: var(--primary);
+    border-top: none; /* First one doesn't need top border if it's top-most */
+}
+
+.prompt-content .sequence-prompt-textarea.video-prompt {
+    border-top: 1px solid rgba(168, 85, 247, 0.1);
+    min-height: 80px;
+}
+
+.prompt-content .sequence-prompt-textarea.image-prompt {
+    min-height: 100px;
+}
+
 .expand-prompt-btn {
     background: rgba(15, 23, 42, 0.6);
     border: none;
