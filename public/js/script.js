@@ -770,7 +770,21 @@ function updateGlobalQueueUI() {
     const queueCount = document.getElementById('queueCount');
     if (!queueContainer || !queueList) return;
 
-    const activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
+    // Sort items by batch and type: images first, then videos, grouped by batch
+    let activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
+    
+    // Sort by: batchId (chronological), then type (storyboard first), then original order
+    activeItems.sort((a, b) => {
+        // If different batches, sort by batchId (earlier batches first)
+        if (a.batchId !== b.batchId) {
+            return (a.batchId || '').localeCompare(b.batchId || '');
+        }
+        // Same batch: storyboard (images) before videos
+        if (a.type === 'storyboard' && b.type !== 'storyboard') return -1;
+        if (a.type !== 'storyboard' && b.type === 'storyboard') return 1;
+        // Same type: maintain original order (by id)
+        return a.id - b.id;
+    });
     const completedItems = globalGenerationQueue.filter(i => i.status === 'completed');
     
     if (activeItems.length > 0 || isGeneratingGlobal) {
@@ -856,7 +870,8 @@ function updateGlobalQueueUI() {
 
         let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
         if (item.type === 'storyboard') modeLabel = 'T2I';
-        if (item.status === 'waiting') modeLabel = 'I2V (waiting for image)';
+        if (item.type === 'export') modeLabel = 'EXPORT';
+        if (item.status === 'waiting' && item.type !== 'export') modeLabel = 'I2V (waiting for image)';
 
         const progressIndicator = item.status === 'generating' ?
             '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' :
@@ -890,11 +905,49 @@ function updateGlobalQueueUI() {
 function checkGlobalQueue() {
     if (isGeneratingGlobal) return;
     
-    // PRIORITY: Generate all images (T2I/storyboard) first, then videos (I2V/T2V)
-    let nextItem = globalGenerationQueue.find(item => item.status === 'pending' && item.type === 'storyboard');
-    if (!nextItem) {
-        nextItem = globalGenerationQueue.find(item => item.status === 'pending');
+    // Get all pending items
+    const pendingItems = globalGenerationQueue.filter(item => item.status === 'pending');
+    if (pendingItems.length === 0) return;
+    
+    // Group by batch and find the earliest batch that still has work
+    const batchGroups = {};
+    pendingItems.forEach(item => {
+        const batchKey = item.batchId || 'no_batch';
+        if (!batchGroups[batchKey]) {
+            batchGroups[batchKey] = { images: [], videos: [], exports: [] };
+        }
+        if (item.type === 'storyboard') {
+            batchGroups[batchKey].images.push(item);
+        } else if (item.type === 'export') {
+            batchGroups[batchKey].exports.push(item);
+        } else {
+            batchGroups[batchKey].videos.push(item);
+        }
+    });
+    
+    // Find the first batch (chronologically) and process images first, then videos, then exports
+    const sortedBatchIds = Object.keys(batchGroups).sort();
+    let nextItem = null;
+    
+    for (const batchId of sortedBatchIds) {
+        const batch = batchGroups[batchId];
+        // First, process all images in this batch
+        if (batch.images.length > 0) {
+            nextItem = batch.images[0];
+            break;
+        }
+        // Then, process all videos in this batch
+        if (batch.videos.length > 0) {
+            nextItem = batch.videos[0];
+            break;
+        }
+        // Finally, process exports for this batch
+        if (batch.exports.length > 0) {
+            nextItem = batch.exports[0];
+            break;
+        }
     }
+    
     if (!nextItem) return;
 
     nextItem.status = 'generating';
@@ -906,17 +959,41 @@ function checkGlobalQueue() {
     const batchProject = openProjects.find(p => p.id === nextItem.projectId);
     const batchName = batchProject ? batchProject.name : null;
     
-    const message = {
-        type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
-        prompt: nextItem.prompt,
-        params: nextItem.params,
-        imageFilename: nextItem.imageFilename,
-        storyboardIndex: nextItem.storyboardIndex,
-        batchId: nextItem.batchId,
-        batchName: batchName
-    };
-    ws.send(JSON.stringify(message));
-    appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
+    // Handle export items differently
+    if (nextItem.type === 'export') {
+        appendConsoleLine(`🎬 Starting auto-render export for batch: ${batchName}`, 'system');
+        // Trigger the export directly
+        const project = openProjects.find(p => p.id === nextItem.projectId);
+        if (project && project.data.timeline && project.data.timeline.length > 0) {
+            // Pass isAutoRender flag to skip modal
+            startRealExport(project.data.timeline, nextItem.isAutoRender);
+            // Mark as completed immediately since export is async
+            nextItem.status = 'completed';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 1000);
+        } else {
+            appendConsoleLine(`⚠️ Cannot export: timeline is empty`, 'system');
+            nextItem.status = 'completed';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 1000);
+        }
+    } else {
+        const message = {
+            type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
+            prompt: nextItem.prompt,
+            params: nextItem.params,
+            imageFilename: nextItem.imageFilename,
+            storyboardIndex: nextItem.storyboardIndex,
+            batchId: nextItem.batchId,
+            batchName: batchName
+        };
+        ws.send(JSON.stringify(message));
+        appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
+    }
 }
 
 // Botón de Lanzamiento (Stage) - REMOVED, now all generation is from Prompting tab
@@ -1022,10 +1099,27 @@ function handleSequencerGenerate() {
     freshData.timeline = [];
     const batchProjectId = createNewProject(batchName, freshData);
     
-    // Re-asociar los items recién añadidos a ESTE proyecto recién creado
+    // Re-asociar SOLO los items de ESTE batch al proyecto recién creado
     globalGenerationQueue.forEach(item => {
-        if (item.batchId === batchId) item.projectId = batchProjectId;
+        if (item.batchId === batchId && !item.projectId) {
+            item.projectId = batchProjectId;
+        }
     });
+
+    // Si autoRender está activado, agregar el export final al queue PARA ESTE BATCH
+    if (isAutoRender) {
+        globalGenerationQueue.push({
+            id: Date.now() + Math.random() + 0.9,
+            prompt: `Final Export - ${batchName}`,
+            type: 'export',
+            status: 'pending',
+            batchId: batchId,
+            projectId: batchProjectId,
+            isExport: true,
+            isAutoRender: true
+        });
+        appendConsoleLine(`📦 Auto-render export added to queue for batch: ${batchName}`, 'system');
+    }
 
     // Redirigir a Stage
     document.getElementById('tabOutputBtn').click();
@@ -2505,7 +2599,7 @@ if (exportBtn) {
     });
 }
 
-async function startRealExport(timelineData) {
+async function startRealExport(timelineData, isAutoRender = false) {
     const modal = document.getElementById('exportModal');
     const progressBar = document.getElementById('exportProgressBar');
     const progressPct = document.getElementById('exportProgressPct');
@@ -2514,7 +2608,10 @@ async function startRealExport(timelineData) {
     const viewBtn = document.getElementById('viewFinalVideo');
     const badge = document.getElementById('exportStatusBadge');
 
-    modal.style.display = 'flex';
+    // Solo mostrar modal si NO es auto-render
+    if (!isAutoRender) {
+        modal.style.display = 'flex';
+    }
     viewBtn.style.display = 'none';
     progressBar.style.width = '0%';
     progressPct.textContent = '0%';
@@ -3096,7 +3193,13 @@ function updateCompletedHistory(completedItems) {
         if (item.type === 'storyboard') modeLabel = 'T2I';
         if (item.isExport) modeLabel = 'EXPORT';
         
-        const batchInfo = item.batchId ? `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;">${item.batchId.substring(0, 12)}...</span>` : '';
+        // Show batch info if available - get batch name from project
+        let batchInfo = '';
+        if (item.batchId) {
+            const batchProject = openProjects.find(p => p.id === item.projectId);
+            const batchName = batchProject ? batchProject.name : item.batchId.substring(0, 12) + '...';
+            batchInfo = `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;" data-batch-id="${item.batchId}">${batchName}</span>`;
+        }
         const timestamp = new Date().toLocaleTimeString();
         
         div.innerHTML = `
@@ -3111,10 +3214,10 @@ function updateCompletedHistory(completedItems) {
                     ${item.prompt || 'Final Export'}
                 </div>
             </div>
-            ${item.resultUrl ? `<button class="view-completed-btn" title="View in Previz" style="background: rgba(129, 140, 248, 0.2); border: 1px solid #818cf8; color: #818cf8; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2em; transition: all 0.2s;">👁️</button>` : ''}
+            ${(item.resultUrl || item.type === 'storyboard') ? `<button class="view-completed-btn" title="View in Previz" style="background: rgba(129, 140, 248, 0.2); border: 1px solid #818cf8; color: #818cf8; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2em; transition: all 0.2s;">👁️</button>` : ''}
         `;
         
-        if (item.resultUrl) {
+        if (item.resultUrl || item.type === 'storyboard') {
             const viewBtn = div.querySelector('.view-completed-btn');
             viewBtn?.addEventListener('click', () => {
                 if (item.type === 'storyboard') {
