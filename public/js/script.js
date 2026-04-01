@@ -519,6 +519,7 @@ function renderProjectTabs() {
                 if (newName && newName !== proj.name) {
                     proj.name = newName;
                     renderProjectTabs();
+                    updateGlobalQueueUI(); // Update batch indicators in Stage
                     appendConsoleLine(`✏️ Project renamed to: ${newName}`, 'system');
                 } else {
                     input.replaceWith(nameSpan);
@@ -770,6 +771,8 @@ function updateGlobalQueueUI() {
     if (!queueContainer || !queueList) return;
 
     const activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
+    const completedItems = globalGenerationQueue.filter(i => i.status === 'completed');
+    
     if (activeItems.length > 0 || isGeneratingGlobal) {
         queueContainer.classList.remove('hidden');
     } else {
@@ -780,6 +783,9 @@ function updateGlobalQueueUI() {
             if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '100%';
         }
     }
+    
+    // Update completed history
+    updateCompletedHistory(completedItems);
 
     // Calculate counters for images and videos (including waiting items)
     const imgItems = activeItems.filter(i => i.type === 'storyboard');
@@ -858,8 +864,13 @@ function updateGlobalQueueUI() {
             '<span style="color: #64748b;">⏸️ WAITING</span>' :
             '<span style="color: #94a3b8;">⏳ QUEUED</span>';
 
-        // Show batch info if available
-        const batchInfo = item.batchId ? `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;">${item.batchId.substring(0, 12)}...</span>` : '';
+        // Show batch info if available - get batch name from project
+        let batchInfo = '';
+        if (item.batchId) {
+            const batchProject = openProjects.find(p => p.id === item.projectId);
+            const batchName = batchProject ? batchProject.name : item.batchId.substring(0, 12) + '...';
+            batchInfo = `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;" data-batch-id="${item.batchId}">${batchName}</span>`;
+        }
 
         div.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -878,7 +889,12 @@ function updateGlobalQueueUI() {
 
 function checkGlobalQueue() {
     if (isGeneratingGlobal) return;
-    const nextItem = globalGenerationQueue.find(item => item.status === 'pending');
+    
+    // PRIORITY: Generate all images (T2I/storyboard) first, then videos (I2V/T2V)
+    let nextItem = globalGenerationQueue.find(item => item.status === 'pending' && item.type === 'storyboard');
+    if (!nextItem) {
+        nextItem = globalGenerationQueue.find(item => item.status === 'pending');
+    }
     if (!nextItem) return;
 
     nextItem.status = 'generating';
@@ -886,13 +902,18 @@ function checkGlobalQueue() {
     isGeneratingGlobal = true;
     updateGlobalQueueUI();
 
+    // Get batch name from project
+    const batchProject = openProjects.find(p => p.id === nextItem.projectId);
+    const batchName = batchProject ? batchProject.name : null;
+    
     const message = {
         type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
         prompt: nextItem.prompt,
         params: nextItem.params,
         imageFilename: nextItem.imageFilename,
         storyboardIndex: nextItem.storyboardIndex,
-        batchId: nextItem.batchId
+        batchId: nextItem.batchId,
+        batchName: batchName
     };
     ws.send(JSON.stringify(message));
     appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
@@ -2524,6 +2545,22 @@ async function startRealExport(timelineData) {
 
             viewBtn.style.display = 'block';
             viewBtn.onclick = () => window.open(result.url, '_blank');
+            
+            // Add export to completed queue
+            globalGenerationQueue.push({
+                id: Date.now() + Math.random(),
+                prompt: `Timeline Export (${timelineData.length} clips)`,
+                status: 'completed',
+                resultUrl: result.url,
+                isExport: true,
+                type: 'export',
+                projectId: activeProjectId
+            });
+            updateGlobalQueueUI();
+            
+            // Refresh video gallery to show new export
+            loadExistingVideos();
+            appendConsoleLine('✅ Export completed and added to gallery', 'system');
         } else {
             throw new Error(result.error || 'Error desconocido');
         }
@@ -3019,6 +3056,88 @@ document.getElementById('storyboardImageInput')?.addEventListener('change', asyn
     }
     
     e.target.value = '';
+});
+
+// UPDATE COMPLETED HISTORY
+function updateCompletedHistory(completedItems) {
+    const completedList = document.getElementById('completedList');
+    const completedCount = document.getElementById('completedCount');
+    
+    if (!completedList || !completedCount) return;
+    
+    completedCount.textContent = completedItems.length;
+    completedList.innerHTML = '';
+    
+    if (completedItems.length === 0) {
+        completedList.innerHTML = '<div style="padding: 20px; text-align: center; color: #64748b; font-size: 0.9em;">No completed generations yet</div>';
+        return;
+    }
+    
+    // Show most recent first
+    const sortedItems = [...completedItems].reverse();
+    
+    sortedItems.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.style.cssText = `
+            padding: 12px; 
+            background: rgba(16, 185, 129, 0.1); 
+            border-left: 4px solid #10b981; 
+            border-radius: 8px; 
+            font-size: 0.85em; 
+            color: #e2e8f0;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        `;
+        
+        let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
+        if (item.type === 'storyboard') modeLabel = 'T2I';
+        if (item.isExport) modeLabel = 'EXPORT';
+        
+        const batchInfo = item.batchId ? `<span style="margin: 0 5px; opacity: 0.3;">|</span> Batch: <span style="color: #10b981;">${item.batchId.substring(0, 12)}...</span>` : '';
+        const timestamp = new Date().toLocaleTimeString();
+        
+        div.innerHTML = `
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                    <div style="font-weight: 700; color: #10b981; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;">
+                        ${modeLabel} ${batchInfo}
+                    </div>
+                    <div style="font-size: 0.65em; color: #64748b;">${timestamp}</div>
+                </div>
+                <div style="font-size: 0.85em; line-height: 1.4; color: #cbd5e1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                    ${item.prompt || 'Final Export'}
+                </div>
+            </div>
+            ${item.resultUrl ? `<button class="view-completed-btn" title="View in Previz" style="background: rgba(129, 140, 248, 0.2); border: 1px solid #818cf8; color: #818cf8; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2em; transition: all 0.2s;">👁️</button>` : ''}
+        `;
+        
+        if (item.resultUrl) {
+            const viewBtn = div.querySelector('.view-completed-btn');
+            viewBtn?.addEventListener('click', () => {
+                if (item.type === 'storyboard') {
+                    loadImageToPreviz(item.resultUrl);
+                } else {
+                    loadVideoToPreviz(item.resultUrl);
+                }
+                document.getElementById('tabPrevizBtn')?.click();
+                appendConsoleLine(`👁️ Viewing completed ${modeLabel} in Previz`, 'system');
+            });
+        }
+        
+        completedList.appendChild(div);
+    });
+}
+
+// CLEAR HISTORY BUTTON
+document.getElementById('clearHistoryBtn')?.addEventListener('click', () => {
+    if (confirm('Clear completed history?')) {
+        globalGenerationQueue = globalGenerationQueue.filter(i => i.status !== 'completed');
+        updateGlobalQueueUI();
+        appendConsoleLine('🗑️ Completed history cleared.', 'system');
+    }
 });
 
 // STOP QUEUE BUTTON

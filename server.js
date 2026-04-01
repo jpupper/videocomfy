@@ -175,7 +175,9 @@ function connectToComfy() {
                                     prompt: metaToSave.prompt,
                                     params: metaToSave.params,
                                     imageFilename: metaToSave.imageFilename,
-                                    prompt_id: promptId
+                                    prompt_id: promptId,
+                                    batchId: metaToSave.batchId,
+                                    batchName: metaToSave.batchName
                                 });
                             } else {
                                 saveImageMetadata(filenameOnly, {
@@ -183,6 +185,7 @@ function connectToComfy() {
                                     params: metaToSave.params,
                                     storyboardIndex: metaToSave.storyboardIndex,
                                     batchId: metaToSave.batchId,
+                                    batchName: metaToSave.batchName,
                                     prompt_id: promptId
                                 });
                             }
@@ -639,7 +642,9 @@ wss.on('connection', (ws) => {
                     prompt: message.prompt,
                     params: message.params,
                     imageFilename: message.imageFilename,
-                    type: 'video'
+                    type: 'video',
+                    batchId: message.batchId,
+                    batchName: message.batchName
                 };
                 promptDetails[promptId] = details;
                 lastPromptDetails = details;
@@ -651,7 +656,8 @@ wss.on('connection', (ws) => {
                     params: message.params,
                     type: 'storyboard',
                     storyboardIndex: message.storyboardIndex,
-                    batchId: message.batchId
+                    batchId: message.batchId,
+                    batchName: message.batchName
                 };
                 promptDetails[promptId] = details;
                 lastPromptDetails = details;
