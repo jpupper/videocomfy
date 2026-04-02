@@ -1889,7 +1889,11 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
     const filename = src.split('/').pop().split('?')[0];
     const rect = trackElement.getBoundingClientRect();
     clip.style.left = `${Math.max(0, xPos - rect.left)}px`;
-    clip.style.width = '150px';
+    
+    // Calculate width based on metadata.videoLength (defaulting to 121 frames = 150px = 6s)
+    const videoFrames = metadata.videoLength || 121;
+    const calculatedWidth = (videoFrames / 121) * 150;
+    clip.style.width = `${calculatedWidth}px`;
 
     const isAudio = metadata.isAudioOnly === true;
     if (isAudio) clip.classList.add('audio-clip');
@@ -2817,24 +2821,23 @@ function assembleBatchInTimeline(batchItems) {
 
     // 1. Calcular los clips a añadir
     let currentX = 0;
-    const clipWidth = 150;
-    // Ahora el overlap es la "distancia de inicio" del siguiente clip
-    // 0 = mismo punto, 100 = consecutivo
-    const step = clipWidth * overlap; 
-    
     const newClipsRaw = [];
     batchItems.forEach((item) => {
         if (item.resultUrl) {
             const filename = item.resultUrl.split('/').pop().split('?')[0];
+            const vFrames = item.params?.videoLength || 121;
+            const vDuration = (vFrames / 121) * 6;
+            const vWidth = (vFrames / 121) * 150;
+            
             newClipsRaw.push({
                 filename,
                 startTime: currentX / 25,
-                duration: 6, // 150px / 25px/s
+                duration: vDuration,
                 track: 'V1',
                 prompt: item.prompt,
                 metadata: item.params
             });
-            currentX += step;
+            currentX += (vWidth * overlap);
         }
     });
 
@@ -2842,13 +2845,13 @@ function assembleBatchInTimeline(batchItems) {
     const project = openProjects.find(p => p.id === targetProjectId);
     if (project) {
         if (!project.data.timeline) project.data.timeline = [];
-        // Añadir clips al timeline del proyecto (podríamos pisarlo o añadirlo al final)
-        // Por consistencia con "assemble", solemos limpiar o empezar desde el final
-        // Aquí vamos a AÑADIRLOS al timeline existente del proyecto
+        
         let startFrom = 0;
         if (project.data.timeline.length > 0) {
             const last = project.data.timeline.sort((a,b) => b.startTime - a.startTime)[0];
-            startFrom = last.startTime + (6 * (1-overlap));
+            const lastFrames = last.metadata?.videoLength || 121;
+            const lastDuration = (lastFrames / 121) * 6;
+            startFrom = last.startTime + (lastDuration * overlap);
         }
 
         newClipsRaw.forEach(c => {
