@@ -11,6 +11,12 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const multer = require('multer');
+require('dotenv').config();
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// Inicializar Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const ipglobal = "192.168.0.13"; // IP de ComfyUI
 const serverAddress = ipglobal + ":8188";
@@ -580,6 +586,78 @@ app.post('/api/projects/save', (req, res) => {
         res.json({ success: true, filename });
     } catch (error) {
         console.error('Error saving project:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// GEMINI PROMPT ENHANCER
+// ============================================
+
+app.get('/api/list-models', async (req, res) => {
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Error listing models:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/enhance-prompt', async (req, res) => {
+    try {
+        const { text, modelName } = req.body;
+        if (!text) return res.status(400).json({ error: 'No prompt text provided' });
+
+        let mName = modelName || "gemini-2.5-flash";
+        if (!mName.startsWith('models/')) mName = `models/${mName}`;
+
+        const selectedModel = genAI.getGenerativeModel({ model: mName });
+        const skillPath = path.join(__dirname, '.agents', 'skills', 'prompt_master', 'SKILL.md');
+        let skillGuide = "";
+        try {
+            skillGuide = fs.readFileSync(skillPath, 'utf8');
+        } catch (e) {
+            console.warn("⚠️ No se pudo leer SKILL.md para el contexto de Gemini");
+        }
+
+        const prompt = `
+        Sos un asistente experto en ingeniería de prompts para modelos de IA como Flux y LTX-2. 
+        Tu tarea es tomar la siguiente "Idea del Usuario" y generar un JSON de batch siguiendo ESTRICTAMENTE las reglas de esta guía de estilo:
+
+        --- GUIA DE ESTILO (SKILL.MD) ---
+        ${skillGuide}
+        --- FIN GUIA ---
+
+        IDEA DEL USUARIO: "${text}"
+
+        REGLAS DE SALIDA:
+        - Debes devolver ÚNICAMENTE el JSON válido.
+        - El JSON debe tener llaves "globalImage", "globalVideo" y un array "steps".
+        - "globalImage" debe definir el estilo visual de alta calidad basado en la guía.
+        - "globalVideo" debe definir el tono de voz y estilo de cámara global basado en la guía.
+        - Crea al menos de 3 a 5 "steps" que cuenten una pequeña historia basada en la idea.
+        - Cada step debe tener "PROMPT IMAGE" (detalles visuales de Flux) y "VIDEO IMAGE" (acción, cámara y diálogos entre comillas para LTX-2).
+        - Asegura la consistencia de los sujetos en todos los pasos.
+        - NO incluyas explicaciones fuera del bloque JSON.
+        `;
+
+        const result = await selectedModel.generateContent(prompt);
+        const response = await result.response;
+        const generatedText = response.text();
+
+        // Extraer JSON si Gemini lo envolvió en bloques de código
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const cleanJson = JSON.parse(jsonMatch[0]);
+            res.json(cleanJson);
+        } else {
+            throw new Error("No se pudo extraer un JSON válido de la respuesta de Gemini.");
+        }
+
+    } catch (error) {
+        console.error('Error enhancing prompt with Gemini:', error);
         res.status(500).json({ error: error.message });
     }
 });

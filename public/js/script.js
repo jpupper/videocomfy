@@ -311,7 +311,8 @@ function getProjectData() {
     return {
         timeline: getTimelineData(),
         prompting: {
-            globalPrompt: document.getElementById('promptGeneral')?.value || '',
+            globalImagePrompt: document.getElementById('globalImagePrompt')?.value || '',
+            globalVideoPrompt: document.getElementById('globalVideoPrompt')?.value || '',
             sequence: Array.from(document.querySelectorAll('.prompt-item')).map(el => ({
                 prompt: el.querySelector('.image-prompt')?.value || '',
                 videoPrompt: el.querySelector('.video-prompt')?.value || '',
@@ -359,7 +360,8 @@ function applyProjectData(data) {
     // 3. Restaurar Prompting (unificado - siempre secuencia)
     if (data.prompting || data.sequencer) {
         const promptingData = data.prompting || data.sequencer; // backward compatibility
-        if (document.getElementById('promptGeneral')) document.getElementById('promptGeneral').value = promptingData.globalPrompt || '';
+        if (document.getElementById('globalImagePrompt')) document.getElementById('globalImagePrompt').value = promptingData.globalImagePrompt || promptingData.globalPrompt || '';
+        if (document.getElementById('globalVideoPrompt')) document.getElementById('globalVideoPrompt').value = promptingData.globalVideoPrompt || promptingData.globalPrompt || '';
         
         const seqContainer = document.getElementById('promptSequence');
         if (seqContainer) {
@@ -1009,7 +1011,8 @@ function handleSequencerGenerate() {
     const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
     const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
     const batchId = 'batch_' + Date.now();
-    const promptGeneral = document.getElementById('promptGeneral')?.value.trim() || '';
+    const globalImagePrompt = document.getElementById('globalImagePrompt')?.value.trim() || '';
+    const globalVideoPrompt = document.getElementById('globalVideoPrompt')?.value.trim() || '';
 
     promptItems.forEach((item, index) => {
         const tImg = item.querySelector('.image-prompt');
@@ -1022,8 +1025,8 @@ function handleSequencerGenerate() {
 
         if (valImg || valVid) {
             // Global style prefix
-            const finalImgPrompt = valImg ? (promptGeneral ? `${promptGeneral}, ${valImg}` : valImg) : '';
-            const finalVidPrompt = valVid ? (promptGeneral ? `${promptGeneral}, ${valVid}` : valVid) : '';
+            const finalImgPrompt = valImg ? (globalImagePrompt ? `${globalImagePrompt}, ${valImg}` : valImg) : '';
+            const finalVidPrompt = valVid ? (globalVideoPrompt ? `${globalVideoPrompt}, ${valVid}` : valVid) : '';
 
             if (mode === 't2i') {
                 addToStoryboardQueue(finalImgPrompt || finalVidPrompt, { batchId, storyboardIndex: index, autoOverlap });
@@ -1266,7 +1269,8 @@ if (jsonExampleBtn) {
     jsonExampleBtn.addEventListener('click', () => {
         // Get current prompts from the sequencer
         const promptItems = document.querySelectorAll('.prompt-item');
-        const globalPrompt = document.getElementById('promptGeneral')?.value.trim() || '';
+        const globalImagePrompt = document.getElementById('globalImagePrompt')?.value.trim() || '';
+        const globalVideoPrompt = document.getElementById('globalVideoPrompt')?.value.trim() || '';
         
         const steps = [];
         promptItems.forEach(item => {
@@ -1289,7 +1293,8 @@ if (jsonExampleBtn) {
         });
         
         const jsonData = {
-            global: globalPrompt,
+            globalImage: globalImagePrompt,
+            globalVideo: globalVideoPrompt,
             steps: steps.length > 0 ? steps : [
                 {
                     "PROMPT IMAGE": "a futuristic city at night",
@@ -1342,36 +1347,125 @@ if (confirmJsonImport) {
 
         try {
             const data = JSON.parse(input);
-            if (!data.steps || !Array.isArray(data.steps)) {
-                throw new Error("Invalid format: 'steps' array is missing.");
-            }
-
-            // Limpiar pasos actuales
-            const container = document.getElementById('promptSequence');
-            if (container) container.innerHTML = '';
-
-            // Cargar Global Prompt
-            const promptGeneral = document.getElementById('promptGeneral');
-            if (promptGeneral && data.global) {
-                promptGeneral.value = data.global;
-            }
-
-            // Get default mode from global selector
-            const defaultMode = document.getElementById('defaultPromptMode')?.value || 't2i2v';
-
-            // Cargar pasos
-            data.steps.forEach(step => {
-                addPromptStep(step, defaultMode);
-            });
-
-            appendConsoleLine(`✅ Imported JSON: ${data.steps.length} prompts added (${defaultMode} mode).`, 'system');
-
+            applyBatchData(data);
+            
             // Cerrar el area
             document.getElementById('jsonImportArea').classList.add('hidden');
             document.getElementById('jsonInputText').value = '';
         } catch (e) {
             console.error('JSON Import Error:', e);
             alert("Error importing JSON: " + e.message);
+        }
+    });
+}
+
+function applyBatchData(data) {
+    if (!data.steps || !Array.isArray(data.steps)) {
+        throw new Error("Invalid format: 'steps' array is missing.");
+    }
+
+    // Limpiar pasos actuales
+    const container = document.getElementById('promptSequence');
+    if (container) container.innerHTML = '';
+
+    // Cargar Global Prompt
+    const globalImagePromptEl = document.getElementById('globalImagePrompt');
+    const globalVideoPromptEl = document.getElementById('globalVideoPrompt');
+    if (globalImagePromptEl && (data.globalImage || data.global)) {
+        globalImagePromptEl.value = data.globalImage || data.global;
+    }
+    if (globalVideoPromptEl && (data.globalVideo || data.global)) {
+        globalVideoPromptEl.value = data.globalVideo || data.global;
+    }
+
+    // Get default mode from global selector
+    const defaultMode = document.getElementById('defaultPromptMode')?.value || 't2i2v';
+
+    // Cargar pasos
+    data.steps.forEach(step => {
+        addPromptStep(step, defaultMode);
+    });
+
+    appendConsoleLine(`✅ Applied Batch Data: ${data.steps.length} prompts added (${defaultMode} mode).`, 'system');
+}
+
+const enhancePromptBtn = document.getElementById('enhancePromptBtn');
+const magicPromptBtn = document.getElementById('magicPromptBtn');
+const aiPromptArea = document.getElementById('aiPromptArea');
+const geminiModelSelect = document.getElementById('geminiModelSelect');
+
+if (magicPromptBtn && aiPromptArea) {
+    magicPromptBtn.addEventListener('click', () => {
+        aiPromptArea.classList.toggle('hidden');
+        if (!aiPromptArea.classList.contains('hidden')) {
+            loadGeminiModels();
+        }
+    });
+}
+
+async function loadGeminiModels() {
+    if (!geminiModelSelect) return;
+    try {
+        const response = await fetch('/api/list-models');
+        const data = await response.json();
+        if (data.models) {
+            const currentVal = geminiModelSelect.value;
+            geminiModelSelect.innerHTML = '';
+            
+            // Filtrar solo modelos que soporten generateContent
+            const activeModels = data.models.filter(m => m.supportedGenerationMethods.includes('generateContent'));
+            
+            activeModels.forEach(m => {
+                const nameShort = m.name.replace('models/', '');
+                const opt = document.createElement('option');
+                opt.value = nameShort;
+                opt.textContent = m.displayName || nameShort;
+                if (nameShort === 'gemini-flash-latest') opt.selected = true;
+                geminiModelSelect.appendChild(opt);
+            });
+            
+            if (currentVal && Array.from(geminiModelSelect.options).some(o => o.value === currentVal)) {
+                geminiModelSelect.value = currentVal;
+            }
+        }
+    } catch (e) {
+        console.error('Error loading Gemini models:', e);
+    }
+}
+
+if (enhancePromptBtn) {
+    enhancePromptBtn.addEventListener('click', async () => {
+        const text = document.getElementById('manualBatchPrompt').value.trim();
+        const modelName = geminiModelSelect ? geminiModelSelect.value : 'gemini-2.5-flash';
+
+        if (!text) {
+            alert("Por favor escribe una idea primero.");
+            return;
+        }
+
+        enhancePromptBtn.disabled = true;
+        enhancePromptBtn.textContent = '🪄 GENERATING BATCH WITH AI...';
+        appendConsoleLine(`🪄 Asking Gemini (${modelName}) for a cinematic batch...`, 'system');
+
+        try {
+            const response = await fetch('/api/enhance-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, modelName })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            applyBatchData(data);
+            appendConsoleLine(`✨ Batch sequence generated successfully.`, 'system');
+        } catch (err) {
+            console.error('Enhance error:', err);
+            appendConsoleLine(`❌ AI Enhancement failed: ${err.message}`, 'error');
+            alert("Error al mejorar el prompt: " + err.message);
+        } finally {
+            enhancePromptBtn.disabled = false;
+            enhancePromptBtn.textContent = '✨ GENERATE CLIP FROM IDEA';
         }
     });
 }

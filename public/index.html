@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -193,7 +193,9 @@
                                     </div>
                                 </div>
                             </div>
+
                             <div class="toolbar-actions-row">
+                                <button id="magicPromptBtn" class="primary-btn-outline magic-btn" title="Toggle AI Prompt Helper">🪄 MAGIC PROMPT</button>
                                 <button id="jsonExampleBtn" title="Copy JSON Example" class="icon-btn-std">📋</button>
                                 <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
                                 <select id="defaultPromptMode" class="global-mode-select">
@@ -204,6 +206,19 @@
                             </div>
                         </div>
 
+                        <!-- MAGIC PROMPT AREA (AI HELPER) -->
+                        <div id="aiPromptArea" class="manual-prompt-area hidden">
+                            <div class="ai-controls-row">
+                                <select id="geminiModelSelect" class="model-select-std">
+                                    <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
+                                    <option value="gemini-flash-latest">Gemini Flash (Latest)</option>
+                                    <option value="gemini-pro-latest">Gemini Pro (Latest)</option>
+                                </select>
+                            </div>
+                            <textarea id="manualBatchPrompt" class="manual-prompt-textarea" placeholder="Escribe tu idea (ej: 'Un vaquero en el espacio buscando agua'). El sistema generará el batch JSON completo..."></textarea>
+                            <button id="enhancePromptBtn" class="enhance-btn-std">✨ GENERATE CLIP FROM IDEA</button>
+                        </div>
+
                         <div class="sequencer-settings-header">
                             <label class="sequencer-sub-label">Global Style / Master</label>
                         </div>
@@ -211,14 +226,15 @@
                         <!-- JSON Import Panel -->
                         <div id="jsonImportArea" class="json-import-panel hidden">
                             <label class="sequencer-sub-label color-index">Paste JSON Sequence</label>
-                            <textarea id="jsonInputText" placeholder='{ "global": "...", "steps": [...] }' class="json-textarea-field"></textarea>
+                            <textarea id="jsonInputText" placeholder='{ "globalImage": "...", "globalVideo": "...", "steps": [...] }' class="json-textarea-field"></textarea>
                             <div class="export-actions-row">
                                 <button id="confirmJsonImport" class="confirm-btn-sm">IMPORT</button>
                                 <button id="cancelJsonImport" class="cancel-btn-sm">CANCEL</button>
                             </div>
                         </div>
 
-                        <textarea id="promptGeneral" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all steps..."></textarea>
+                        <textarea id="globalImagePrompt" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all generated images (Flux)..."></textarea>
+                        <textarea id="globalVideoPrompt" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all generated videos (LTX)..." style="margin-top: 10px;"></textarea>
                         
                         <div id="promptSequence"></div>
 
@@ -428,7 +444,7 @@
         </div>
     </div>
 
-    <script src="js/script.js"></script>
+    <script src="js/script.js?v=2"></script>
 </body>
 
 </html>
