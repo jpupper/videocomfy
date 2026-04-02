@@ -109,23 +109,14 @@ ws.onmessage = (event) => {
                     // AUTO-ASSEMBLY LOGIC
                     const batchItems = globalGenerationQueue.filter(i => i.batchId === item.batchId);
                     const autoBatch = batchItems.filter(i => i.isAutoAssemble);
+                    const generationItems = batchItems.filter(i => i.type !== 'export');
 
-                    if (autoBatch.length > 0 && batchItems.every(i => i.status === 'completed')) {
-                        // All items in the batch are finished! Assemble them.
-                        assembleBatchInTimeline(autoBatch);
-
-                        // AUTO-RENDER LOGIC
-                        const isAutoRender = batchItems.some(i => i.isAutoRender);
-                        if (isAutoRender) {
-                            const targetProjectId = autoBatch[0].projectId;
-                            const project = openProjects.find(p => p.id === targetProjectId);
-                            
-                            if (project && project.data.timeline && project.data.timeline.length > 0) {
-                                appendConsoleLine(`🎬 Auto-render triggered for project: ${project.name}`, 'system');
-                                setTimeout(() => {
-                                    startRealExport(project.data.timeline);
-                                }, 1500);
-                            }
+                    if (autoBatch.length > 0 && generationItems.every(i => i.status === 'completed')) {
+                        // All image/video items in the batch are finished! Assemble them.
+                        // ONLY assemble videos, skip images (T2I storyboard items)
+                        const itemsToAssemble = autoBatch.filter(i => i.type !== 'storyboard');
+                        if (itemsToAssemble.length > 0) {
+                            assembleBatchInTimeline(itemsToAssemble);
                         }
 
                         // Clean batchId from queue to avoid repeating
@@ -150,6 +141,7 @@ ws.onmessage = (event) => {
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
+                    item.resultUrl = message.url;
 
                     // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
                     if (item.autoVideo) {
@@ -480,8 +472,8 @@ function closeProject(id, e) {
             switchProject(openProjects[0].id);
         } else {
             activeProjectId = null;
-            // Podríamos crear uno vacío o dejarlo limpio
-            createNewProject("Project 1");
+            // Leave empty - don't create default project
+            renderProjectTabs();
         }
     }
     
@@ -519,7 +511,7 @@ function renderProjectTabs() {
                 if (newName && newName !== proj.name) {
                     proj.name = newName;
                     renderProjectTabs();
-                    updateGlobalQueueUI(); // Update batch indicators in Stage
+                    updateGlobalQueueUI(); // Update batch indicators in queue and completed history
                     appendConsoleLine(`✏️ Project renamed to: ${newName}`, 'system');
                 } else {
                     input.replaceWith(nameSpan);
@@ -676,10 +668,12 @@ if (tabEditor) {
     });
 }
 
-// Initial Session
+// Initial Session - Start empty, projects created when batches are added
 setTimeout(() => {
+    // Don't create default project - let it be empty until user creates a batch
     if (openProjects.length === 0) {
-        createNewProject("Project 1");
+        activeProjectId = null;
+        renderProjectTabs();
     }
 }, 500);
 
@@ -965,14 +959,8 @@ function checkGlobalQueue() {
         // Trigger the export directly
         const project = openProjects.find(p => p.id === nextItem.projectId);
         if (project && project.data.timeline && project.data.timeline.length > 0) {
-            // Pass isAutoRender flag to skip modal
-            startRealExport(project.data.timeline, nextItem.isAutoRender);
-            // Mark as completed immediately since export is async
-            nextItem.status = 'completed';
-            isGeneratingGlobal = false;
-            currentExecutingId = null;
-            updateGlobalQueueUI();
-            setTimeout(() => checkGlobalQueue(), 1000);
+            // Pass the queueItem to startRealExport to handle async completion
+            startRealExport(project.data.timeline, nextItem.isAutoRender, nextItem);
         } else {
             appendConsoleLine(`⚠️ Cannot export: timeline is empty`, 'system');
             nextItem.status = 'completed';
@@ -1099,9 +1087,9 @@ function handleSequencerGenerate() {
     freshData.timeline = [];
     const batchProjectId = createNewProject(batchName, freshData);
     
-    // Re-asociar SOLO los items de ESTE batch al proyecto recién creado
+    // Re-asociar TODOS los items de ESTE batch al proyecto recién creado
     globalGenerationQueue.forEach(item => {
-        if (item.batchId === batchId && !item.projectId) {
+        if (item.batchId === batchId) {
             item.projectId = batchProjectId;
         }
     });
@@ -1120,6 +1108,9 @@ function handleSequencerGenerate() {
         });
         appendConsoleLine(`📦 Auto-render export added to queue for batch: ${batchName}`, 'system');
     }
+
+    // Force queue refesh to correctly show the newest batch project association
+    updateGlobalQueueUI();
 
     // Redirigir a Stage
     document.getElementById('tabOutputBtn').click();
@@ -2599,7 +2590,7 @@ if (exportBtn) {
     });
 }
 
-async function startRealExport(timelineData, isAutoRender = false) {
+async function startRealExport(timelineData, isAutoRender = false, queueItem = null) {
     const modal = document.getElementById('exportModal');
     const progressBar = document.getElementById('exportProgressBar');
     const progressPct = document.getElementById('exportProgressPct');
@@ -2643,21 +2634,32 @@ async function startRealExport(timelineData, isAutoRender = false) {
             viewBtn.style.display = 'block';
             viewBtn.onclick = () => window.open(result.url, '_blank');
             
-            // Add export to completed queue
-            globalGenerationQueue.push({
-                id: Date.now() + Math.random(),
-                prompt: `Timeline Export (${timelineData.length} clips)`,
-                status: 'completed',
-                resultUrl: result.url,
-                isExport: true,
-                type: 'export',
-                projectId: activeProjectId
-            });
+            if (queueItem) {
+                queueItem.status = 'completed';
+                queueItem.resultUrl = result.url;
+            } else {
+                // Add export to completed queue
+                globalGenerationQueue.push({
+                    id: Date.now() + Math.random(),
+                    prompt: `Timeline Export (${timelineData.length} clips)`,
+                    status: 'completed',
+                    resultUrl: result.url,
+                    isExport: true,
+                    type: 'export',
+                    projectId: activeProjectId
+                });
+            }
             updateGlobalQueueUI();
             
             // Refresh video gallery to show new export
             loadExistingVideos();
             appendConsoleLine('✅ Export completed and added to gallery', 'system');
+            
+            if (queueItem) {
+                isGeneratingGlobal = false;
+                currentExecutingId = null;
+                setTimeout(() => checkGlobalQueue(), 1000);
+            }
         } else {
             throw new Error(result.error || 'Error desconocido');
         }
@@ -2667,6 +2669,14 @@ async function startRealExport(timelineData, isAutoRender = false) {
         statusText.textContent = 'Fallo al exportar';
         badge.textContent = 'FAILED';
         badge.style.background = '#ef4444';
+        
+        if (queueItem) {
+            queueItem.status = 'completed';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 1000);
+        }
     } finally {
         isExporting = false;
     }
@@ -3214,7 +3224,7 @@ function updateCompletedHistory(completedItems) {
                     ${item.prompt || 'Final Export'}
                 </div>
             </div>
-            ${(item.resultUrl || item.type === 'storyboard') ? `<button class="view-completed-btn" title="View in Previz" style="background: rgba(129, 140, 248, 0.2); border: 1px solid #818cf8; color: #818cf8; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2em; transition: all 0.2s;">👁️</button>` : ''}
+            ${(item.resultUrl || item.type === 'storyboard') ? `<button class="view-completed-btn" title="View in Previz" style="background: rgba(129, 140, 248, 0.2); border: 1px solid #818cf8; color: #818cf8; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: all 0.2s;">👁️</button>` : ''}
         `;
         
         if (item.resultUrl || item.type === 'storyboard') {
