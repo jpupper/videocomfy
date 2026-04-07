@@ -1009,7 +1009,9 @@ function handleSequencerGenerate() {
 
     const isAutoAssemble = document.getElementById('autoAssembleCheck')?.checked;
     const isAutoRender = document.getElementById('autoRenderCheck')?.checked;
-    const autoOverlap = parseFloat(document.getElementById('autoOverlapSlider')?.value || 15) / 100;
+    // Interpret Slider 0-100% as Overlap Percentage (0% = sequential, 100% = stacked)
+    const overlapValue = parseFloat(document.getElementById('autoOverlapSlider')?.value || 0);
+    const autoOverlapRatio = overlapValue / 100;
     const batchId = 'batch_' + Date.now();
     const globalImagePrompt = document.getElementById('globalImagePrompt')?.value.trim() || '';
     const globalVideoPrompt = document.getElementById('globalVideoPrompt')?.value.trim() || '';
@@ -1041,7 +1043,7 @@ function handleSequencerGenerate() {
                     videoPrompt: finalVidPrompt,
                     isAutoAssemble,
                     isAutoRender,
-                    autoOverlap,
+                    autoOverlap: autoOverlapRatio,
                     id: storyboardId
                 });
                 
@@ -1065,11 +1067,11 @@ function handleSequencerGenerate() {
                     isAutoAssemble,
                     isAutoRender,
                     batchId,
-                    autoOverlap
+                    autoOverlap: autoOverlapRatio
                 });
             } else {
                 // Text to Video directly (t2v)
-                addToQueue(finalVidPrompt || finalImgPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap });
+                addToQueue(finalVidPrompt || finalImgPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap: autoOverlapRatio });
             }
             addedCount++;
         }
@@ -1489,6 +1491,7 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
         imageFilename: forcedImage !== null ? forcedImage : uploadedImageFilename,
         status: 'pending',
         projectId: activeProjectId,
+        autoOverlap: options.autoOverlap !== undefined ? options.autoOverlap : (parseFloat(document.getElementById('autoOverlapSlider')?.value || 0) / 100),
         ...options // replaceClipId, isAutoAssemble, batchId, etc.
     });
 
@@ -1515,6 +1518,14 @@ async function loadExistingVideos() {
             const techInfo = video.metadata || { videoWidth: 1280, videoHeight: 720, samplerSteps: 20, videoLength: 121 };
             const promptStr = isEx ? (video.metadata.prompt || 'Final Output Render') : (video.prompt || '');
             const dateStr = new Date(video.timestamp).toLocaleString();
+            
+            // Preserve original prompts from metadata for regeneration
+            const fullMetadata = {
+                ...techInfo,
+                imagePrompt: techInfo.imagePrompt || video.prompt || '',
+                videoPrompt: techInfo.videoPrompt || video.prompt || '',
+                imageFilename: techInfo.imageFilename || null
+            };
 
             // Badge style and text
             const badgeLabel = isEx ? `🎬 FINAL EXPORT` : `${techInfo.videoWidth}x${techInfo.videoHeight} • ${techInfo.samplerSteps} steps`;
@@ -1542,7 +1553,7 @@ async function loadExistingVideos() {
             galleryItem.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('videoSrc', video.url);
                 e.dataTransfer.setData('videoPrompt', promptStr);
-                e.dataTransfer.setData('videoMetadata', JSON.stringify(techInfo));
+                e.dataTransfer.setData('videoMetadata', JSON.stringify(fullMetadata));
                 galleryItem.style.opacity = '0.5';
             });
             galleryItem.addEventListener('dragend', () => galleryItem.style.opacity = '1');
@@ -1890,7 +1901,8 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
     const rect = trackElement.getBoundingClientRect();
     clip.style.left = `${Math.max(0, xPos - rect.left)}px`;
     
-    // Calculate width based on metadata.videoLength (defaulting to 121 frames = 150px = 6s)
+    // Set initial width based on metadata.videoLength as fallback (121 frames = 150px = 6s)
+    // This will be updated once the video metadata loads
     const videoFrames = metadata.videoLength || 121;
     const calculatedWidth = (videoFrames / 121) * 150;
     clip.style.width = `${calculatedWidth}px`;
@@ -1912,6 +1924,25 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
             <button class="remove-clip-btn" title="${isAudio ? 'Delete Audio' : 'Delete Clip'}">×</button>
         </div>
     `;
+
+    // Get the video element and update width based on actual duration
+    const videoElement = clip.querySelector('video');
+    if (videoElement) {
+        videoElement.addEventListener('loadedmetadata', () => {
+            // Timeline scale: 25px = 1 second
+            const actualDuration = videoElement.duration;
+            const correctWidth = actualDuration * 25;
+            clip.style.width = `${correctWidth}px`;
+            
+            // Update metadata with actual duration for future reference
+            const meta = JSON.parse(clip.dataset.metadata || '{}');
+            meta.actualDuration = actualDuration;
+            clip.dataset.metadata = JSON.stringify(meta);
+            
+            // Refresh cache to update clip dimensions
+            refreshClipCache();
+        });
+    }
 
     if (!isAudio) {
         clip.querySelector('.detach-audio-btn').addEventListener('click', (e) => {
@@ -2816,7 +2847,11 @@ if (activeExportWidget) {
 function assembleBatchInTimeline(batchItems) {
     // Tomamos el projectId del primer item del batch
     const targetProjectId = batchItems[0]?.projectId;
-    const overlap = batchItems[0]?.autoOverlap !== undefined ? batchItems[0].autoOverlap : 0.15;
+    // autoOverlap is the RATIO of sharing (0.0 = sequential, 1.0 = stacked)
+    const overlapRatio = batchItems[0]?.autoOverlap !== undefined ? batchItems[0].autoOverlap : 0.0;
+    // offsetRatio is how much we move forward (1.0 = sequential, 0.0 = stacked)
+    const offsetRatio = 1.0 - overlapRatio;
+
     if (!targetProjectId) return;
 
     // 1. Calcular los clips a añadir
@@ -2837,7 +2872,9 @@ function assembleBatchInTimeline(batchItems) {
                 prompt: item.prompt,
                 metadata: item.params
             });
-            currentX += (vWidth * overlap);
+            
+            // Advance by the width MINUS the overlap
+            currentX += (vWidth * offsetRatio);
         }
     });
 
@@ -2851,7 +2888,8 @@ function assembleBatchInTimeline(batchItems) {
             const last = project.data.timeline.sort((a,b) => b.startTime - a.startTime)[0];
             const lastFrames = last.metadata?.videoLength || 121;
             const lastDuration = (lastFrames / 121) * 6;
-            startFrom = last.startTime + (lastDuration * overlap);
+            // The batch starts after the last existing clip, respecting the overlap
+            startFrom = last.startTime + (lastDuration * offsetRatio);
         }
 
         newClipsRaw.forEach(c => {
