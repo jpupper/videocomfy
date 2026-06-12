@@ -5,12 +5,97 @@ const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
 const placeholder = document.getElementById('placeholder');
 
-const ws = new WebSocket(`ws://${window.location.hostname}:${window.location.port}`);
+// ============================================
+// WEBSOCKET CONNECTION MANAGER
+// ============================================
+let ws = null;
+let wsReconnectAttempts = 0;
+const MAX_WS_RECONNECT_DELAY = 30000; // 30s max
+let wsReconnectTimer = null;
 
 // Variables de cola de generación global
 let globalGenerationQueue = [];
 let isGeneratingGlobal = false;
 let currentExecutingId = null;
+
+// ============================================
+// QUEUE PERSISTENCE (localStorage)
+// ============================================
+const QUEUE_STORAGE_KEY = 'videocomfy_generation_queue';
+const QUEUE_META_KEY = 'videocomfy_queue_meta';
+
+function saveQueueState() {
+    try {
+        // We save non-completed items + last 20 completed for history
+        const activeItems = globalGenerationQueue.filter(i => i.status !== 'completed');
+        const recentCompleted = globalGenerationQueue
+            .filter(i => i.status === 'completed')
+            .slice(-20); // Keep only last 20 completed
+        
+        const state = {
+            queue: [...activeItems, ...recentCompleted],
+            isGenerating: isGeneratingGlobal,
+            currentId: currentExecutingId,
+            timestamp: Date.now()
+        };
+        
+        // Remove functions and DOM references before serializing
+        const serialized = JSON.stringify(state);
+        localStorage.setItem(QUEUE_STORAGE_KEY, serialized);
+    } catch (e) {
+        console.warn('Failed to save queue state:', e);
+    }
+}
+
+function loadQueueState() {
+    try {
+        const saved = localStorage.getItem(QUEUE_STORAGE_KEY);
+        if (!saved) return false;
+        
+        const state = JSON.parse(saved);
+        if (!state || !Array.isArray(state.queue)) return false;
+        
+        // Restore queue
+        globalGenerationQueue = state.queue.map(item => {
+            // Don't restore 'generating' items as 'generating' — we lost the WS connection
+            // Convert them to 'pending' so they get re-sent to ComfyUI
+            if (item.status === 'generating') {
+                item.status = 'pending';
+                item.generationStartTime = undefined;
+                item._timeoutWarning = false;
+                item._lastWarnedMinute = undefined;
+            }
+            // 'waiting' items stay waiting (they need their images first)
+            // 'pending' items stay pending
+            return item;
+        });
+        
+        isGeneratingGlobal = false; // Always reset — we don't know if generation is still active
+        currentExecutingId = null;
+        
+        console.log(`♻️ Queue restored from storage: ${globalGenerationQueue.length} items`);
+        appendConsoleLine(`♻️ Queue restored: ${globalGenerationQueue.filter(i => i.status === 'pending' || i.status === 'waiting').length} pending items`, 'system');
+        
+        return true;
+    } catch (e) {
+        console.warn('Failed to load queue state:', e);
+        return false;
+    }
+}
+
+function clearQueueState() {
+    try {
+        localStorage.removeItem(QUEUE_STORAGE_KEY);
+        localStorage.removeItem(QUEUE_META_KEY);
+    } catch (e) {}
+}
+
+// Also save when ws reconnects — request server's queue state
+function requestServerQueueState() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'request_queue_state' }));
+    }
+}
 
 // Variables para modo de blending
 let isBlendMode = false;
@@ -23,16 +108,35 @@ let uploadedImageFilename = null;
 // Variables para Storyboard
 let storyboardItems = [];
 
+// Variables para Timeline Playback (deben declararse antes de usarlas)
+let isPlayingTl = false;
+let tlAnimationFrame = null;
+let currentTlPos = 0;
+let clipCache = [];
+let lastTickTime = 0;
+
 // ============================================
 // WEBSOCKET HANDLING
 // ============================================
 
-ws.onopen = () => {
+function handleWsOpen() {
     console.log('WebSocket connection established');
+    wsReconnectAttempts = 0; // Reset reconnect counter on successful connection
     appendConsoleLine('[SYSTEM] WebSocket connected. Engine ready.', 'system');
-};
+    
+    // Request current queue state from server (which has active prompt_ids)
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'request_queue_state' }));
+    }
+    
+    // If we have a restored queue from localStorage, start processing it
+    if (globalGenerationQueue.filter(i => i.status === 'pending').length > 0) {
+        appendConsoleLine('🚀 Checking persisted queue items...', 'system');
+        setTimeout(() => checkGlobalQueue(), 1500);
+    }
+}
 
-ws.onmessage = (event) => {
+function handleWsMessage(event) {
     try {
         const message = JSON.parse(event.data);
         console.log('Mensaje del servidor:', message.type, message);
@@ -50,9 +154,16 @@ ws.onmessage = (event) => {
             if (currentExecutingId) {
                 const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
                 if (item && progressText) {
-                    const modeLabel = item.imageFilename ? 'I2V' : (item.type === 'storyboard' ? 'FLUX' : 'T2V');
-                    const stepInfo = message.value && message.max ? ` • Step ${message.value}/${message.max}` : '';
-                    progressText.textContent = `⚡ [${modeLabel}] ${item.type === 'storyboard' ? 'Drawing' : 'Animating'}: ${item.prompt.substring(0, 40)}...${stepInfo}`;
+                    // Verificar si el progreso es realmente para nuestro item
+                    const isOurProgress = !message.prompt_id || !item.prompt_id || message.prompt_id === item.prompt_id;
+                    if (!isOurProgress) {
+                        const queueRemaining = globalGenerationQueue.filter(i => i.status === 'pending' && i.batchId === item.batchId).length;
+                        progressText.textContent = `⏳ En cola (${queueRemaining} adelante): ${item.prompt.substring(0, 30)}...`;
+                    } else {
+                        const modeLabel = item.imageFilename ? 'I2V' : (item.type === 'storyboard' ? 'FLUX' : 'T2V');
+                        const stepInfo = message.value && message.max ? ` • Step ${message.value}/${message.max}` : '';
+                        progressText.textContent = `⚡ [${modeLabel}] ${item.type === 'storyboard' ? 'Drawing' : 'Animating'}: ${item.prompt.substring(0, 40)}...${stepInfo}`;
+                    }
                 }
             }
         }
@@ -61,9 +172,19 @@ ws.onmessage = (event) => {
             if (currentExecutingId && progressText) {
                 const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
                 if (item) {
-                    item.prompt_id = message.prompt_id; // Link client ID with ComfyUI prompt_id
+                    // Solo vincular prompt_id si aun no se ha vinculado via prompt_queued
+                    // o si el mensaje es realmente para este item
+                    if (!item.prompt_id) {
+                        item.prompt_id = message.prompt_id;
+                    } else if (item.prompt_id !== message.prompt_id) {
+                        // Este mensaje 'executing' es para OTRO prompt en la cola de ComfyUI.
+                        // No pisar nuestro prompt_id, pero mostrar que esta en espera.
+                        const queueRemaining = globalGenerationQueue.filter(i => i.status === 'pending' && i.batchId === item.batchId).length;
+                        progressText.textContent = `⏳ En cola (${queueRemaining} adelante): ${item.prompt.substring(0, 30)}...`;
+                        return;
+                    }
                     const modeLabel = item.imageFilename ? 'I2V' : (item.type === 'storyboard' ? 'FLUX' : 'T2V');
-                    progressText.textContent = `⚡ [${modeLabel}] Executing node ${message.node}: ${item.prompt.substring(0, 40)}...`;
+                    progressText.textContent = `⚡ [${modeLabel}] Node ${message.node}: ${item.prompt.substring(0, 40)}...`;
                 }
             }
         }
@@ -132,6 +253,45 @@ ws.onmessage = (event) => {
         if (message.type === 'storyboard_generated') {
             handleStoryboardGenerated(message);
             loadExistingImages();
+
+            // Show toast notification
+            showToast(`🖼️ Image generated: ${(message.prompt || '').substring(0, 60)}${message.prompt?.length > 60 ? '...' : ''}`, 'success');
+
+            // Update live preview in CREATE tab (T2I panel)
+            const previewArea = document.getElementById('t2iPreview');
+            const previewImg = document.getElementById('t2iPreviewImg');
+            if (previewArea && previewImg && message.url) {
+                previewImg.src = message.url + '?t=' + Date.now();
+                previewArea.style.display = 'block';
+                // Wire View button
+                const viewBtn = document.getElementById('t2iPreviewViewBtn');
+                if (viewBtn) {
+                    viewBtn.onclick = () => {
+                        loadImageToPreviz(message.url);
+                        const tabPrevizBtn = document.getElementById('tabPrevizBtn');
+                        if (tabPrevizBtn) tabPrevizBtn.click();
+                    };
+                }
+                // Wire Copy Prompt button
+                const copyBtn = document.getElementById('t2iPreviewCopyPromptBtn');
+                if (copyBtn) {
+                    copyBtn.onclick = () => {
+                        navigator.clipboard.writeText(message.prompt || '');
+                        showToast('Prompt copied to clipboard', 'info');
+                    };
+                }
+            }
+
+            // Auto-switch right sidebar to IMAGES tab
+            const imagesTabBtn = document.querySelector('.asset-tab-btn[data-type="images"]');
+            if (imagesTabBtn) {
+                document.querySelectorAll('.asset-tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.asset-gallery-grid').forEach(g => g.classList.add('hidden'));
+                imagesTabBtn.classList.add('active');
+                const imgGallery = document.getElementById('imageGallery');
+                if (imgGallery) imgGallery.classList.remove('hidden');
+            }
+
             if (currentExecutingId || message.prompt_id) {
                 const itemIndex = globalGenerationQueue.findIndex(i =>
                     i.status !== 'completed' &&
@@ -143,8 +303,62 @@ ws.onmessage = (event) => {
                     item.status = 'completed';
                     item.resultUrl = message.url;
 
+                    // Handle FLUX images generated for WAN2.2
+                    if (message.isForWan && message.wanId) {
+                        appendConsoleLine(`🖼️ FLUX ${message.wanRole} image ready for WAN2.2: ${message.filename}`, 'system');
+                        
+                        // Find waiting WAN2.2 video items and update their image references
+                        globalGenerationQueue.forEach(q => {
+                            if (q.model === 'wan2.2' && q.status === 'waiting') {
+                                if (message.wanRole === 'start' && q.startImageId === message.wanId) {
+                                    q.startImageFilename = message.filename;
+                                    appendConsoleLine(`✅ WAN2.2 start image assigned (step ${q.wanStepIndex}): ${message.filename}`, 'debug');
+                                } else if (message.wanRole === 'end' && q.endImageId === message.wanId) {
+                                    q.endImageFilename = message.filename;
+                                    appendConsoleLine(`✅ WAN2.2 end image assigned (step ${q.wanStepIndex}): ${message.filename}`, 'debug');
+                                }
+                                
+                                // CADENA CONTINUA: Si es un paso continuo (no el primero) y tiene prevEndImageId,
+                                // usar la imagen end del paso anterior como start
+                                if (q.isChainContinued && q.prevEndImageId && !q.startImageFilename) {
+                                    // Buscar el filename de la imagen end del paso anterior
+                                    const prevEndItem = globalGenerationQueue.find(prev => 
+                                        prev.id === q.prevEndImageId && prev.status === 'completed'
+                                    );
+                                    if (prevEndItem && prevEndItem.resultUrl) {
+                                        q.startImageFilename = prevEndItem.resultFilename || 
+                                            prevEndItem.resultUrl.split('/').pop();
+                                        appendConsoleLine(`🔗 CADENA: Usando fin del paso anterior como inicio: ${q.startImageFilename}`, 'system');
+                                    }
+                                }
+                                
+                                // If both images are ready, activate the WAN2.2 generation
+                                if (q.startImageFilename && q.endImageFilename) {
+                                    q.status = 'pending';
+                                    appendConsoleLine(`🚀 WAN2.2 video generation activated (step ${q.wanStepIndex})`, 'system');
+                                }
+                            }
+                        });
+                        
+                        // CADENA CONTINUA: Si es una imagen 'end', buscar el siguiente paso WAN2.2
+                        // y asignarle esta imagen como su 'start'
+                        if (message.wanRole === 'end') {
+                            const currentStepIndex = message.wanStepIndex;
+                            const nextWanStep = globalGenerationQueue.find(q => 
+                                q.model === 'wan2.2' && 
+                                q.wanStepIndex === currentStepIndex + 1 &&
+                                q.isChainContinued &&
+                                q.status === 'waiting'
+                            );
+                            if (nextWanStep && !nextWanStep.startImageFilename) {
+                                nextWanStep.startImageFilename = message.filename;
+                                nextWanStep.prevEndImageFilename = message.filename;
+                                appendConsoleLine(`🔗 CADENA CONTINUA: Paso ${currentStepIndex + 1} usa fin del paso ${currentStepIndex} como inicio`, 'system');
+                            }
+                        }
+                    }
                     // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
-                    if (item.autoVideo) {
+                    else if (item.autoVideo) {
                         // Use videoPrompt if specifically set for this I2V step, else fallback to storyboard prompt
                         const generationPrompt = item.videoPrompt || message.prompt || item.prompt;
                         appendConsoleLine(`🎬 Auto-transitioning to Video for: ${generationPrompt.substring(0, 30)}...`, 'system');
@@ -190,10 +404,259 @@ ws.onmessage = (event) => {
                 }
             }
         }
+
+        // QUEUE STATE SYNC (from server, after reconnection)
+        if (message.type === 'queue_state') {
+            console.log(`📡 Received queue state from server: ${message.activePrompts?.length || 0} active prompts, ComfyUI connected: ${message.comfyConnected}`);
+            if (message.activePrompts && message.activePrompts.length > 0) {
+                // Mark items in our queue that match active server prompts
+                message.activePrompts.forEach(sp => {
+                    const localItem = globalGenerationQueue.find(i => i.prompt_id === sp.prompt_id);
+                    if (localItem) {
+                        // Server still has this prompt active — it's really generating
+                        if (localItem.status !== 'generating') {
+                            localItem.status = 'generating';
+                            localItem.generationStartTime = Date.now();
+                        }
+                    }
+                });
+                updateGlobalQueueUI();
+            }
+            // Sync ComfyUI status dot
+            if (message.comfyConnected) {
+                const statusDot = document.getElementById('comfyStatusDot');
+                if (statusDot) {
+                    statusDot.className = 'status-dot connected';
+                    statusDot.title = 'ComfyUI Connected';
+                }
+            }
+            return;
+        }
+
+        // PROMPT_QUEUED: el servidor nos informa el prompt_id real de ComfyUI
+        if (message.type === 'prompt_queued') {
+            if (message.queueItemId) {
+                const item = globalGenerationQueue.find(qi => qi.id === message.queueItemId);
+                if (item) {
+                    item.prompt_id = message.prompt_id;
+                    console.log(`🔗 Queue item ${message.queueItemId} -> ComfyUI prompt: ${message.prompt_id}`);
+                }
+            }
+            return;
+        }
+
+        // GENERATION ERROR HANDLING
+        if (message.type === 'generation_error') {
+            const errorMsg = message.error || 'Unknown generation error';
+            appendConsoleLine(`❌ ${errorMsg}`, 'error');
+            showToast(errorMsg, 'error');
+
+            // Mark the current item as failed
+            if (currentExecutingId) {
+                const itemIndex = globalGenerationQueue.findIndex(i => i.id === currentExecutingId);
+                if (itemIndex !== -1) {
+                    globalGenerationQueue[itemIndex].status = 'failed';
+                    globalGenerationQueue[itemIndex].error = errorMsg;
+                    appendConsoleLine(`⛔ Item #${itemIndex + 1} marked as failed: ${globalGenerationQueue[itemIndex].prompt.substring(0, 40)}`, 'error');
+                }
+            }
+
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 1500);
+        }
+
+        // TIMEOUT HANDLER FOR QUEUE ITEMS
+        if (message.type === 'queue_timeout') {
+            const errorMsg = message.error || 'Queue item timed out';
+            appendConsoleLine(`⏰ ${errorMsg}`, 'error');
+            showToast(errorMsg, 'warning');
+
+            if (message.prompt_id) {
+                const itemIndex = globalGenerationQueue.findIndex(i => i.prompt_id === message.prompt_id);
+                if (itemIndex !== -1) {
+                    globalGenerationQueue[itemIndex].status = 'failed';
+                    globalGenerationQueue[itemIndex].error = errorMsg;
+                }
+            }
+
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 1500);
+        }
     } catch (e) {
         console.error('Error procesando mensaje WebSocket:', e);
     }
-};
+}
+
+// WebSocket reconnection handlers
+function handleWsClose() {
+    console.log(`WebSocket disconnected. Reconnecting in ${Math.min(1000 * Math.pow(2, wsReconnectAttempts), MAX_WS_RECONNECT_DELAY)}ms...`);
+    appendConsoleLine('[SYSTEM] WebSocket disconnected. Reconnecting...', 'warning');
+    
+    // Save queue state so pending items aren't lost
+    saveQueueState();
+    
+    // Reset generation state to avoid permanent lock
+    if (isGeneratingGlobal) {
+        isGeneratingGlobal = false;
+        currentExecutingId = null;
+        updateGlobalQueueUI();
+    }
+    
+    // Schedule reconnection with exponential backoff
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), MAX_WS_RECONNECT_DELAY);
+    wsReconnectAttempts++;
+    wsReconnectTimer = setTimeout(connectWebSocket, delay);
+}
+
+function handleWsError() {
+    console.error('WebSocket error');
+    // onclose will fire after onerror, so the reconnect is handled there
+    if (ws) {
+        ws.close();
+    }
+}
+
+function connectWebSocket() {
+    // Clean up any existing connection
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+    if (ws) {
+        try { ws.close(); } catch(e) {}
+        ws = null;
+    }
+    
+    ws = new WebSocket(`ws://${window.location.hostname}:${window.location.port}`);
+    ws.onopen = handleWsOpen;
+    ws.onmessage = handleWsMessage;
+    ws.onclose = handleWsClose;
+    ws.onerror = handleWsError;
+}
+
+// ============================================
+// TOAST NOTIFICATION SYSTEM
+// ============================================
+function showToast(text, type = 'info', duration = 7000) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast-item toast-${type}`;
+
+    const iconMap = {
+        error: '❌',
+        success: '✅',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    const titleMap = {
+        error: 'Error',
+        success: 'Success',
+        warning: 'Warning',
+        info: 'Info'
+    };
+
+    toast.innerHTML = `
+        <div class="toast-icon">${iconMap[type] || 'ℹ️'}</div>
+        <div class="toast-content">
+            <div class="toast-title">${titleMap[type] || 'Info'}</div>
+            <div class="toast-text">${text}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+
+    container.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    // Auto-dismiss
+    const timeoutId = setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    }, duration);
+
+    // Click to dismiss immediately
+    toast.addEventListener('click', (e) => {
+        if (e.target.closest('.toast-close')) return;
+        clearTimeout(timeoutId);
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    });
+}
+
+// ============================================
+// GENERATION TIMEOUT CHECK — NO FALSE TIMEOUTS
+// ============================================
+const GENERATION_WARN_MINUTES = 10;  // Warn after 10 minutes
+const GENERATION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour — real timeout, not a false positive
+
+function checkGenerationTimeouts() {
+    const now = Date.now();
+    let foundTimeout = false;
+    globalGenerationQueue.forEach(item => {
+        if (item.status === 'generating' && item.generationStartTime) {
+            const elapsed = now - item.generationStartTime;
+            const elapsedMin = Math.round(elapsed / 60000);
+
+            // Show warning at 10 min but DON'T kill the generation
+            if (!item._timeoutWarning && elapsed > GENERATION_WARN_MINUTES * 60 * 1000) {
+                item._timeoutWarning = true;
+                const msg = `⚠️ Generation taking long (${elapsedMin} min): ${item.prompt.substring(0, 40)}...`;
+                appendConsoleLine(msg, 'warning');
+                showToast(msg, 'warning', 10000);
+                // Update progress text to show elapsed time
+                if (progressText) {
+                    progressText.textContent = `⏳ [${elapsedMin} min] Still generating: ${item.prompt.substring(0, 40)}...`;
+                }
+            }
+
+            // Update elapsed time display every 5 minutes after warning
+            if (item._timeoutWarning && item._lastWarnedMinute !== elapsedMin && elapsedMin % 5 === 0) {
+                item._lastWarnedMinute = elapsedMin;
+                appendConsoleLine(`⏳ Still processing (${elapsedMin} min): ${item.prompt.substring(0, 40)}...`, 'warning');
+                // Keep progress bar showing something
+                if (progressText) {
+                    progressText.textContent = `⏳ [${elapsedMin} min] Still generating: ${item.prompt.substring(0, 40)}...`;
+                }
+            }
+
+            // Only HARD FAIL if exceeding the very generous 1-hour timeout
+            if (elapsed > GENERATION_TIMEOUT_MS) {
+                item.status = 'failed';
+                foundTimeout = true;
+                item.error = `⏰ Hard timeout: generation exceeded 60 minutes`;
+                appendConsoleLine(`⏰ Hard timeout: ${item.prompt.substring(0, 40)}... (${elapsedMin} min)`, 'error');
+                showToast(`Generation hard timeout after ${elapsedMin} min`, 'error');
+            }
+        }
+    });
+
+    if (foundTimeout) {
+        isGeneratingGlobal = false;
+        currentExecutingId = null;
+        updateGlobalQueueUI();
+        saveQueueState();
+        setTimeout(() => checkGlobalQueue(), 1500);
+    } else if (!isGeneratingGlobal) {
+        updateGlobalQueueUI();
+        checkGlobalQueue();
+    }
+}
+
+// Run timeout check every 30 seconds
+setInterval(checkGenerationTimeouts, 30000);
 
 // ============================================
 // IMAGE UPLOAD HANDLING
@@ -250,6 +713,63 @@ async function handleImageFile(file) {
         uploadStatus.textContent = '❌ Error';
         uploadStatus.style.color = '#ef4444';
     }
+}
+
+async function handleStepImageFile(file, div) {
+    const uploadArea = div.querySelector('.step-image-upload-area');
+    const filenameInput = div.querySelector('.step-uploaded-filename');
+    
+    const reader = new FileReader();
+    reader.onload = (e) => showStepImagePreview(e.target.result, file.name, div);
+    reader.readAsDataURL(file);
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+        const result = await response.json();
+
+        if (result.success) {
+            filenameInput.value = result.filename;
+            appendConsoleLine(`✅ Step image uploaded: ${result.filename}`, 'debug');
+        }
+    } catch (error) {
+        appendConsoleLine(`❌ Step image upload error: ${error.message}`, 'error');
+    }
+}
+
+function showStepImagePreview(dataUrl, filename, div) {
+    const uploadArea = div.querySelector('.step-image-upload-area');
+    uploadArea.classList.add('has-image');
+    uploadArea.innerHTML = `
+        <div class="step-image-preview-container">
+            <img src="${dataUrl}" alt="Preview">
+            <div class="step-image-preview-info" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); padding: 5px; font-size: 0.6em; color: white;">
+                ${filename}
+            </div>
+            <button class="step-remove-image-btn" title="Remove image">×</button>
+        </div>
+    `;
+    
+    uploadArea.querySelector('.step-remove-image-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeStepImage(div);
+    });
+}
+
+function removeStepImage(div) {
+    const uploadArea = div.querySelector('.step-image-upload-area');
+    const filenameInput = div.querySelector('.step-uploaded-filename');
+    filenameInput.value = '';
+    uploadArea.classList.remove('has-image');
+    uploadArea.innerHTML = `
+        <div class="step-upload-placeholder">
+            <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px; color: #64748b; margin-bottom: 5px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p style="font-size: 0.7em; color: #94a3b8; margin: 0;">Click or drop image</p>
+        </div>
+    `;
 }
 
 function showImagePreview(dataUrl, filename) {
@@ -316,7 +836,8 @@ function getProjectData() {
             sequence: Array.from(document.querySelectorAll('.prompt-item')).map(el => ({
                 prompt: el.querySelector('.image-prompt')?.value || '',
                 videoPrompt: el.querySelector('.video-prompt')?.value || '',
-                mode: el.querySelector('.step-mode-select-compact')?.value || 't2i2v'
+                mode: el.querySelector('.step-mode-select-compact')?.value || 't2i2v',
+                imageFilename: el.querySelector('.step-uploaded-filename')?.value || ''
             })),
             autoAssemble: document.getElementById('autoAssembleCheck')?.checked || false,
             autoRender: document.getElementById('autoRenderCheck')?.checked || false
@@ -539,7 +1060,7 @@ function renderProjectTabs() {
     });
 }
 
-async function saveProjectToFile(name, dataOverride = null) {
+async function saveProjectToFile(name, dataOverride = null, silent = false) {
     const data = dataOverride || getProjectData();
     try {
         const response = await fetch('/api/projects/save', {
@@ -549,7 +1070,9 @@ async function saveProjectToFile(name, dataOverride = null) {
         });
         const result = await response.json();
         if (result.success) {
-            appendConsoleLine(`✅ Project "${name}" saved to storage.`, 'system');
+            if (!silent) {
+                appendConsoleLine(`✅ Project "${name}" saved to storage.`, 'system');
+            }
             loadProjectsList();
         }
     } catch (e) {
@@ -797,12 +1320,15 @@ function updateGlobalQueueUI() {
     // Update completed history
     updateCompletedHistory(completedItems);
 
-    // Calculate counters for images and videos (including waiting items)
-    const imgItems = activeItems.filter(i => i.type === 'storyboard');
-    const videoItems = activeItems.filter(i => i.type !== 'storyboard');
-    const imgCompleted = globalGenerationQueue.filter(i => i.type === 'storyboard' && i.status === 'completed').length;
-    const videoCompleted = globalGenerationQueue.filter(i => i.type !== 'storyboard' && i.status === 'completed').length;
+    // Calculate counters for images, videos, and WAN2.2 (including waiting items)
+    const imgItems = activeItems.filter(i => i.type === 'storyboard' || i.type === 'flux_for_wan');
+    const wanItems = activeItems.filter(i => i.model === 'wan2.2');
+    const videoItems = activeItems.filter(i => i.type !== 'storyboard' && i.type !== 'flux_for_wan' && i.model !== 'wan2.2');
+    const imgCompleted = globalGenerationQueue.filter(i => (i.type === 'storyboard' || i.type === 'flux_for_wan') && i.status === 'completed').length;
+    const wanCompleted = globalGenerationQueue.filter(i => i.model === 'wan2.2' && i.status === 'completed').length;
+    const videoCompleted = globalGenerationQueue.filter(i => i.type !== 'storyboard' && i.type !== 'flux_for_wan' && i.model !== 'wan2.2' && i.status === 'completed').length;
     const totalImg = imgItems.length + imgCompleted;
+    const totalWan = wanItems.length + wanCompleted;
     const totalVideo = videoItems.length + videoCompleted;
 
     if (queueCount) queueCount.textContent = activeItems.length;
@@ -825,7 +1351,7 @@ function updateGlobalQueueUI() {
         queueList.parentElement.insertBefore(countersDiv, queueList);
     }
     
-    if (totalImg > 0 || totalVideo > 0) {
+    if (totalImg > 0 || totalVideo > 0 || totalWan > 0) {
         countersDiv.style.display = 'flex';
         countersDiv.innerHTML = '';
         
@@ -834,6 +1360,13 @@ function updateGlobalQueueUI() {
             imgCounter.style.cssText = 'color: #818cf8;';
             imgCounter.innerHTML = `🖼️ IMG remaining: <span style="color: #f59e0b;">${imgItems.length}/${totalImg}</span>`;
             countersDiv.appendChild(imgCounter);
+        }
+        
+        if (totalWan > 0) {
+            const wanCounter = document.createElement('div');
+            wanCounter.style.cssText = 'color: #a855f7;';
+            wanCounter.innerHTML = `🎬 WAN2.2 remaining: <span style="color: #f59e0b;">${wanItems.length}/${totalWan}</span>`;
+            countersDiv.appendChild(wanCounter);
         }
         
         if (totalVideo > 0) {
@@ -867,13 +1400,41 @@ function updateGlobalQueueUI() {
         let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
         if (item.type === 'storyboard') modeLabel = 'T2I';
         if (item.type === 'export') modeLabel = 'EXPORT';
-        if (item.status === 'waiting' && item.type !== 'export') modeLabel = 'I2V (waiting for image)';
+        if (item.model === 'wan2.2') {
+            const chainInfo = item.isChainContinued ? '🔗' : '🔥';
+            modeLabel = `WAN2.2 ${chainInfo}`;
+        }
+        if (item.type === 'flux_for_wan') modeLabel = `FLUX ${item.wanRole === 'start' ? '🔥' : '🔗'} (${item.wanRole})`;
+        if (item.status === 'waiting' && item.type !== 'export') {
+            if (item.model === 'wan2.2') {
+                const hasStart = item.startImageFilename ? '✓' : (item.isChainContinued ? '🔗' : '○');
+                const hasEnd = item.endImageFilename ? '✓' : '○';
+                const chainStatus = item.isChainContinued ? '🔗' : '🔥';
+                modeLabel = `WAN2.2 ${chainStatus} (start:${hasStart} end:${hasEnd})`;
+            } else {
+                modeLabel = 'I2V (waiting for image)';
+            }
+        }
 
         const progressIndicator = item.status === 'generating' ?
             '<span style="color: #f59e0b; animation: pulse 1s infinite;">⚡ PROCESSING</span>' :
             item.status === 'waiting' ?
             '<span style="color: #64748b;">⏸️ WAITING</span>' :
+            item.status === 'failed' ?
+            '<span style="color: #ef4444;">❌ FAILED</span>' :
             '<span style="color: #94a3b8;">⏳ QUEUED</span>';
+
+        // Show error detail for failed items
+        let errorHtml = '';
+        if (item.status === 'failed' && item.error) {
+            errorHtml = `<div class="error-detail">${item.error}</div>`;
+        }
+
+        // Apply error styling
+        if (item.status === 'failed') {
+            div.style.borderLeftColor = '#ef4444';
+            div.style.background = 'rgba(127, 29, 29, 0.3)';
+        }
 
         // Show batch info if available - get batch name from project
         let batchInfo = '';
@@ -893,14 +1454,18 @@ function updateGlobalQueueUI() {
             <div style="font-size: 0.9em; line-height: 1.5; color: #f1f5f9; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                 ${item.prompt}
             </div>
+            ${errorHtml}
         `;
         queueList.appendChild(div);
     });
+    
+    // Persist queue state to localStorage after every UI update
+    saveQueueState();
 }
 
 function checkGlobalQueue() {
     if (isGeneratingGlobal) return;
-    
+
     // Get all pending items
     const pendingItems = globalGenerationQueue.filter(item => item.status === 'pending');
     if (pendingItems.length === 0) return;
@@ -910,10 +1475,12 @@ function checkGlobalQueue() {
     pendingItems.forEach(item => {
         const batchKey = item.batchId || 'no_batch';
         if (!batchGroups[batchKey]) {
-            batchGroups[batchKey] = { images: [], videos: [], exports: [] };
+            batchGroups[batchKey] = { images: [], fluxForWan: [], videos: [], wan22Waiting: [], exports: [] };
         }
         if (item.type === 'storyboard') {
             batchGroups[batchKey].images.push(item);
+        } else if (item.type === 'flux_for_wan') {
+            batchGroups[batchKey].fluxForWan.push(item);
         } else if (item.type === 'export') {
             batchGroups[batchKey].exports.push(item);
         } else {
@@ -921,23 +1488,29 @@ function checkGlobalQueue() {
         }
     });
     
-    // Find the first batch (chronologically) and process images first, then videos, then exports
+    // Find the first batch (chronologically) and process in order:
+    // 1. FLUX images for WAN2.2, 2. Regular images, 3. Videos (incl. WAN2.2 when pending), 4. Exports
     const sortedBatchIds = Object.keys(batchGroups).sort();
     let nextItem = null;
     
     for (const batchId of sortedBatchIds) {
         const batch = batchGroups[batchId];
-        // First, process all images in this batch
+        // First, process FLUX images for WAN
+        if (batch.fluxForWan.length > 0) {
+            nextItem = batch.fluxForWan[0];
+            break;
+        }
+        // Then, process regular images
         if (batch.images.length > 0) {
             nextItem = batch.images[0];
             break;
         }
-        // Then, process all videos in this batch
+        // Then, process videos
         if (batch.videos.length > 0) {
             nextItem = batch.videos[0];
             break;
         }
-        // Finally, process exports for this batch
+        // Finally, process exports
         if (batch.exports.length > 0) {
             nextItem = batch.exports[0];
             break;
@@ -947,6 +1520,7 @@ function checkGlobalQueue() {
     if (!nextItem) return;
 
     nextItem.status = 'generating';
+    nextItem.generationStartTime = Date.now(); // Track start time for timeout detection
     currentExecutingId = nextItem.id;
     isGeneratingGlobal = true;
     updateGlobalQueueUI();
@@ -971,6 +1545,36 @@ function checkGlobalQueue() {
             updateGlobalQueueUI();
             setTimeout(() => checkGlobalQueue(), 1000);
         }
+    } else if (nextItem.type === 'flux_for_wan') {
+        // Generate FLUX image for WAN2.2
+        const message = {
+            type: 'generarStoryboard',
+            prompt: nextItem.prompt,
+            params: nextItem.params,
+            batchId: nextItem.batchId,
+            batchName: batchName,
+            isForWan: true,
+            wanRole: nextItem.wanRole,
+            wanId: nextItem.id,
+            wanStepIndex: nextItem.wanStepIndex,
+            queueItemId: nextItem.id
+        };
+        ws.send(JSON.stringify(message));
+        appendConsoleLine(`>> Generating FLUX image for WAN2.2 (${nextItem.wanRole}): ${nextItem.prompt.substring(0, 30)}...`, 'system');
+    } else if (nextItem.model === 'wan2.2') {
+        // Generate WAN2.2 video
+        const message = {
+            type: 'generarWan22',
+            prompt: nextItem.prompt,
+            params: nextItem.params,
+            startImageFilename: nextItem.startImageFilename,
+            endImageFilename: nextItem.endImageFilename,
+            batchId: nextItem.batchId,
+            batchName: batchName,
+            queueItemId: nextItem.id
+        };
+        ws.send(JSON.stringify(message));
+        appendConsoleLine(`>> Launching WAN2.2 video: ${nextItem.prompt.substring(0, 30)}...`, 'system');
     } else {
         const message = {
             type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
@@ -979,7 +1583,8 @@ function checkGlobalQueue() {
             imageFilename: nextItem.imageFilename,
             storyboardIndex: nextItem.storyboardIndex,
             batchId: nextItem.batchId,
-            batchName: batchName
+            batchName: batchName,
+            queueItemId: nextItem.id
         };
         ws.send(JSON.stringify(message));
         appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
@@ -1015,23 +1620,119 @@ function handleSequencerGenerate() {
     const batchId = 'batch_' + Date.now();
     const globalImagePrompt = document.getElementById('globalImagePrompt')?.value.trim() || '';
     const globalVideoPrompt = document.getElementById('globalVideoPrompt')?.value.trim() || '';
+    
+    // Variable para rastrear la cadena continua de imágenes WAN2.2
+    // Cada paso WAN2.2 (excepto el primero) usa el final del anterior como su inicio
+    let previousWanEndImageId = null;
+    let previousWanEndImageFilename = null;
 
     promptItems.forEach((item, index) => {
         const tImg = item.querySelector('.image-prompt');
         const tVid = item.querySelector('.video-prompt');
         const modeSelect = item.querySelector('.step-mode-select-compact');
+        const modelSelect = item.querySelector('.step-model-select');
+        const outputSelect = item.querySelector('.step-output-select');
+        const wanFluxCheck = item.querySelector('.wan-flux-images-check');
         
         const valImg = tImg?.value.trim();
         const valVid = tVid?.value.trim();
         const mode = modeSelect?.value || 't2i2v';
+        const model = modelSelect?.value || 'ltx2';
+        const outputType = outputSelect?.value || 'video';
+        const useFluxForWanImages = wanFluxCheck?.checked ?? true;
 
         if (valImg || valVid) {
             // Global style prefix
             const finalImgPrompt = valImg ? (globalImagePrompt ? `${globalImagePrompt}, ${valImg}` : valImg) : '';
             const finalVidPrompt = valVid ? (globalVideoPrompt ? `${globalVideoPrompt}, ${valVid}` : valVid) : '';
 
-            if (mode === 't2i') {
-                addToStoryboardQueue(finalImgPrompt || finalVidPrompt, { batchId, storyboardIndex: index, autoOverlap });
+            if (mode === 't2i' || model === 'flux' || outputType === 'image') {
+                // Image generation with FLUX
+                addToStoryboardQueue(finalImgPrompt || finalVidPrompt, { 
+                    batchId, 
+                    storyboardIndex: index, 
+                    autoOverlap: autoOverlapRatio,
+                    model: 'flux'
+                });
+            } else if (mode === 'wan2.2' || mode === 'chainvideo' || model === 'wan2.2') {
+                // WAN2.2 I2V with FLUX-generated start/end images
+                // CADENA CONTINUA: Cada video usa el final del anterior como su inicio
+                const isFirstWanStep = index === 0 || !previousWanEndImageId;
+                const startImageId = isFirstWanStep ? 'wan_start_' + Date.now() + '_' + index + Math.random() : null;
+                const endImageId = 'wan_end_' + Date.now() + '_' + index + Math.random();
+                
+                if (isFirstWanStep) {
+                    // Primer paso: generar ambas imágenes (inicio y fin)
+                    globalGenerationQueue.push({
+                        id: startImageId,
+                        prompt: finalImgPrompt,
+                        type: 'flux_for_wan',
+                        params: {},
+                        status: 'pending',
+                        projectId: activeProjectId,
+                        batchId,
+                        isForWan: true,
+                        wanRole: 'start',
+                        wanStepIndex: index,
+                        isChainStart: true
+                    });
+                }
+                
+                // Siempre generar imagen de fin (será el inicio del siguiente)
+                globalGenerationQueue.push({
+                    id: endImageId,
+                    prompt: finalVidPrompt || finalImgPrompt,
+                    type: 'flux_for_wan',
+                    params: {},
+                    status: 'pending',
+                    projectId: activeProjectId,
+                    batchId,
+                    isForWan: true,
+                    wanRole: 'end',
+                    wanStepIndex: index,
+                    isChainEnd: true,
+                    prevStartImageId: startImageId // Referencia para el primer paso
+                });
+                
+                // Add WAN2.2 video generation
+                globalGenerationQueue.push({
+                    id: Date.now() + Math.random() + 0.5,
+                    prompt: finalVidPrompt || finalImgPrompt,
+                    params: {
+                        videoWidth: parseInt(document.getElementById('videoWidth').value),
+                        videoHeight: parseInt(document.getElementById('videoHeight').value),
+                        videoLength: parseInt(document.getElementById('videoLength').value),
+                        samplerSteps: parseInt(document.getElementById('samplerSteps').value),
+                        cfgScale: parseFloat(document.getElementById('cfgScale').value),
+                        refStrength: parseFloat(document.getElementById('refStrength').value),
+                        seed: document.getElementById('randomSeed').checked ? -1 : parseInt(document.getElementById('seed').value)
+                    },
+                    model: 'wan2.2',
+                    useFluxImages: useFluxForWanImages,
+                    startImageId: isFirstWanStep ? startImageId : null, // null = usar end del anterior
+                    endImageId: endImageId,
+                    prevEndImageId: previousWanEndImageId, // Referencia al final del paso anterior
+                    wanStepIndex: index,
+                    isChainContinued: !isFirstWanStep,
+                    status: 'waiting',
+                    projectId: activeProjectId,
+                    isAutoAssemble,
+                    isAutoRender,
+                    batchId,
+                    autoOverlap: autoOverlapRatio
+                });
+                
+                // Guardar referencia para el siguiente paso
+                previousWanEndImageId = endImageId;
+            } else if (mode === 'i2v') {
+                const stepImageFilename = item.querySelector('.step-uploaded-filename')?.value;
+                addToQueue(finalVidPrompt || finalImgPrompt, stepImageFilename, { 
+                    isAutoAssemble, 
+                    isAutoRender, 
+                    batchId, 
+                    autoOverlap: autoOverlapRatio, 
+                    model 
+                });
             } else if (mode === 't2i2v') {
                 const storyboardId = 'sb_' + Date.now() + '_' + index + Math.random();
                 
@@ -1071,7 +1772,7 @@ function handleSequencerGenerate() {
                 });
             } else {
                 // Text to Video directly (t2v)
-                addToQueue(finalVidPrompt || finalImgPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap: autoOverlapRatio });
+                addToQueue(finalVidPrompt || finalImgPrompt, null, { isAutoAssemble, isAutoRender, batchId, autoOverlap: autoOverlapRatio, model });
             }
             addedCount++;
         }
@@ -1086,7 +1787,9 @@ function handleSequencerGenerate() {
     appendConsoleLine(`🎬 Added ${addedCount} prompts to generation queue`, 'system');
 
     // Create a NEW PROJECT for this Batch (Clean of storyboard and timeline previos)
-    const batchName = `Batch ${new Date().toLocaleTimeString()}`;
+    // Use pending batch name from magic prompt if available, otherwise use timestamp
+    const batchName = window.pendingBatchName || `Batch ${new Date().toLocaleTimeString()}`;
+    window.pendingBatchName = null; // Clear after use
     const freshData = getProjectData();
     freshData.storyboard = [];
     freshData.timeline = [];
@@ -1114,8 +1817,13 @@ function handleSequencerGenerate() {
         appendConsoleLine(`📦 Auto-render export added to queue for batch: ${batchName}`, 'system');
     }
 
-    // Force queue refesh to correctly show the newest batch project association
+    // Force queue refresh to correctly show the newest batch project association
     updateGlobalQueueUI();
+
+    appendConsoleLine(`🚀 Batch "${batchName}" queued — ${addedCount} step(s). Starting generation engine...`, 'system');
+
+    // Kick off the generation engine directly
+    checkGlobalQueue();
 
     // Redirigir a Stage
     document.getElementById('tabOutputBtn').click();
@@ -1125,7 +1833,42 @@ document.getElementById('addPromptButton')?.addEventListener('click', () => {
     addPromptStep();
 });
 
-function addPromptStep(val = '', mode = 't2i2v') {
+// Workflow definitions
+const WORKFLOW_CONFIG = {
+    t2i: { name: '🖼️ T2I', model: 'flux', output: 'image', desc: 'Text to Image with FLUX' },
+    t2v: { name: '🎬 T2V', model: 'ltx2', output: 'video', desc: 'Text to Video direct with LTX-2' },
+    t2i2v: { name: '🔄 T2I→I2V', model: 'ltx2', output: 'video', desc: 'Image then Video with LTX-2' },
+    i2v: { name: '📸 I2V', model: 'ltx2', output: 'video', desc: 'Image to Video with manual image upload' },
+    chainvideo: { name: '🔗 CHAINVIDEO', model: 'wan2.2', output: 'video', desc: 'Linked videos with Wan2.2 (start/end images)' }
+};
+
+// Update workflow info display
+function updateWorkflowInfo() {
+    const workflowSelect = document.getElementById('workflowSelect');
+    const workflowInfo = document.getElementById('workflowInfo');
+    if (workflowSelect && workflowInfo) {
+        const workflow = workflowSelect.value;
+        const config = WORKFLOW_CONFIG[workflow];
+        workflowInfo.textContent = config?.desc || '';
+    }
+}
+
+// Generation Line Add Step Button
+document.getElementById('addGenerationLineBtn')?.addEventListener('click', () => {
+    const workflowSelect = document.getElementById('workflowSelect');
+    const selectedWorkflow = workflowSelect?.value || 't2v';
+    
+    addPromptStep('', selectedWorkflow);
+    
+    // Scroll to the new step
+    const container = document.getElementById('promptSequence');
+    if (container) {
+        const newStep = container.lastElementChild;
+        if (newStep) newStep.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+
+function addPromptStep(val = '', mode = 't2v') {
     const container = document.getElementById('promptSequence');
     if (!container) return;
 
@@ -1133,9 +1876,11 @@ function addPromptStep(val = '', mode = 't2i2v') {
     let promptImg = '';
     let promptVid = '';
     
+    let stepImage = '';
     if (typeof val === 'object' && val !== null) {
         promptImg = val['PROMPT IMAGE'] || val.promptImage || val.prompt || '';
         promptVid = val['VIDEO IMAGE'] || val.videoImage || val.video || '';
+        stepImage = val.imageFilename || '';
     } else {
         promptImg = val;
         promptVid = val;
@@ -1144,24 +1889,81 @@ function addPromptStep(val = '', mode = 't2i2v') {
     const count = container.querySelectorAll('.prompt-item').length + 1;
     const div = document.createElement('div');
     div.className = 'prompt-item';
+    
+    // Use WORKFLOW_CONFIG to determine model and output
+    const workflow = WORKFLOW_CONFIG[mode] || WORKFLOW_CONFIG['t2v'];
+    const initialModel = workflow.model;
+    const initialOutput = workflow.output;
+    const isChainVideo = mode === 'chainvideo';
+    
     div.dataset.mode = mode;
+    div.dataset.model = initialModel;
+    
     div.innerHTML = `
         <div class="prompt-header">
             <div class="prompt-header-left">
                 <div class="prompt-number">${count}</div>
                 <span class="prompt-status-text">STEP</span>
+                <span class="workflow-badge" style="font-size: 0.65em; margin-left: 8px; padding: 2px 6px; border-radius: 4px; background: ${isChainVideo ? 'rgba(168,85,247,0.2)' : 'rgba(99,102,241,0.1)'}; border: 1px solid ${isChainVideo ? '#a855f7' : 'rgba(99,102,241,0.3)'}; color: ${isChainVideo ? '#a855f7' : '#818cf8'};">${workflow.name}</span>
+                <span class="wan-chain-indicator ${isChainVideo ? '' : 'hidden'}" style="font-size: 0.65em; color: #a855f7; margin-left: 8px; padding: 2px 6px; background: rgba(168,85,247,0.1); border-radius: 4px; border: 1px solid rgba(168,85,247,0.3);">${count === 1 && isChainVideo ? '🔥 START' : '🔗 CHAIN'}</span>
             </div>
-            <div class="prompt-header-right">
-                <select class="step-mode-select-compact" title="Generation mode">
-                    <option value="t2v" ${mode === 't2v' ? 'selected' : ''}>🎬 T2V</option>
-                    <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>🖼️ T2I</option>
-                    <option value="t2i2v" ${mode === 't2i2v' ? 'selected' : ''}>🔄 T2I→I2V</option>
+            <div class="prompt-header-right" style="display: flex; gap: 8px; align-items: center;">
+                <!-- Model Display (Locked per workflow) -->
+                <span class="step-model-display" style="padding: 4px 8px; font-size: 0.75em; border-radius: 4px; border: 1px solid rgba(99,102,241,0.3); background: rgba(15,23,42,0.8); color: #e2e8f0; font-weight: 600;">
+                    ${initialModel === 'flux' ? '🖼️ FLUX' : initialModel === 'wan2.2' ? '🎬 Wan 2.2' : '🎬 LTX-2'}
+                </span>
+                <!-- Hidden selects for compatibility -->
+                <select class="step-model-select hidden" title="AI Model">
+                    <option value="ltx2" ${initialModel === 'ltx2' ? 'selected' : ''}>LTX-2</option>
+                    <option value="wan2.2" ${initialModel === 'wan2.2' ? 'selected' : ''}>Wan 2.2</option>
+                    <option value="flux" ${initialModel === 'flux' ? 'selected' : ''}>FLUX</option>
                 </select>
+                <select class="step-output-select hidden" title="Output Type">
+                    <option value="video" ${initialOutput === 'video' ? 'selected' : ''}>Video</option>
+                    <option value="image" ${initialOutput === 'image' ? 'selected' : ''}>Image</option>
+                </select>
+                <select class="step-mode-select-compact hidden" title="Generation mode">
+                    <option value="t2v" ${mode === 't2v' ? 'selected' : ''}>T2V</option>
+                    <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>T2I</option>
+                    <option value="t2i2v" ${mode === 't2i2v' ? 'selected' : ''}>T2I→I2V</option>
+                    <option value="i2v" ${mode === 'i2v' ? 'selected' : ''}>I2V</option>
+                    <option value="chainvideo" ${mode === 'chainvideo' ? 'selected' : ''}>CHAINVIDEO</option>
+                </select>
+                <button class="step-magic-btn" title="Magic Prompt (Improve with AI)" style="background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.9em; cursor: pointer; transition: all 0.2s;">🪄</button>
                 <button class="remove-prompt-btn" title="Remove prompt">×</button>
             </div>
         </div>
         <div class="prompt-content collapsed">
             <div class="prompt-inputs-container">
+                <!-- Workflow info panel -->
+                <div class="workflow-info-panel" style="background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.1); border-radius: 6px; padding: 10px; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span style="font-size: 0.75em; color: #818cf8; font-weight: 600;">⚡ Workflow:</span>
+                            <span style="font-size: 0.7em; color: #e2e8f0;">${workflow.desc}</span>
+                        </div>
+                        <div class="wan22-settings ${isChainVideo ? '' : 'hidden'}" style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-size: 0.7em; color: #a855f7; font-weight: 600;">
+                                🔗 Cadena continua activada
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step-image-upload-section hidden" style="margin-bottom: 15px;">
+                    <label style="font-size: 0.75em; color: #818cf8; font-weight: 600; display: block; margin-bottom: 8px;">REFERENCE IMAGE (I2V)</label>
+                    <div class="step-image-upload-area" style="border: 2px dashed rgba(99,102,241,0.3); border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; background: rgba(15, 23, 42, 0.4); transition: all 0.2s;">
+                        <div class="step-upload-placeholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px; color: #64748b; margin-bottom: 5px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <p style="font-size: 0.7em; color: #94a3b8; margin: 0;">Click or drop image</p>
+                        </div>
+                    </div>
+                    <input type="file" class="step-image-input hidden" accept="image/*">
+                    <input type="hidden" class="step-uploaded-filename">
+                </div>
+                
                 <div class="prompt-split-label image" id="labelImg_${count}">
                     <span>PROMPT IMAGE (DESCRIPTION)</span>
                 </div>
@@ -1180,36 +1982,98 @@ function addPromptStep(val = '', mode = 't2i2v') {
     const content = div.querySelector('.prompt-content');
     const expandBtn = div.querySelector('.expand-prompt-btn');
     const modeSelect = div.querySelector('.step-mode-select-compact');
+    const modelSelect = div.querySelector('.step-model-select');
+    const outputSelect = div.querySelector('.step-output-select');
+    const wanSettings = div.querySelector('.wan22-settings');
+    const chainIndicator = div.querySelector('.wan-chain-indicator');
     const tImg = div.querySelector('.image-prompt');
     const tVid = div.querySelector('.video-prompt');
     const lImg = div.querySelector('.prompt-split-label.image');
     const lVid = div.querySelector('.prompt-split-label.video');
 
     function updateVisibility() {
+        const currentModel = modelSelect.value;
         const currentMode = modeSelect.value;
-        if (currentMode === 't2i2v') {
-            lImg.style.display = 'flex';
-            tImg.style.display = 'block';
-            lVid.style.display = 'flex';
-            tVid.style.display = 'block';
-            lImg.querySelector('span').textContent = 'PROMPT IMAGE (STATIC)';
-        } else if (currentMode === 't2i') {
+        const outputType = outputSelect.value;
+        const isWan22 = currentModel === 'wan2.2' || currentMode === 'chainvideo';
+        const isI2VManual = currentMode === 'i2v';
+        
+        // Show/hide I2V Manual Upload UI
+        const stepImgUpload = div.querySelector('.step-image-upload-section');
+        if (stepImgUpload) {
+            stepImgUpload.classList.toggle('hidden', !isI2VManual);
+        }
+
+        // Show/hide WAN2.2 specific settings
+        if (wanSettings) {
+            wanSettings.classList.toggle('hidden', !isWan22);
+        }
+        
+        // Show/hide chain indicator for WAN2.2 / CHAINVIDEO
+        if (chainIndicator) {
+            chainIndicator.classList.toggle('hidden', !isWan22);
+            if (isWan22) {
+                const stepNum = parseInt(div.querySelector('.prompt-number')?.textContent || '1');
+                const isChainStart = stepNum === 1 || currentMode === 'chainvideo' && stepNum === 1;
+                if (isChainStart) {
+                    chainIndicator.textContent = '🔥 START';
+                    chainIndicator.style.background = 'rgba(168,85,247,0.2)';
+                } else {
+                    chainIndicator.textContent = '🔗 CHAIN';
+                    chainIndicator.style.background = 'rgba(168,85,247,0.1)';
+                }
+            }
+        }
+        
+        // Update visibility based on output type
+        if (outputType === 'image' || currentModel === 'flux') {
             lImg.style.display = 'flex';
             tImg.style.display = 'block';
             lVid.style.display = 'none';
             tVid.style.display = 'none';
             lImg.querySelector('span').textContent = 'PROMPT IMAGE';
         } else {
-            // T2V
-            lImg.style.display = 'none';
-            tImg.style.display = 'none';
+            // Video output
+            lImg.style.display = isI2VManual ? 'none' : 'flex';
+            tImg.style.display = isI2VManual ? 'none' : 'block';
+            
             lVid.style.display = 'flex';
-            lVid.querySelector('span').textContent = 'PROMPT VIDEO';
             tVid.style.display = 'block';
+            lImg.querySelector('span').textContent = isWan22 ? 'START IMAGE PROMPT' : 'PROMPT IMAGE (STATIC)';
+            lVid.querySelector('span').textContent = isWan22 ? 'END IMAGE PROMPT / VIDEO' : 'VIDEO IMAGE (ANIMATION & PLOT)';
+        }
+        
+        // Sync mode select for backward compatibility
+        if (currentModel === 'flux' || outputType === 'image') {
+            modeSelect.value = 't2i';
+        } else if (isWan22) {
+            modeSelect.value = currentMode === 'chainvideo' ? 'chainvideo' : 'wan2.2';
+        } else if (currentMode === 'i2v') {
+            modeSelect.value = 'i2v';
+        } else {
+            modeSelect.value = outputType === 'video' ? 't2i2v' : 't2i';
         }
     }
 
-    modeSelect.addEventListener('change', updateVisibility);
+    // Event listeners for model and output dropdowns
+    modelSelect.addEventListener('change', () => {
+        // Auto-update output type based on model
+        if (modelSelect.value === 'flux') {
+            outputSelect.value = 'image';
+        }
+        updateVisibility();
+    });
+    
+    outputSelect.addEventListener('change', () => {
+        // Auto-update model based on output type
+        if (outputSelect.value === 'image' && modelSelect.value !== 'flux') {
+            modelSelect.value = 'flux';
+        } else if (outputSelect.value === 'video' && modelSelect.value === 'flux') {
+            modelSelect.value = 'ltx2';
+        }
+        updateVisibility();
+    });
+    
     updateVisibility();
 
     // Auto-resize function
@@ -1234,7 +2098,10 @@ function addPromptStep(val = '', mode = 't2i2v') {
     if (promptImg || promptVid) setTimeout(() => { autoResize(tImg); autoResize(tVid); }, 0);
 
     header.addEventListener('click', (e) => {
-        if (e.target.closest('.step-mode-select-compact') || e.target.closest('.remove-prompt-btn')) return;
+        if (e.target.closest('.step-mode-select-compact') || 
+            e.target.closest('.step-model-select') || 
+            e.target.closest('.step-output-select') ||
+            e.target.closest('.remove-prompt-btn')) return;
         content.classList.toggle('collapsed');
         expandBtn.textContent = content.classList.contains('collapsed') ? '▼' : '▲';
     });
@@ -1250,6 +2117,87 @@ function addPromptStep(val = '', mode = 't2i2v') {
             item.querySelector('.prompt-number').textContent = idx + 1;
         });
     });
+
+    // Magic Prompt listener for step
+    const stepMagicBtn = div.querySelector('.step-magic-btn');
+    if (stepMagicBtn) {
+        stepMagicBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const currentMode = modeSelect.value;
+            const isI2VManual = currentMode === 'i2v';
+            
+            const pImg = tImg.value.trim();
+            const pVid = tVid.value.trim();
+            
+            if (!pImg && !pVid) {
+                appendConsoleLine('⚠️ Please enter some text to improve', 'warning');
+                return;
+            }
+            
+            stepMagicBtn.textContent = '⏳';
+            stepMagicBtn.disabled = true;
+            
+            try {
+                if (pImg && !isI2VManual) {
+                    const res = await fetch('/api/improve-step-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: pImg, type: 'image' })
+                    });
+                    const data = await res.json();
+                    if (data.improvedText) {
+                        tImg.value = data.improvedText;
+                        autoResize(tImg);
+                    }
+                }
+                
+                if (pVid) {
+                    const res = await fetch('/api/improve-step-prompt', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: pVid, type: 'video' })
+                    });
+                    const data = await res.json();
+                    if (data.improvedText) {
+                        tVid.value = data.improvedText;
+                        autoResize(tVid);
+                    }
+                }
+                appendConsoleLine(`✨ Step ${count} prompts improved with AI`, 'system');
+            } catch (err) {
+                appendConsoleLine(`❌ Error improving step prompt: ${err.message}`, 'error');
+            } finally {
+                stepMagicBtn.textContent = '🪄';
+                stepMagicBtn.disabled = false;
+            }
+        });
+    }
+
+    // Image upload listeners for step
+    const stepUploadArea = div.querySelector('.step-image-upload-area');
+    const stepImageInput = div.querySelector('.step-image-input');
+    if (stepUploadArea && stepImageInput) {
+        stepUploadArea.addEventListener('click', () => {
+            if (!stepUploadArea.classList.contains('has-image')) stepImageInput.click();
+        });
+        stepImageInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleStepImageFile(e.target.files[0], div);
+        });
+        
+        stepUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); stepUploadArea.classList.add('dragover'); });
+        stepUploadArea.addEventListener('dragleave', () => stepUploadArea.classList.remove('dragover'));
+        stepUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            stepUploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) handleStepImageFile(e.dataTransfer.files[0], div);
+        });
+    }
+
+    if (stepImage) {
+        const filenameInput = div.querySelector('.step-uploaded-filename');
+        if (filenameInput) filenameInput.value = stepImage;
+        showStepImagePreview(`/uploads/${stepImage}`, stepImage, div);
+    }
 
     container.appendChild(div);
 }
@@ -1361,7 +2309,7 @@ if (confirmJsonImport) {
     });
 }
 
-function applyBatchData(data) {
+function applyBatchData(data, batchNameHint = null) {
     if (!data.steps || !Array.isArray(data.steps)) {
         throw new Error("Invalid format: 'steps' array is missing.");
     }
@@ -1380,65 +2328,90 @@ function applyBatchData(data) {
         globalVideoPromptEl.value = data.globalVideo || data.global;
     }
 
-    // Get default mode from global selector
-    const defaultMode = document.getElementById('defaultPromptMode')?.value || 't2i2v';
+    // Get current workflow from selector
+    const workflowSelect = document.getElementById('workflowSelect');
+    const currentWorkflow = workflowSelect?.value || 't2v';
 
-    // Cargar pasos
+    // Cargar pasos con el workflow actual
     data.steps.forEach(step => {
-        addPromptStep(step, defaultMode);
+        addPromptStep(step, currentWorkflow);
     });
 
-    appendConsoleLine(`✅ Applied Batch Data: ${data.steps.length} prompts added (${defaultMode} mode).`, 'system');
+    // Store batch name hint for later use
+    if (batchNameHint) {
+        window.pendingBatchName = batchNameHint;
+    }
+
+    appendConsoleLine(`✅ Applied Batch Data: ${data.steps.length} prompts added (${currentWorkflow} workflow).`, 'system');
 }
 
 const enhancePromptBtn = document.getElementById('enhancePromptBtn');
 const magicPromptBtn = document.getElementById('magicPromptBtn');
 const aiPromptArea = document.getElementById('aiPromptArea');
-const geminiModelSelect = document.getElementById('geminiModelSelect');
+const ollamaModelSelect = document.getElementById('ollamaModelSelect');
 
 if (magicPromptBtn && aiPromptArea) {
     magicPromptBtn.addEventListener('click', () => {
         aiPromptArea.classList.toggle('hidden');
         if (!aiPromptArea.classList.contains('hidden')) {
-            loadGeminiModels();
+            loadOllamaModels();
         }
     });
 }
 
-async function loadGeminiModels() {
-    if (!geminiModelSelect) return;
+async function loadOllamaModels() {
+    if (!ollamaModelSelect) return;
     try {
-        const response = await fetch('/api/list-models');
+        const response = await fetch('/api/list-ollama-models');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        if (data.models) {
-            const currentVal = geminiModelSelect.value;
-            geminiModelSelect.innerHTML = '';
-            
-            // Filtrar solo modelos que soporten generateContent
-            const activeModels = data.models.filter(m => m.supportedGenerationMethods.includes('generateContent'));
-            
-            activeModels.forEach(m => {
-                const nameShort = m.name.replace('models/', '');
-                const opt = document.createElement('option');
-                opt.value = nameShort;
-                opt.textContent = m.displayName || nameShort;
-                if (nameShort === 'gemini-flash-latest') opt.selected = true;
-                geminiModelSelect.appendChild(opt);
+        const models = data.models || [];
+        ollamaModelSelect.innerHTML = '';
+        // Add a placeholder option so user must explicitly choose a model
+        const placeholderOpt = document.createElement('option');
+        placeholderOpt.value = '';
+        placeholderOpt.disabled = true;
+        placeholderOpt.selected = true;
+        placeholderOpt.textContent = '-- Select a model --';
+        ollamaModelSelect.appendChild(placeholderOpt);
+        if (models.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No Ollama models found';
+            ollamaModelSelect.appendChild(opt);
+        } else {
+            // Sort: push embedding models to the end, text-generation models first
+            const sorted = [...models].sort((a, b) => {
+                const aIsEmbed = a.name.toLowerCase().includes('embed') || a.name.toLowerCase().includes('nomic');
+                const bIsEmbed = b.name.toLowerCase().includes('embed') || b.name.toLowerCase().includes('nomic');
+                if (aIsEmbed && !bIsEmbed) return 1;
+                if (!aIsEmbed && bIsEmbed) return -1;
+                return a.name.localeCompare(b.name);
             });
-            
-            if (currentVal && Array.from(geminiModelSelect.options).some(o => o.value === currentVal)) {
-                geminiModelSelect.value = currentVal;
-            }
+            sorted.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                ollamaModelSelect.appendChild(opt);
+            });
         }
     } catch (e) {
-        console.error('Error loading Gemini models:', e);
+        console.error('Error loading Ollama models:', e);
+        if (ollamaModelSelect) {
+            ollamaModelSelect.innerHTML = '<option value="">Ollama not available</option>';
+        }
     }
 }
 
 if (enhancePromptBtn) {
     enhancePromptBtn.addEventListener('click', async () => {
         const text = document.getElementById('manualBatchPrompt').value.trim();
-        const modelName = geminiModelSelect ? geminiModelSelect.value : 'gemini-2.5-flash';
+        const modelName = ollamaModelSelect ? ollamaModelSelect.value : 'llama3.2:latest';
+
+        if (!modelName) {
+            alert("Please select an Ollama model from the dropdown first.");
+            return;
+        }
 
         if (!text) {
             alert("Por favor escribe una idea primero.");
@@ -1447,7 +2420,7 @@ if (enhancePromptBtn) {
 
         enhancePromptBtn.disabled = true;
         enhancePromptBtn.textContent = '🪄 GENERATING BATCH WITH AI...';
-        appendConsoleLine(`🪄 Asking Gemini (${modelName}) for a cinematic batch...`, 'system');
+        appendConsoleLine(`🪄 Asking Ollama (${modelName}) for a cinematic batch...`, 'system');
 
         try {
             const response = await fetch('/api/enhance-prompt', {
@@ -1459,8 +2432,13 @@ if (enhancePromptBtn) {
             const data = await response.json();
             if (data.error) throw new Error(data.error);
 
-            applyBatchData(data);
-            appendConsoleLine(`✨ Batch sequence generated successfully.`, 'system');
+            // Extract a short name from the user's idea (first 3-5 words)
+            const words = text.trim().split(/\s+/);
+            const shortName = words.slice(0, Math.min(5, words.length)).join(' ');
+            const batchName = shortName.length > 40 ? shortName.substring(0, 40) + '...' : shortName;
+
+            applyBatchData(data, batchName);
+            appendConsoleLine(`✨ Batch sequence generated successfully: "${batchName}".`, 'system');
         } catch (err) {
             console.error('Enhance error:', err);
             appendConsoleLine(`❌ AI Enhancement failed: ${err.message}`, 'error');
@@ -1772,10 +2750,6 @@ document.querySelectorAll('.asset-tab-btn').forEach(btn => {
 // TIMELINE & EDITOR (OPTIMIZED)
 // ============================================
 
-let isPlayingTl = false;
-let tlAnimationFrame = null; // Cambio de Interval a AnimationFrame para fluidez
-let currentTlPos = 0;
-let clipCache = []; // Cache para evitar leer el DOM cada frame
 let selectedClipElement = null; // Elemento seleccionado actualmente en el timeline
 let currentTimelineMode = 'trim'; // 'trim' o 'stretch'
 let currentlyRegeneratingClipId = null; // ID del clip que se está editando en el modal de regeneración
@@ -1866,6 +2840,23 @@ if (timelineTracksContent) {
     });
 }
 
+// Auto-save debounce timer
+let autoSaveTimer = null;
+
+function triggerAutoSave() {
+    if (!activeProjectId) return;
+    
+    // Debounce: wait 2 seconds after last change before saving
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+        const project = openProjects.find(p => p.id === activeProjectId);
+        if (project) {
+            project.data = getProjectData();
+            saveProjectToFile(project.name, project.data);
+        }
+    }, 2000);
+}
+
 // Función para refrescar la cache de clips (se llama cuando cambian)
 function refreshClipCache() {
     const clips = document.querySelectorAll('.timeline-clip');
@@ -1885,7 +2876,10 @@ function refreshClipCache() {
             videoElement: video,
             isAudioOnly: !!meta.isAudioOnly
         };
-    }).sort((a, b) => b.track.localeCompare(a.track)); 
+    }).sort((a, b) => b.track.localeCompare(a.track));
+    
+    // Trigger auto-save when clips change
+    triggerAutoSave();
 }
 
 function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) {
@@ -1901,10 +2895,12 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
     const rect = trackElement.getBoundingClientRect();
     clip.style.left = `${Math.max(0, xPos - rect.left)}px`;
     
-    // Set initial width based on metadata.videoLength as fallback (121 frames = 150px = 6s)
+    // Set initial width based on metadata.videoLength as fallback
     // This will be updated once the video metadata loads
     const videoFrames = metadata.videoLength || 121;
-    const calculatedWidth = (videoFrames / 121) * 150;
+    const FPS = 24;
+    const videoDuration = videoFrames / FPS;
+    const calculatedWidth = videoDuration * 25;
     clip.style.width = `${calculatedWidth}px`;
 
     const isAudio = metadata.isAudioOnly === true;
@@ -2226,7 +3222,9 @@ function syncPreviewToTime(xPos, forceSeek = false) {
         let playbackRate = 1.0;
         const metadata = JSON.parse(c.element.dataset.metadata || '{}');
         const naturalFrames = metadata.videoLength || 121;
-        const naturalWidth = (naturalFrames / 121) * 150;
+        const FPS = 24;
+        const naturalDuration = naturalFrames / FPS;
+        const naturalWidth = naturalDuration * 25;
 
         if (currentTimelineMode === 'stretch') {
             playbackRate = naturalWidth / c.width;
@@ -2265,7 +3263,9 @@ function updateVideoPreview(video, clip, xPos, weight, forceSeek) {
     let playbackRate = 1.0;
     const metadata = JSON.parse(clip.element.dataset.metadata || '{}');
     const naturalFrames = metadata.videoLength || 121;
-    const naturalWidth = (naturalFrames / 121) * 150; // Aproximación de ancho base
+    const FPS = 24;
+    const naturalDuration = naturalFrames / FPS;
+    const naturalWidth = naturalDuration * 25;
 
     if (currentTimelineMode === 'stretch') {
         playbackRate = naturalWidth / clip.width;
@@ -2299,9 +3299,6 @@ function updateVideoPreview(video, clip, xPos, weight, forceSeek) {
         video.currentTime = targetTime;
     }
 }
-
-
-let lastTickTime = 0;
 
 function playbackLoop() {
     if (!isPlayingTl) return;
@@ -2744,10 +3741,23 @@ async function startRealExport(timelineData, isAutoRender = false, queueItem = n
     try {
         appendExportLog('> Solicitando exportación de ' + timelineData.length + ' clips...');
 
+        // Get batch info from queueItem or current project
+        let batchId = null;
+        let batchName = null;
+        if (queueItem) {
+            batchId = queueItem.batchId;
+            const batchProject = openProjects.find(p => p.id === queueItem.projectId);
+            batchName = batchProject ? batchProject.name : null;
+        }
+
         const response = await fetch('/api/export-timeline', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clips: timelineData })
+            body: JSON.stringify({ 
+                clips: timelineData,
+                batchId: batchId,
+                batchName: batchName
+            })
         });
 
         const result = await response.json();
@@ -2861,8 +3871,9 @@ function assembleBatchInTimeline(batchItems) {
         if (item.resultUrl) {
             const filename = item.resultUrl.split('/').pop().split('?')[0];
             const vFrames = item.params?.videoLength || 121;
-            const vDuration = (vFrames / 121) * 6;
-            const vWidth = (vFrames / 121) * 150;
+            const FPS = 24;
+            const vDuration = vFrames / FPS;
+            const vWidth = vDuration * 25;
             
             newClipsRaw.push({
                 filename,
@@ -2887,7 +3898,8 @@ function assembleBatchInTimeline(batchItems) {
         if (project.data.timeline.length > 0) {
             const last = project.data.timeline.sort((a,b) => b.startTime - a.startTime)[0];
             const lastFrames = last.metadata?.videoLength || 121;
-            const lastDuration = (lastFrames / 121) * 6;
+            const FPS = 24;
+            const lastDuration = lastFrames / FPS;
             // The batch starts after the last existing clip, respecting the overlap
             startFrom = last.startTime + (lastDuration * offsetRatio);
         }
@@ -3096,10 +4108,13 @@ if (confirmRegenBtn) {
 
 function addToStoryboardQueue(prompt, options = {}) {
 
+    // Get params: prefer passed options.params, fallback to sidebar sliders
+    const customParams = options.params || {};
     const params = {
-        videoWidth: parseInt(document.getElementById('videoWidth').value),
-        videoHeight: parseInt(document.getElementById('videoHeight').value),
-        storyboardSteps: parseInt(document.getElementById('storyboardSteps').value)
+        videoWidth: customParams.videoWidth || parseInt(document.getElementById('videoWidth')?.value) || 1024,
+        videoHeight: customParams.videoHeight || parseInt(document.getElementById('videoHeight')?.value) || 1024,
+        storyboardSteps: customParams.storyboardSteps || parseInt(document.getElementById('storyboardSteps')?.value) || 25,
+        ...(customParams.seed !== undefined ? { seed: customParams.seed } : {})
     };
 
     globalGenerationQueue.push({
@@ -3109,7 +4124,8 @@ function addToStoryboardQueue(prompt, options = {}) {
         type: 'storyboard',
         status: 'pending',
         projectId: activeProjectId,
-        ...options
+        ...options,
+        params  // Ensure params comes from this function, not options spread
     });
 
     updateGlobalQueueUI();
@@ -3122,7 +4138,31 @@ function handleStoryboardGenerated(message) {
     const targetProjectId = queueItem ? queueItem.projectId : activeProjectId;
     const project = openProjects.find(p => p.id === targetProjectId);
 
-    if (!project) return console.warn('[STORYBOARD] No target project found for generated item');
+    if (!project) {
+        // No project? Still add to the fallback storyboardItems so the data isn't lost
+        const existingIdx = storyboardItems.findIndex(item => 
+            item.storyboardIndex === message.storyboardIndex && item.batchId === message.batchId
+        );
+        const newItem = {
+            id: existingIdx >= 0 ? storyboardItems[existingIdx].id : ('sb_' + Date.now() + Math.random()),
+            url: message.url,
+            filename: message.filename,
+            prompt: message.prompt,
+            videoPrompt: queueItem ? (queueItem.videoPrompt || '') : '',
+            storyboardIndex: message.storyboardIndex !== undefined ? message.storyboardIndex : storyboardItems.length,
+            batchId: message.batchId || 'default',
+            status: 'ready',
+            params: message.params || {}
+        };
+        if (existingIdx >= 0) {
+            storyboardItems[existingIdx] = { ...storyboardItems[existingIdx], ...newItem };
+        } else {
+            storyboardItems.push(newItem);
+        }
+        storyboardItems.sort((a, b) => a.storyboardIndex - b.storyboardIndex);
+        updateStoryboardUI();
+        return;
+    }
     if (!project.data.storyboard) project.data.storyboard = [];
     
     const projStoryboard = project.data.storyboard;
@@ -3384,6 +4424,7 @@ document.getElementById('clearHistoryBtn')?.addEventListener('click', () => {
     if (confirm('Clear completed history?')) {
         globalGenerationQueue = globalGenerationQueue.filter(i => i.status !== 'completed');
         updateGlobalQueueUI();
+        saveQueueState();
         appendConsoleLine('🗑️ Completed history cleared.', 'system');
     }
 });
@@ -3397,6 +4438,7 @@ document.getElementById('stopQueueBtn')?.addEventListener('click', () => {
         currentExecutingId = null;
         
         updateGlobalQueueUI();
+        saveQueueState();
         appendConsoleLine('⏹ Queue stopped. All pending items cleared.', 'system');
         
         if (progressText) {
@@ -3407,11 +4449,581 @@ document.getElementById('stopQueueBtn')?.addEventListener('click', () => {
     }
 });
 
-// INITIALIZATION: Load assets on startup
+// ============================================
+// NEW WORKFLOW-BASED CREATE INTERFACE
+// ============================================
+
+// Track uploaded images per workflow
+const wfUploadedImages = {};
+
+// Bind workflow card clicks to switch panels
+document.addEventListener('click', (e) => {
+    const card = e.target.closest('.wf-card');
+    if (!card) return;
+    
+    const workflow = card.dataset.workflow;
+    if (!workflow) return;
+    
+    // Update cards
+    document.querySelectorAll('.wf-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    
+    // Update panels
+    document.querySelectorAll('.wf-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.querySelector(`.wf-panel[data-panel="${workflow}"]`);
+    if (panel) panel.classList.add('active');
+    
+    // Sync old workflow select for compatibility
+    const oldSelect = document.getElementById('workflowSelect');
+    if (oldSelect) {
+        oldSelect.value = workflow;
+        updateWorkflowInfo();
+    }
+});
+
+// Bind slider values
+document.addEventListener('input', (e) => {
+    const slider = e.target.closest('.wf-param-slider');
+    if (!slider) return;
+    const valEl = slider.parentElement.querySelector('.wf-val');
+    if (valEl) {
+        const val = parseFloat(slider.value);
+        valEl.textContent = slider.step && slider.step.includes('.') ? val.toFixed(1) : val;
+    }
+});
+
+// ============================================
+// FLUX IMAGE (T2I) HANDLERS
+// ============================================
+function setupT2IUpload() {
+    const area = document.getElementById('t2iUploadArea');
+    const input = document.getElementById('t2iImageInput');
+    if (!area || !input) return;
+    
+    area.addEventListener('click', () => {
+        if (!area.classList.contains('has-image')) input.click();
+    });
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) handleWfUpload(e.dataTransfer.files[0], 't2i', area);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleWfUpload(e.target.files[0], 't2i', area);
+    });
+}
+
+function handleWfUpload(file, wf, area) {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    fetch('/api/upload-image', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                wfUploadedImages[wf] = result.filename;
+                area.classList.add('has-image');
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    area.innerHTML = `
+                        <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                            <img src="${e.target.result}" style="max-width: 100%; max-height: 100px; object-fit: contain; border-radius: 6px;">
+                            <button class="wf-remove-img" style="position: absolute; top: 5px; right: 5px; background: rgba(239,68,68,0.8); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">×</button>
+                        </div>`;
+                    area.querySelector('.wf-remove-img').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        removeWfImage(wf, area);
+                    });
+                };
+                reader.readAsDataURL(file);
+                appendConsoleLine(`✅ ${wf.toUpperCase()} image uploaded: ${result.filename}`, 'system');
+            }
+        })
+        .catch(err => appendConsoleLine(`❌ Upload error: ${err.message}`, 'error'));
+}
+
+function removeWfImage(wf, area) {
+    wfUploadedImages[wf] = null;
+    area.classList.remove('has-image');
+    area.innerHTML = `<div class="wf-upload-placeholder">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; opacity: 0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+        <p>Drop image (optional)</p>
+    </div>`;
+}
+
+function setupI2VUpload() {
+    const area = document.getElementById('i2vUploadArea');
+    const input = document.getElementById('i2vImageInput');
+    if (!area || !input) return;
+    
+    area.addEventListener('click', () => {
+        if (!area.classList.contains('has-image')) input.click();
+    });
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) handleWfUpload(e.dataTransfer.files[0], 'i2v', area);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleWfUpload(e.target.files[0], 'i2v', area);
+    });
+}
+
+// ============================================
+// GENERATE HANDLERS PER WORKFLOW
+// ============================================
+function getSeed(prefix) {
+    const randomCheck = document.getElementById(`${prefix}RandomSeed`);
+    const seedInput = document.getElementById(`${prefix}Seed`);
+    if (randomCheck && randomCheck.checked) return -1;
+    if (seedInput) return parseInt(seedInput.value) || -1;
+    return -1;
+}
+
+function getSliderVal(bindId) {
+    const slider = document.querySelector(`.wf-param-slider[data-bind="${bindId}"]`);
+    if (!slider) return null;
+    const val = parseFloat(slider.value);
+    // Determine if it should be float
+    if (slider.step && slider.step.includes('.')) return val;
+    return val;
+}
+
+// Generate T2I (FLUX IMAGE)
+function generateT2I() {
+    const prompt = document.getElementById('t2iPrompt')?.value.trim();
+    if (!prompt) { appendConsoleLine('⚠️ Please enter an image prompt', 'warning'); return; }
+    
+    // Use addToStoryboardQueue
+    addToStoryboardQueue(prompt, {
+        model: 'flux',
+        params: {
+            videoWidth: getSliderVal('t2iWidth') || 1024,
+            videoHeight: getSliderVal('t2iHeight') || 1024,
+            storyboardSteps: getSliderVal('t2iSteps') || 25,
+            seed: getSeed('t2i')
+        }
+    });
+    
+    appendConsoleLine(`🖼️ T2I queued: ${prompt.substring(0, 50)}...`, 'system');
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Generate T2V (DIRECT VIDEO)
+function generateT2V() {
+    const prompt = document.getElementById('t2vPrompt')?.value.trim();
+    if (!prompt) { appendConsoleLine('⚠️ Please enter a video prompt', 'warning'); return; }
+    
+    addToQueue(prompt, null, {
+        model: 'ltx2',
+        params: {
+            videoWidth: getSliderVal('t2vWidth') || 1280,
+            videoHeight: getSliderVal('t2vHeight') || 720,
+            videoLength: getSliderVal('t2vFrames') || 121,
+            samplerSteps: getSliderVal('t2vSteps') || 20,
+            cfgScale: getSliderVal('t2vCFG') || 4.0,
+            seed: getSeed('t2v')
+        }
+    });
+    
+    appendConsoleLine(`🎬 T2V queued: ${prompt.substring(0, 50)}...`, 'system');
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Generate T2I→I2V
+function generateT2I2V() {
+    const imgPrompt = document.getElementById('t2i2vImagePrompt')?.value.trim();
+    const vidPrompt = document.getElementById('t2i2vVideoPrompt')?.value.trim();
+    
+    if (!imgPrompt && !vidPrompt) { appendConsoleLine('⚠️ Please enter at least one prompt', 'warning'); return; }
+    
+    const isAutoAssemble = document.getElementById('t2i2vAutoAssemble')?.checked || false;
+    const isAutoRender = document.getElementById('t2i2vAutoRender')?.checked || false;
+    const batchId = 'batch_' + Date.now();
+    const storyboardId = 'sb_' + Date.now();
+    
+    // Add T2I (storyboard) item
+    globalGenerationQueue.push({
+        id: storyboardId,
+        prompt: imgPrompt || vidPrompt,
+        type: 'storyboard',
+        params: {
+            videoWidth: getSliderVal('t2i2vWidth') || 1280,
+            videoHeight: getSliderVal('t2i2vHeight') || 720,
+            storyboardSteps: getSliderVal('t2i2vFluxSteps') || 25,
+            seed: getSeed('t2i2v')
+        },
+        status: 'pending',
+        projectId: activeProjectId,
+        batchId,
+        autoVideo: true,
+        videoPrompt: vidPrompt || imgPrompt,
+        isAutoAssemble,
+        isAutoRender
+    });
+    
+    // Add I2V item waiting for image
+    globalGenerationQueue.push({
+        id: Date.now() + Math.random(),
+        prompt: vidPrompt || imgPrompt,
+        params: {
+            videoWidth: getSliderVal('t2i2vWidth') || 1280,
+            videoHeight: getSliderVal('t2i2vHeight') || 720,
+            videoLength: getSliderVal('t2i2vFrames') || 121,
+            samplerSteps: getSliderVal('t2i2vSteps') || 20,
+            cfgScale: getSliderVal('t2i2vCFG') || 4.0,
+            refStrength: getSliderVal('t2i2vRef') || 1.0,
+            seed: getSeed('t2i2v')
+        },
+        imageFilename: null,
+        status: 'waiting',
+        waitingForStoryboardId: storyboardId,
+        projectId: activeProjectId,
+        isAutoAssemble,
+        isAutoRender,
+        batchId
+    });
+    
+    appendConsoleLine(`🔄 T2I→I2V queued: ${(imgPrompt || vidPrompt).substring(0, 40)}...`, 'system');
+    updateGlobalQueueUI();
+    checkGlobalQueue();
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Generate I2V (Manual Image)
+function generateI2V() {
+    const prompt = document.getElementById('i2vPrompt')?.value.trim();
+    const image = wfUploadedImages['i2v'];
+    
+    if (!image) { appendConsoleLine('⚠️ Please upload a reference image first', 'warning'); return; }
+    if (!prompt) { appendConsoleLine('⚠️ Please enter a video prompt', 'warning'); return; }
+    
+    addToQueue(prompt, image, {
+        params: {
+            videoWidth: getSliderVal('i2vWidth') || 1280,
+            videoHeight: getSliderVal('i2vHeight') || 720,
+            videoLength: getSliderVal('i2vFrames') || 121,
+            samplerSteps: getSliderVal('i2vSteps') || 20,
+            cfgScale: getSliderVal('i2vCFG') || 4.0,
+            refStrength: getSliderVal('i2vRef') || 1.0,
+            seed: getSeed('i2v')
+        },
+        model: 'ltx2'
+    });
+    
+    appendConsoleLine(`📸 I2V queued with image: ${prompt.substring(0, 50)}...`, 'system');
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// ============================================
+// CHAIN VIDEO STEPS
+// ============================================
+function addChainStep(startPrompt = '', endPrompt = '') {
+    const container = document.getElementById('chainSequence');
+    if (!container) return;
+    
+    const count = container.querySelectorAll('.chain-step-item').length + 1;
+    const div = document.createElement('div');
+    div.className = 'chain-step-item';
+    div.innerHTML = `
+        <div class="chain-step-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="chain-step-number">${count}</div>
+                <span style="font-size: 0.7em; color: #a855f7; font-weight: 700;">WAN2.2 CHAIN</span>
+            </div>
+            <button class="chain-remove-step" style="background: rgba(239,68,68,0.1); color: #ef4444; border: none; border-radius: 6px; width: 24px; height: 24px; cursor: pointer;">×</button>
+        </div>
+        <div class="chain-step-content">
+            <div class="chain-prompt-row">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.6em; color: #818cf8; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">🟢 START IMAGE PROMPT</label>
+                    <textarea class="chain-start-prompt" placeholder="Describe the starting frame...">${startPrompt}</textarea>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.6em; color: #a855f7; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">🔴 END IMAGE PROMPT</label>
+                    <textarea class="chain-end-prompt" placeholder="Describe the ending frame...">${endPrompt}</textarea>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    div.querySelector('.chain-remove-step').addEventListener('click', () => {
+        div.remove();
+        container.querySelectorAll('.chain-step-item').forEach((item, idx) => {
+            item.querySelector('.chain-step-number').textContent = idx + 1;
+        });
+    });
+    
+    container.appendChild(div);
+}
+
+function generateChainVideo() {
+    const steps = document.querySelectorAll('.chain-step-item');
+    if (steps.length === 0) { appendConsoleLine('⚠️ Please add at least one chain step', 'warning'); return; }
+    
+    const batchId = 'chain_' + Date.now();
+    let previousWanEndImageId = null;
+    let addedCount = 0;
+    
+    steps.forEach((item, index) => {
+        const startPrompt = item.querySelector('.chain-start-prompt')?.value.trim();
+        const endPrompt = item.querySelector('.chain-end-prompt')?.value.trim();
+        
+        if (!startPrompt && !endPrompt) return;
+        
+        const isFirstStep = index === 0 || !previousWanEndImageId;
+        const endImageId = 'wan_end_' + Date.now() + '_' + index;
+        const startImageId = isFirstStep ? 'wan_start_' + Date.now() + '_' + index : null;
+        
+        // Generate start image if first step
+        if (isFirstStep) {
+            globalGenerationQueue.push({
+                id: startImageId,
+                prompt: startPrompt,
+                type: 'flux_for_wan',
+                params: {},
+                status: 'pending',
+                projectId: activeProjectId,
+                batchId,
+                isForWan: true,
+                wanRole: 'start',
+                wanStepIndex: index,
+                isChainStart: true
+            });
+        }
+        
+        // Always generate end image
+        globalGenerationQueue.push({
+            id: endImageId,
+            prompt: endPrompt || startPrompt,
+            type: 'flux_for_wan',
+            params: {},
+            status: 'pending',
+            projectId: activeProjectId,
+            batchId,
+            isForWan: true,
+            wanRole: 'end',
+            wanStepIndex: index,
+            isChainEnd: true
+        });
+        
+        // Add WAN2.2 video generation
+        globalGenerationQueue.push({
+            id: Date.now() + Math.random() + index,
+            prompt: endPrompt || startPrompt,
+            params: {
+                videoWidth: getSliderVal('chainWidth') || 1280,
+                videoHeight: getSliderVal('chainHeight') || 720,
+                videoLength: getSliderVal('chainFrames') || 121,
+                samplerSteps: getSliderVal('chainSteps') || 20,
+                cfgScale: getSliderVal('chainCFG') || 4.0,
+                seed: getSeed('chain')
+            },
+            model: 'wan2.2',
+            useFluxImages: true,
+            startImageId: isFirstStep ? startImageId : null,
+            endImageId: endImageId,
+            prevEndImageId: previousWanEndImageId,
+            wanStepIndex: index,
+            isChainContinued: !isFirstStep,
+            status: 'waiting',
+            projectId: activeProjectId,
+            isAutoAssemble: false,
+            isAutoRender: false,
+            batchId
+        });
+        
+        previousWanEndImageId = endImageId;
+        addedCount++;
+    });
+    
+    if (addedCount === 0) { appendConsoleLine('⚠️ No valid prompts in chain steps', 'warning'); return; }
+    
+    appendConsoleLine(`🔗 CHAINVIDEO queued: ${addedCount} steps`, 'system');
+    updateGlobalQueueUI();
+    checkGlobalQueue();
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Chain magic prompt (uses Ollama)
+function setupChainMagic() {
+    const magicBtn = document.getElementById('chainMagicBtn');
+    const promptArea = document.getElementById('chainPromptArea');
+    const enhancerBtn = document.getElementById('chainEnhanceBtn');
+    const modelSelect = document.getElementById('chainOllamaModel');
+    const batchPrompt = document.getElementById('chainBatchPrompt');
+    
+    if (magicBtn && promptArea) {
+        magicBtn.addEventListener('click', () => {
+            promptArea.classList.toggle('hidden');
+            if (!promptArea.classList.contains('hidden')) loadChainModels();
+        });
+    }
+    
+    if (enhancerBtn && modelSelect && batchPrompt) {
+        enhancerBtn.addEventListener('click', async () => {
+            const text = batchPrompt.value.trim();
+            const modelName = modelSelect.value;
+            
+            if (!modelName) { appendConsoleLine('⚠️ Please select an Ollama model', 'warning'); return; }
+            if (!text) { appendConsoleLine('⚠️ Please describe your video sequence idea', 'warning'); return; }
+            
+            enhancerBtn.disabled = true;
+            enhancerBtn.textContent = '⏳ Generating...';
+            
+            try {
+                const response = await fetch('/api/enhance-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, modelName })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                
+                if (data.steps && Array.isArray(data.steps)) {
+                    // Clear existing chain steps
+                    const container = document.getElementById('chainSequence');
+                    if (container) container.innerHTML = '';
+                    
+                    data.steps.forEach(step => {
+                        const imgP = step['PROMPT IMAGE'] || step.promptImage || step.prompt || '';
+                        const vidP = step['VIDEO IMAGE'] || step.videoImage || step.video || '';
+                        addChainStep(imgP, vidP);
+                    });
+                    appendConsoleLine(`✨ Generated ${data.steps.length} chain steps from idea`, 'system');
+                }
+            } catch (err) {
+                appendConsoleLine(`❌ Magic prompt error: ${err.message}`, 'error');
+            } finally {
+                enhancerBtn.disabled = false;
+                enhancerBtn.textContent = '✨ GENERATE CHAIN FROM IDEA';
+            }
+        });
+    }
+}
+
+async function loadChainModels() {
+    const select = document.getElementById('chainOllamaModel');
+    if (!select) return;
+    try {
+        const response = await fetch('/api/list-ollama-models');
+        const data = await response.json();
+        const models = data.models || [];
+        select.innerHTML = '<option value="" disabled selected>-- Select a model --</option>';
+        if (models.length === 0) {
+            select.innerHTML = '<option value="">No models found</option>';
+        } else {
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                select.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        select.innerHTML = '<option value="">Ollama not available</option>';
+    }
+}
+
+// Chain JSON import
+function setupChainJsonImport() {
+    const importBtn = document.getElementById('chainImportJsonBtn');
+    const jsonArea = document.getElementById('chainJsonImport');
+    const confirmBtn = document.getElementById('chainConfirmJson');
+    const cancelBtn = document.getElementById('chainCancelJson');
+    const jsonInput = document.getElementById('chainJsonInput');
+    
+    if (importBtn && jsonArea) {
+        importBtn.addEventListener('click', () => jsonArea.classList.remove('hidden'));
+    }
+    if (cancelBtn && jsonArea) {
+        cancelBtn.addEventListener('click', () => {
+            jsonArea.classList.add('hidden');
+            if (jsonInput) jsonInput.value = '';
+        });
+    }
+    if (confirmBtn && jsonInput) {
+        confirmBtn.addEventListener('click', () => {
+            try {
+                const data = JSON.parse(jsonInput.value);
+                if (!data.steps || !Array.isArray(data.steps)) throw new Error("Invalid format");
+                
+                const container = document.getElementById('chainSequence');
+                if (container) container.innerHTML = '';
+                
+                data.steps.forEach(step => {
+                    const imgP = step['PROMPT IMAGE'] || step.promptImage || step.prompt || '';
+                    const vidP = step['VIDEO IMAGE'] || step.videoImage || step.video || '';
+                    addChainStep(imgP, vidP);
+                });
+                appendConsoleLine(`✅ Imported ${data.steps.length} chain steps from JSON`, 'system');
+                jsonArea.classList.add('hidden');
+                jsonInput.value = '';
+            } catch (e) {
+                appendConsoleLine(`❌ JSON import error: ${e.message}`, 'error');
+            }
+        });
+    }
+}
+
+// ============================================
+// MODIFIED INITIALIZATION
+// ============================================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Studio initialized. Loading assets...');
+    
+    // Initialize workflow selector (NEW card-based)
+    const firstCard = document.querySelector('.wf-card.active');
+    if (firstCard) {
+        const firstPanel = document.querySelector(`.wf-panel[data-panel="${firstCard.dataset.workflow}"]`);
+        if (firstPanel) firstPanel.classList.add('active');
+    }
+    
+    // Setup per-workflow handlers
+    setupT2IUpload();
+    setupI2VUpload();
+    setupChainMagic();
+    setupChainJsonImport();
+    
+    // Generate button handlers
+    document.querySelectorAll('.wf-gen-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const wf = btn.dataset.workflow;
+            switch(wf) {
+                case 't2i': generateT2I(); break;
+                case 't2v': generateT2V(); break;
+                case 't2i2v': generateT2I2V(); break;
+                case 'i2v': generateI2V(); break;
+                case 'chainvideo': generateChainVideo(); break;
+            }
+        });
+    });
+    
+    // Chain add step button
+    document.getElementById('chainAddStepBtn')?.addEventListener('click', () => addChainStep());
+    
+    // Restore generation queue from localStorage
+    const hasRestoredQueue = loadQueueState();
+    if (hasRestoredQueue) {
+        updateGlobalQueueUI();
+        const pendingCount = globalGenerationQueue.filter(i => i.status === 'pending').length;
+        if (pendingCount > 0) {
+            appendConsoleLine(`🚀 Restarting generation engine with ${pendingCount} pending items...`, 'system');
+            setTimeout(() => checkGlobalQueue(), 2000);
+        }
+        const waitingCount = globalGenerationQueue.filter(i => i.status === 'waiting').length;
+        if (waitingCount > 0) {
+            appendConsoleLine(`⏸️ ${waitingCount} items waiting for images`, 'system');
+        }
+    }
+    
     loadExistingVideos();
     loadExistingImages();
     loadExistingAudio();
     loadProjectsList();
+    
+    // Start WebSocket connection
+    connectWebSocket();
 });

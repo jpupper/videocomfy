@@ -12,14 +12,20 @@ const util = require('util');
 const execPromise = util.promisify(exec);
 const multer = require('multer');
 require('dotenv').config();
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Inicializar Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Telegram Bot (auto-sends generated media)
+const telegramBot = require('./telegram-bot.js');
 
-const ipglobal = "192.168.0.13"; // IP de ComfyUI
-const serverAddress = ipglobal + ":8188";
+// Default Telegram settings
+const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
+if (TELEGRAM_ENABLED) {
+    console.log('🤖 Telegram Bot enabled');
+} else {
+    console.log('🤖 Telegram Bot disabled — set TELEGRAM_BOT_TOKEN in .env');
+}
+
+const ipglobal = process.env.COMFYUI_ADDRESS || "127.0.0.1"; // Default to localhost
+const serverAddress = ipglobal.includes(':') ? ipglobal : `${ipglobal}:8188`;
 const clientId = uuidv4();
 
 const app = express();
@@ -95,6 +101,30 @@ function connectToComfy() {
                 });
             }
 
+            if (message.type === 'execution_error') {
+                console.error('❌ ComfyUI execution error:', JSON.stringify(message.data).substring(0, 500));
+                const promptId = message.data?.prompt_id;
+                const errorDetail = message.data?.exception_message || message.data?.exception?.message || JSON.stringify(message.data).substring(0, 300);
+                const nodeId = message.data?.node_id || 'unknown';
+                
+                // Broadcast error to all clients
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'generation_error',
+                            error: `❌ ComfyUI execution error (node ${nodeId}): ${errorDetail}`,
+                            prompt_id: promptId,
+                            node: nodeId
+                        }));
+                    }
+                });
+                
+                // Clean up prompt details for this prompt_id
+                if (promptId && promptDetails[promptId]) {
+                    delete promptDetails[promptId];
+                }
+            }
+
             if (message.type === 'executed') {
                 const promptId = message.data.prompt_id;
                 const details = promptDetails[promptId];
@@ -103,12 +133,15 @@ function connectToComfy() {
                 // Buscar video o imagen en las distintas posibles salidas de ComfyUI
                 let assetFound = null;
                 let assetType = 'video';
-                const output = message.data.output;
+                const output = message.data.output || {};
 
                 if (output.video) assetFound = output.video;
                 else if (output.gifs) assetFound = output.gifs;
                 else if (output.images) {
                     const imgs = Array.isArray(output.images) ? output.images : [output.images];
+                    if (imgs.length === 0) {
+                        console.log(`   ⚠️ output.images is empty array for node ${message.data.node}`);
+                    }
                     // Primero buscar videos camuflados como imágenes
                     const possibleVideo = imgs.find(img => img.filename.endsWith('.webm') || img.filename.endsWith('.mp4'));
                     if (possibleVideo) {
@@ -124,7 +157,12 @@ function connectToComfy() {
                     }
                 }
 
+                if (!assetFound && message.data.node) {
+                    console.log(`   ℹ️ No downloadable asset for node ${message.data.node}${output.images ? ` (images=${Array.isArray(output.images) ? output.images.length : typeof output.images})` : ''}${output.video ? ' (has video)' : ''}${output.gifs ? ' (has gifs)' : ''}`);
+                }
+
                 if (assetFound) {
+                    console.log(`   ✅ Asset found for node ${message.data.node}: ${assetType} count=${Array.isArray(assetFound) ? assetFound.length : 1}`);
                     const assetItems = Array.isArray(assetFound) ? assetFound : [assetFound];
 
                     for (const asset of assetItems) {
@@ -183,7 +221,8 @@ function connectToComfy() {
                                     imageFilename: metaToSave.imageFilename,
                                     prompt_id: promptId,
                                     batchId: metaToSave.batchId,
-                                    batchName: metaToSave.batchName
+                                    batchName: metaToSave.batchName,
+                                    type: metaToSave.type || 'video'
                                 });
                             } else {
                                 saveImageMetadata(filenameOnly, {
@@ -192,14 +231,17 @@ function connectToComfy() {
                                     storyboardIndex: metaToSave.storyboardIndex,
                                     batchId: metaToSave.batchId,
                                     batchName: metaToSave.batchName,
-                                    prompt_id: promptId
+                                    prompt_id: promptId,
+                                    isForWan: metaToSave.isForWan,
+                                    wanRole: metaToSave.wanRole,
+                                    wanId: metaToSave.wanId
                                 });
                             }
 
                             // Notificar al frontend
                             wss.clients.forEach(client => {
                                 if (client.readyState === WebSocket.OPEN) {
-                                    client.send(JSON.stringify({
+                                    const msg = {
                                         type: assetType === 'video' ? 'video_generated' : 'storyboard_generated',
                                         url: `/${targetSubdir}/${filenameOnly}`,
                                         filename: filenameOnly,
@@ -207,11 +249,41 @@ function connectToComfy() {
                                         storyboardIndex: metaToSave.storyboardIndex,
                                         batchId: metaToSave.batchId,
                                         prompt_id: promptId
+                                    };
+                                    // Include WAN2.2 specific info if applicable
+                                    if (metaToSave.isForWan) {
+                                        msg.isForWan = true;
+                                        msg.wanRole = metaToSave.wanRole;
+                                        msg.wanId = metaToSave.wanId;
+                                        msg.wanStepIndex = metaToSave.wanStepIndex;
+                                    }
+                                    client.send(JSON.stringify(msg));
+                                }
+                            });
+
+                            // Enviar a Telegram automáticamente si está configurado
+                            if (TELEGRAM_ENABLED && telegramBot.getDefaultChatId()) {
+                                const telegramCaption = `🎬 <b>${assetType === 'video' ? 'Video' : 'Image'} Generated</b>\n\n📝 <code>${(metaToSave.prompt || '').substring(0, 200)}</code>`;
+                                const telegramPromise = assetType === 'video'
+                                    ? telegramBot.sendVideoToTelegram(null, targetPath, telegramCaption)
+                                    : telegramBot.sendPhotoToTelegram(null, targetPath, telegramCaption);
+                                telegramPromise
+                                    .then(() => console.log(`🤖 Sent ${assetType} to Telegram: ${filenameOnly}`))
+                                    .catch(err => console.warn(`🤖 Failed to send ${assetType} to Telegram: ${err.message}`));
+                            }
+                        } catch (error) {
+                            console.error(`❌ Error al descargar ${assetType}:`, error);
+                            // Notify frontend about the failure so it can recover the queue
+                            const errorMsg = `❌ Failed to download ${assetType} from ComfyUI: ${error.message || error}`;
+                            wss.clients.forEach(client => {
+                                if (client.readyState === WebSocket.OPEN) {
+                                    client.send(JSON.stringify({
+                                        type: 'generation_error',
+                                        error: errorMsg,
+                                        prompt_id: promptId
                                     }));
                                 }
                             });
-                        } catch (error) {
-                            console.error(`❌ Error al descargar ${assetType}:`, error);
                         }
                     }
                 }
@@ -238,6 +310,38 @@ function connectToComfy() {
 
 // Se llamará al final del archivo para asegurar que wss esté definido
 // connectToComfy();
+
+// ============================================
+// GENERATION TIMEOUT CHECKER
+// ============================================
+const GENERATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max
+
+setInterval(() => {
+    const now = Date.now();
+    Object.keys(promptDetails).forEach(promptId => {
+        const details = promptDetails[promptId];
+        if (details && details.generationStartTime) {
+            const elapsed = now - details.generationStartTime;
+            if (elapsed > GENERATION_TIMEOUT_MS) {
+                console.error(`⏰ Hard timeout for prompt ${promptId}: ${Math.round(elapsed / 60000)} min`);
+                
+                // Notify frontend
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'queue_timeout',
+                            error: `⏰ Hard timeout: generation exceeded 30 minutes`,
+                            prompt_id: promptId
+                        }));
+                    }
+                });
+                
+                // Clean up
+                delete promptDetails[promptId];
+            }
+        }
+    });
+}, 60000); // Check every 60 seconds
 
 // ============================================
 // ENDPOINTS API
@@ -395,6 +499,120 @@ app.post('/api/upload-audio', upload.single('audio'), (req, res) => {
 });
 
 
+app.post('/api/generate-avatar', upload.fields([
+    { name: 'audio', maxCount: 1 },
+    { name: 'image', maxCount: 1 }
+]), async (req, res) => {
+    try {
+        if (!req.files || !req.files['audio']) {
+            return res.status(400).json({ error: 'Se requiere un archivo de audio' });
+        }
+        
+        const prompt = req.body.prompt || '';
+        const resolution = req.body.resolution || '480p';
+        
+        // Procesar audio
+        const audioFile = req.files['audio'][0];
+        const audioExt = path.extname(audioFile.originalname) || '.mp3';
+        const audioFilename = `longcat_audio_${Date.now()}${audioExt}`;
+        const audioPath = path.join(__dirname, 'public', 'uploads', audioFilename);
+        fs.renameSync(audioFile.path, audioPath);
+        
+        // Procesar imagen (opcional)
+        let imageFilename = null;
+        if (req.files['image']) {
+            const imgFile = req.files['image'][0];
+            const imgExt = path.extname(imgFile.originalname) || '.png';
+            imageFilename = `longcat_img_${Date.now()}${imgExt}`;
+            const imgPath = path.join(__dirname, 'public', 'uploads', imageFilename);
+            fs.renameSync(imgFile.path, imgPath);
+        }
+        
+        // Generar avatar via WebSocket (para que el frontend reciba updates)
+        const outputFilename = `longcat_${Date.now()}.mp4`;
+        const outputPath = path.join(__dirname, 'public', 'videos', outputFilename);
+        const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+        
+        if (!fs.existsSync(scriptPath)) {
+            return res.status(500).json({ error: 'Script LongCat no encontrado. Ejecutá setup primero.' });
+        }
+        
+        const mode = imageFilename ? 'ai2v' : 'at2v';
+        let cmd = `"${process.execPath}" "${scriptPath}" --no_setup --mode ${mode} --audio "${audioPath}" --prompt "${prompt.replace(/"/g, '\\"')}" --output "${outputPath}" --resolution ${resolution} --use_int8`;
+        if (imageFilename) {
+            const imgPath = path.join(__dirname, 'public', 'uploads', imageFilename);
+            cmd += ` --image "${imgPath}"`;
+        }
+        
+        console.log(`🐱 [REST] LongCat generando: ${outputFilename}`);
+        
+        // Responder inmediatamente con el filename
+        // La generación corre en background
+        exec(cmd, { timeout: 1800000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`❌ [REST] LongCat error: ${error.message}`);
+                return;
+            }
+            console.log(`✅ [REST] LongCat completado: ${outputFilename}`);
+            
+            // Guardar metadata
+            saveVideoMetadata(outputFilename, {
+                prompt: prompt,
+                params: { resolution, mode },
+                type: 'longcat-avatar'
+            });
+            
+            // Notificar frontend
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({
+                        type: 'video_generated',
+                        url: `/videos/${outputFilename}`,
+                        filename: outputFilename,
+                        prompt: prompt,
+                        prompt_id: 'longcat-' + Date.now()
+                    }));
+                }
+            });
+        });
+        
+        res.json({
+            success: true,
+            message: 'Generación de avatar iniciada',
+            outputFilename: outputFilename,
+            estimatedTime: '5-10 minutos'
+        });
+    } catch (error) {
+        console.error('Error generating avatar:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+app.post('/api/setup-longcat', async (req, res) => {
+    try {
+        const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+        if (!fs.existsSync(scriptPath)) {
+            return res.status(500).json({ error: 'longcat_avatar.py no encontrado' });
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Setup iniciado. Corré: python longcat_avatar.py --help',
+            instructions: [
+                '1. Asegurate de tener Python 3.10+ y CUDA 12.4',
+                '2. El script descargará automáticamente el modelo (~75GB)',
+                '3. Corré: python longcat_avatar.py --mode at2v --audio test.mp3 --prompt "test" --output test.mp4',
+                '4. Requiere ~24GB VRAM con --use_int8',
+                '5. Opcional: git clone https://github.com/meituan-longcat/LongCat-Video.git'
+            ]
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 async function checkAudio(filePath) {
     try {
         const { stdout } = await execPromise(`ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${filePath}"`);
@@ -444,7 +662,7 @@ app.get('/api/videos', (req, res) => {
 
 app.post('/api/export-timeline', async (req, res) => {
     try {
-        const { clips } = req.body;
+        const { clips, batchId, batchName } = req.body;
         if (!clips || clips.length === 0) return res.status(400).json({ error: 'No clips provided' });
 
         console.log(`🎬 Iniciando exportación de timeline: ${clips.length} clips`);
@@ -533,11 +751,23 @@ app.post('/api/export-timeline', async (req, res) => {
         console.log('Ejecutando FFmpeg:', command);
         await execPromise(command);
 
+        // Recopilar todos los prompts de los clips para metadata completo
+        const clipPrompts = clips.map(c => c.prompt || 'Unknown').filter(p => p && p !== 'Unknown');
+        const combinedPrompt = clipPrompts.length > 0 ? clipPrompts.join(' | ') : 'Final Project Export';
+
         saveVideoMetadata(outputFilename, {
-            prompt: "Final Project Export",
+            prompt: combinedPrompt,
             isExport: true,
             clipCount: clips.length,
             duration: totalDuration,
+            batchId: batchId || null,
+            batchName: batchName || null,
+            clips: clips.map(c => ({
+                filename: c.filename,
+                prompt: c.prompt,
+                startTime: c.startTime,
+                duration: c.duration
+            })),
             params: { videoWidth: targetWidth, videoHeight: targetHeight }
         });
 
@@ -591,17 +821,21 @@ app.post('/api/projects/save', (req, res) => {
 });
 
 // ============================================
-// GEMINI PROMPT ENHANCER
+// OLLAMA PROMPT ENHANCER
 // ============================================
 
-app.get('/api/list-models', async (req, res) => {
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+app.get('/api/list-ollama-models', async (req, res) => {
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+        const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+        if (!response.ok) throw new Error(`Ollama responded with ${response.status}`);
         const data = await response.json();
         res.json(data);
     } catch (error) {
-        console.error('Error listing models:', error);
-        res.status(500).json({ error: error.message });
+        const isConnRefused = error?.cause?.code === 'ECONNREFUSED' || error?.code === 'ECONNREFUSED';
+        if (!isConnRefused) console.error('Error listing Ollama models:', error);
+        res.json({ models: [] });
     }
 });
 
@@ -610,19 +844,17 @@ app.post('/api/enhance-prompt', async (req, res) => {
         const { text, modelName } = req.body;
         if (!text) return res.status(400).json({ error: 'No prompt text provided' });
 
-        let mName = modelName || "gemini-2.5-flash";
-        if (!mName.startsWith('models/')) mName = `models/${mName}`;
+        const ollamaModel = modelName || 'llama3.2:latest';
 
-        const selectedModel = genAI.getGenerativeModel({ model: mName });
         const skillPath = path.join(__dirname, '.agents', 'skills', 'prompt_master', 'SKILL.md');
         let skillGuide = "";
         try {
             skillGuide = fs.readFileSync(skillPath, 'utf8');
         } catch (e) {
-            console.warn("⚠️ No se pudo leer SKILL.md para el contexto de Gemini");
+            console.warn("⚠️ No se pudo leer SKILL.md");
         }
 
-        const prompt = `
+        const promptText = `
         Sos un asistente experto en ingeniería de prompts para modelos de IA como Flux y LTX-2. 
         Tu tarea es tomar la siguiente "Idea del Usuario" y generar un JSON de batch siguiendo ESTRICTAMENTE las reglas de esta guía de estilo:
 
@@ -643,21 +875,76 @@ app.post('/api/enhance-prompt', async (req, res) => {
         - NO incluyas explicaciones fuera del bloque JSON.
         `;
 
-        const result = await selectedModel.generateContent(prompt);
-        const response = await result.response;
-        const generatedText = response.text();
+        const ollamaRes = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: ollamaModel,
+                prompt: promptText,
+                stream: false
+            })
+        });
+        if (!ollamaRes.ok) throw new Error(`Ollama responded with ${ollamaRes.status}`);
+        const ollamaData = await ollamaRes.json();
+        const generatedText = ollamaData.response || "";
 
-        // Extraer JSON si Gemini lo envolvió en bloques de código
         const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const cleanJson = JSON.parse(jsonMatch[0]);
             res.json(cleanJson);
         } else {
-            throw new Error("No se pudo extraer un JSON válido de la respuesta de Gemini.");
+            throw new Error("No se pudo extraer un JSON válido de la respuesta de Ollama.");
         }
 
     } catch (error) {
-        console.error('Error enhancing prompt with Gemini:', error);
+        console.error('Error enhancing prompt:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/improve-step-prompt', async (req, res) => {
+    try {
+        const { text, type, modelName } = req.body;
+        if (!text) return res.status(400).json({ error: 'No prompt text provided' });
+
+        const ollamaModel = modelName || 'llama3.2:latest';
+        const skillPath = path.join(__dirname, '.agents', 'skills', 'prompt_master', 'SKILL.md');
+        let skillGuide = "";
+        try { skillGuide = fs.readFileSync(skillPath, 'utf8'); } catch (e) {}
+
+        const promptText = `
+        Sos un asistente experto en ingeniería de prompts. 
+        Tu tarea es mejorar el siguiente prompt de usuario para que sea de alta calidad.
+        
+        --- GUIA DE ESTILO ---
+        ${skillGuide}
+        --- FIN GUIA ---
+
+        TIPO DE PROMPT: ${type === 'video' ? 'VIDEO / ANIMACIÓN (LTX-2)' : 'IMAGEN ESTÁTICA (FLUX)'}
+        PROMPT ORIGINAL: "${text}"
+
+        REGLAS DE SALIDA:
+        - Devuelve ÚNICAMENTE el texto del prompt mejorado.
+        - NO incluyas introducciones, explicaciones ni comillas externas.
+        - Asegúrate de seguir las reglas de estilo de la guía (detalles técnicos, iluminación, cámara, etc).
+        `;
+
+        const ollamaRes = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: ollamaModel,
+                prompt: promptText,
+                stream: false
+            })
+        });
+        
+        if (!ollamaRes.ok) throw new Error(`Ollama responded with ${ollamaRes.status}`);
+        const ollamaData = await ollamaRes.json();
+        res.json({ improvedText: ollamaData.response.trim() });
+
+    } catch (error) {
+        console.error('Error improving step prompt:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -691,12 +978,84 @@ app.delete('/api/projects/:name', (req, res) => {
 });
 
 // ============================================
+// TELEGRAM BOT API ENDPOINT
+// ============================================
+
+app.post('/api/send-to-telegram', async (req, res) => {
+    try {
+        const { filename, type, chatId, caption } = req.body;
+
+        if (!filename) {
+            return res.status(400).json({ error: 'filename is required' });
+        }
+
+        // Determine the file path based on type
+        let filePath;
+        if (type === 'video') {
+            filePath = path.join(__dirname, 'public', 'videos', filename);
+        } else {
+            // Default to uploads for images
+            filePath = path.join(__dirname, 'public', 'uploads', filename);
+        }
+
+        // If the file doesn't exist in the default location, try the other
+        if (!fs.existsSync(filePath)) {
+            const altPath = type === 'video'
+                ? path.join(__dirname, 'public', 'uploads', filename)
+                : path.join(__dirname, 'public', 'videos', filename);
+            if (fs.existsSync(altPath)) {
+                filePath = altPath;
+            } else {
+                return res.status(404).json({ error: `File not found: ${filename}` });
+            }
+        }
+
+        if (!TELEGRAM_ENABLED) {
+            return res.status(400).json({ error: 'Telegram Bot not configured (TELEGRAM_BOT_TOKEN missing)' });
+        }
+
+        const targetChatId = chatId || telegramBot.getDefaultChatId();
+        if (!targetChatId) {
+            return res.status(400).json({ error: 'No chat ID provided and TELEGRAM_CHAT_ID not configured' });
+        }
+
+        const fileType = type || 'image';
+        let result;
+
+        if (fileType === 'video') {
+            result = await telegramBot.sendVideoToTelegram(targetChatId, filePath, caption || '');
+            console.log(`🤖 Sent video ${filename} to Telegram chat ${targetChatId}`);
+        } else {
+            result = await telegramBot.sendPhotoToTelegram(targetChatId, filePath, caption || '');
+            console.log(`🤖 Sent image ${filename} to Telegram chat ${targetChatId}`);
+        }
+
+        res.json({
+            success: true,
+            message_id: result.result?.message_id,
+            chat: result.result?.chat
+        });
+    } catch (error) {
+        console.error('❌ Error sending to Telegram:', error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
 // SERVIDOR Y WEBSOCKETS CLIENTES
 // ============================================
 
 const port = 5634;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+        console.error(`❌ Error: El puerto ${port} ya está en uso.`);
+        console.error(`💡 Probablemente el servidor ya esté corriendo en otra ventana. Ciérrala e intenta de nuevo.`);
+        process.exit(1);
+    }
+});
 
 server.listen(port, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
@@ -713,32 +1072,154 @@ wss.on('connection', (ws) => {
     ws.on('message', async (data) => {
         try {
             const message = JSON.parse(data);
+            if (message.type === 'request_queue_state') {
+                // Send back the current prompt_ids that are being tracked by the server
+                const activePromptIds = Object.keys(promptDetails).map(pid => ({
+                    prompt_id: pid,
+                    details: promptDetails[pid]
+                }));
+                ws.send(JSON.stringify({
+                    type: 'queue_state',
+                    activePrompts: activePromptIds,
+                    comfyConnected: wsComfy && wsComfy.readyState === 1 ? true : false
+                }));
+                console.log(`📡 Sent queue state to reconnecting client: ${activePromptIds.length} active prompts`);
+                return;
+            }
             if (message.type === 'generarImagen') {
-                console.log(`🎬 Petición generación: ${message.prompt} (${message.imageFilename ? 'I2V' : 'T2V'})`);
-                const promptId = await generarVideo(message.prompt, message.params, message.imageFilename);
-                const details = { 
-                    prompt: message.prompt,
-                    params: message.params,
-                    imageFilename: message.imageFilename,
-                    type: 'video',
-                    batchId: message.batchId,
-                    batchName: message.batchName
-                };
-                promptDetails[promptId] = details;
-                lastPromptDetails = details;
+                const mode = message.imageFilename ? 'I2V' : 'T2V';
+                console.log(`\n🎬 [${mode}] Nueva generación recibida`);
+                console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
+                console.log(`   Prompt  : ${message.prompt}`);
+                console.log(`   Imagen  : ${message.imageFilename || 'ninguna'}`);
+                console.log(`   Params  : steps=${message.params?.samplerSteps} cfg=${message.params?.cfgScale} size=${message.params?.videoWidth}x${message.params?.videoHeight}`);
+                try {
+                    const promptId = await generarVideo(message.prompt, message.params, message.imageFilename);
+                    console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
+                    const details = { 
+                        prompt: message.prompt,
+                        params: message.params,
+                        imageFilename: message.imageFilename,
+                        type: 'video',
+                        batchId: message.batchId,
+                        batchName: message.batchName,
+                        generationStartTime: Date.now()
+                    };
+                    promptDetails[promptId] = details;
+                    lastPromptDetails = details;
+                    
+                    // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI
+                    ws.send(JSON.stringify({
+                        type: 'prompt_queued',
+                        prompt_id: promptId,
+                        queueItemId: message.queueItemId || null
+                    }));
+                } catch (e) {
+                    console.error(`❌ Error generando video: ${e.message}`);
+                    ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando video: ${e.message}` }));
+                }
             } else if (message.type === 'generarStoryboard') {
-                console.log(`🎬 Petición Storyboard: ${message.prompt}`);
-                const promptId = await generarStoryboard(message.prompt, message.params, message.storyboardIndex, message.batchId);
-                const details = { 
-                    prompt: message.prompt,
-                    params: message.params,
-                    type: 'storyboard',
-                    storyboardIndex: message.storyboardIndex,
-                    batchId: message.batchId,
-                    batchName: message.batchName
-                };
-                promptDetails[promptId] = details;
-                lastPromptDetails = details;
+                const wanTag = message.isForWan ? ` [WAN2.2 ${message.wanRole} step=${message.wanStepIndex}]` : '';
+                console.log(`\n🖼️ [FLUX${wanTag}] Nueva generación recibida`);
+                console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
+                console.log(`   Prompt  : ${message.prompt}`);
+                console.log(`   Params  : steps=${message.params?.storyboardSteps || 'default'}`);
+                try {
+                    const promptId = await generarStoryboard(message.prompt, message.params, message.storyboardIndex, message.batchId);
+                    console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
+                    const details = { 
+                        prompt: message.prompt,
+                        params: message.params,
+                        type: 'storyboard',
+                        storyboardIndex: message.storyboardIndex,
+                        batchId: message.batchId,
+                        batchName: message.batchName,
+                        isForWan: message.isForWan || false,
+                        wanRole: message.wanRole || null,
+                        wanId: message.wanId || null,
+                        wanStepIndex: message.wanStepIndex !== undefined ? message.wanStepIndex : null,
+                        generationStartTime: Date.now()
+                    };
+                    promptDetails[promptId] = details;
+                    lastPromptDetails = details;
+                    
+                    // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI
+                    ws.send(JSON.stringify({
+                        type: 'prompt_queued',
+                        prompt_id: promptId,
+                        queueItemId: message.queueItemId || null
+                    }));
+                } catch (e) {
+                    console.error(`❌ Error generando storyboard: ${e.message}`);
+                    ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando storyboard: ${e.message}` }));
+                }
+            } else if (message.type === 'generarWan22') {
+                console.log(`\n🔥 [WAN2.2] Nueva generación recibida`);
+                console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
+                console.log(`   Prompt  : ${message.prompt}`);
+                console.log(`   Start   : ${message.startImageFilename || 'ninguna'}`);
+                console.log(`   End     : ${message.endImageFilename || 'ninguna'}`);
+                console.log(`   Params  : steps=${message.params?.samplerSteps} cfg=${message.params?.cfgScale} size=${message.params?.videoWidth}x${message.params?.videoHeight} length=${message.params?.videoLength}`);
+                try {
+                    const promptId = await generarWan22Video(message.prompt, message.params, message.startImageFilename, message.endImageFilename);
+                    console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
+                    const details = { 
+                        prompt: message.prompt,
+                        params: message.params,
+                        type: 'wan22',
+                        startImageFilename: message.startImageFilename,
+                        endImageFilename: message.endImageFilename,
+                        batchId: message.batchId,
+                        batchName: message.batchName
+                    };
+                    promptDetails[promptId] = details;
+                    lastPromptDetails = details;
+                    
+                    // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI
+                    ws.send(JSON.stringify({
+                        type: 'prompt_queued',
+                        prompt_id: promptId,
+                        queueItemId: message.queueItemId || null
+                    }));
+                } catch (e) {
+                    console.error(`❌ Error generando WAN2.2 video: ${e.message}`);
+                    ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando WAN2.2 video: ${e.message}` }));
+                }
+            } else if (message.type === 'generarLongCat') {
+                const mode = message.imageFilename ? 'AI2V' : 'AT2V';
+                console.log(`\n🐱 [LONGCAT ${mode}] Nueva generación de avatar recibida`);
+                console.log(`   Prompt  : ${message.prompt}`);
+                console.log(`   Audio   : ${message.audioFilename || 'ninguno'}`);
+                console.log(`   Imagen  : ${message.imageFilename || 'ninguna'}`);
+                console.log(`   Res     : ${message.params?.resolution || '480p'}`);
+                try {
+                    const result = await generarLongCat(message);
+                    console.log(`   ✅ Video de avatar generado: ${result.filename}`);
+                    const details = {
+                        prompt: message.prompt,
+                        params: message.params,
+                        type: 'longcat',
+                        audioFilename: message.audioFilename,
+                        imageFilename: message.imageFilename,
+                        batchId: message.batchId,
+                        batchName: message.batchName
+                    };
+                    // Notificar al frontend
+                    wss.clients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                type: 'video_generated',
+                                url: `/videos/${result.filename}`,
+                                filename: result.filename,
+                                prompt: message.prompt,
+                                prompt_id: 'longcat-' + Date.now()
+                            }));
+                        }
+                    });
+                } catch (e) {
+                    console.error(`❌ Error generando LongCat avatar: ${e.message}`);
+                    ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando LongCat avatar: ${e.message}` }));
+                }
             }
         } catch (e) {
             console.error('Error en mensaje de cliente:', e);
@@ -778,7 +1259,22 @@ async function queuePrompt(promptWorkflow) {
         const req = http.request(options, (res) => {
             let data = '';
             res.on('data', c => data += c);
-            res.on('end', () => resolve(JSON.parse(data).prompt_id));
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.error) {
+                        const errorDetail = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+                        const nodeErrors = parsed.node_errors ? '\nNode errors: ' + JSON.stringify(parsed.node_errors) : '';
+                        reject(new Error(`ComfyUI rejected the prompt: ${errorDetail}${nodeErrors}`));
+                    } else if (!parsed.prompt_id) {
+                        reject(new Error(`ComfyUI returned no prompt_id. Response: ${data.substring(0, 300)}`));
+                    } else {
+                        resolve(parsed.prompt_id);
+                    }
+                } catch (e) {
+                    reject(new Error(`Failed to parse ComfyUI response: ${e.message}. Raw: ${data.substring(0, 300)}`));
+                }
+            });
         });
         req.on('error', reject);
         req.write(postData);
@@ -803,8 +1299,40 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
+    // Normalize sg_XX_ prefixed node IDs (I2V workflow from ComfyUI exports with sg_92_ prefix)
+    const keys = Object.keys(promptWorkflow);
+    for (const key of keys) {
+        const match = key.match(/^sg_\d+_(.+)$/);
+        if (match) {
+            promptWorkflow[match[1]] = promptWorkflow[key];
+            delete promptWorkflow[key];
+        }
+    }
+    
+    // Also normalize internal node references (e.g. ["sg_92_107", 0] -> ["107", 0])
+    // ComfyUI connection arrays reference other nodes by their key, so sg_ prefixes must be stripped
+    for (const [nodeKey, node] of Object.entries(promptWorkflow)) {
+        if (!node || !node.inputs) continue;
+        for (const [inputKey, inputVal] of Object.entries(node.inputs)) {
+            if (Array.isArray(inputVal) && typeof inputVal[0] === 'string' && inputVal[0].match(/^sg_\d+_\d+$/)) {
+                const m = inputVal[0].match(/^sg_\d+_(\d+)$/);
+                if (m) {
+                    node.inputs[inputKey][0] = m[1];
+                }
+            }
+        }
+    }
+
     // Configurar workflow
     if (isI2V) {
+        // Validate required nodes exist
+        ['3','4','11','67','98','47','107','108','62','9'].forEach(n => {
+            if (!promptWorkflow[n]) {
+                console.error(`[I2V] NODE ${n} MISSING after normalization!`);
+                console.error(`[I2V] Available keys (${Object.keys(promptWorkflow).length}):`, Object.keys(promptWorkflow).sort((a,b)=>Number(a)-Number(b)).join(', '));
+                throw new Error(`Node "${n}" not found in I2V workflow after sg_ prefix normalization`);
+            }
+        });
         promptWorkflow["3"]["inputs"]["text"] = promptText;
         if (params.negativePrompt) promptWorkflow["4"]["inputs"]["text"] = params.negativePrompt;
         
@@ -812,7 +1340,8 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
         promptWorkflow["11"]["inputs"]["noise_seed"] = seedValue;
         promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
         
-        promptWorkflow["200"]["inputs"]["image"] = imageFilename;
+        // Note: node 98 is LoadImage in the I2V workflow (was node 200 in old workflow)
+        promptWorkflow["98"]["inputs"]["image"] = imageFilename;
         
         if (params.cfgScale) promptWorkflow["47"]["inputs"]["cfg"] = params.cfgScale;
         if (params.refStrength) {
@@ -870,6 +1399,162 @@ function broadcastComfyStatus(status) {
         if (client.readyState === 1) { // 1 = OPEN
             client.send(JSON.stringify({ type: 'comfy_status', status }));
         }
+    });
+}
+
+async function generarWan22Video(promptText, params = {}, startImageFilename = null, endImageFilename = null) {
+    const workflowFile = 'video_wan2_2_14B_flf2v_api.json';
+    const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
+    const promptWorkflow = JSON.parse(data);
+
+    // Configurar el workflow WAN2.2
+    // Texto del prompt
+    promptWorkflow["90"]["inputs"]["text"] = promptText;
+    
+    // Configurar imágenes de inicio y fin si están disponibles
+    if (startImageFilename) {
+        promptWorkflow["80"]["inputs"]["image"] = startImageFilename;
+    }
+    if (endImageFilename) {
+        promptWorkflow["89"]["inputs"]["image"] = endImageFilename;
+    }
+    
+    // Configurar dimensiones y parámetros
+    if (params.videoWidth) {
+        promptWorkflow["81"]["inputs"]["width"] = params.videoWidth;
+    }
+    if (params.videoHeight) {
+        promptWorkflow["81"]["inputs"]["height"] = params.videoHeight;
+    }
+    if (params.videoLength) {
+        promptWorkflow["81"]["inputs"]["length"] = params.videoLength;
+    }
+    if (params.samplerSteps) {
+        promptWorkflow["84"]["inputs"]["steps"] = params.samplerSteps;
+    }
+    if (params.cfgScale) {
+        promptWorkflow["84"]["inputs"]["cfg"] = params.cfgScale;
+    }
+    
+    // Seed
+    const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000000000);
+    promptWorkflow["84"]["inputs"]["noise_seed"] = seedValue;
+
+    const promptId = await queuePrompt(promptWorkflow);
+    console.log(`🚀 WAN2.2 prompt enviado a ComfyUI. ID: ${promptId}`);
+    return promptId;
+}
+
+// ============================================
+// LONGCAT: Audio-Driven Avatar Generation
+// ============================================
+
+async function generarLongCat(message) {
+    const { execSync } = require('child_process');
+    const prompt = message.prompt || '';
+    const audioFilename = message.audioFilename || '';
+    const imageFilename = message.imageFilename || null;
+    const resolution = message.params?.resolution || '480p';
+    const useInt8 = message.params?.useInt8 !== false; // default true
+    
+    // Validar que tenemos audio
+    if (!audioFilename) {
+        throw new Error('Se requiere un archivo de audio para LongCat');
+    }
+    
+    // Construir paths
+    const audioPath = path.join(__dirname, 'public', 'uploads', audioFilename);
+    let imagePath = null;
+    if (imageFilename) {
+        imagePath = path.join(__dirname, 'public', 'uploads', imageFilename);
+    }
+    
+    // Verificar que existe el audio
+    if (!fs.existsSync(audioPath)) {
+        throw new Error(`Archivo de audio no encontrado: ${audioPath}`);
+    }
+    
+    const outputFilename = `longcat_${Date.now()}.mp4`;
+    const outputPath = path.join(__dirname, 'public', 'videos', outputFilename);
+    const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+    
+    // Si no existe el script, crearlo (ya debería estar)
+    if (!fs.existsSync(scriptPath)) {
+        throw new Error(`Script LongCat no encontrado: ${scriptPath}`);
+    }
+    
+    // Construir comando
+    const mode = imageFilename ? 'ai2v' : 'at2v';
+    let cmd = `"${process.execPath}" "${scriptPath}" --mode ${mode} --audio "${audioPath}" --prompt "${prompt.replace(/"/g, '\\"')}" --output "${outputPath}" --resolution ${resolution}`;
+    
+    if (useInt8) cmd += ' --use_int8';
+    if (imagePath) cmd += ` --image "${imagePath}"`;
+    
+    console.log(`🐱 Ejecutando LongCat: ${cmd.substring(0, 200)}...`);
+    
+    // Informar inicio
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ 
+                type: 'executing', 
+                node: 'LongCat-Avatar',
+                message: 'Generando avatar con audio... (puede tomar 5-10 minutos)'
+            }));
+        }
+    });
+    
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+        
+        exec(cmd, { timeout: 1800000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            
+            if (error) {
+                console.error(`❌ LongCat error (${elapsed}s): ${error.message}`);
+                console.error(`   stderr: ${(stderr || '').substring(0, 500)}`);
+                reject(new Error(`LongCat falló: ${error.message}. stderr: ${(stderr || '').substring(0, 200)}`));
+                return;
+            }
+            
+            // Intentar parsear la salida JSON
+            let resultData = null;
+            for (const line of stdout.split('\n')) {
+                try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.success !== undefined) {
+                        resultData = parsed;
+                        break;
+                    }
+                } catch (e) { /* ignorar líneas que no son JSON */ }
+            }
+            
+            console.log(`✅ LongCat completado (${elapsed}s)`);
+            
+            if (resultData && resultData.success) {
+                // Guardar metadata
+                saveVideoMetadata(outputFilename, {
+                    prompt: prompt,
+                    params: { resolution, mode, useInt8 },
+                    type: 'longcat-avatar',
+                    elapsed_seconds: elapsed
+                });
+                
+                resolve({ filename: outputFilename });
+            } else if (fs.existsSync(outputPath)) {
+                // Fallback: si existe el archivo, asumimos éxito
+                saveVideoMetadata(outputFilename, {
+                    prompt: prompt,
+                    params: { resolution, mode, useInt8 },
+                    type: 'longcat-avatar',
+                    elapsed_seconds: elapsed
+                });
+                resolve({ filename: outputFilename });
+            } else {
+                const errorMsg = resultData?.error || 'No se generó video';
+                console.error(`❌ LongCat: ${errorMsg}`);
+                reject(new Error(errorMsg));
+            }
+        });
     });
 }
 

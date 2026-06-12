@@ -92,7 +92,7 @@
                 <div class="tabs-container">
                     <button class="tab-button tab-button-std" id="tabPrevizBtn" data-target="tabPreviz">Previz</button>
                     <button class="tab-button tab-button-std active" id="tabOutputBtn" data-target="tabOutput">Stage</button>
-                    <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">Prompting</button>
+                    <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">CREATE</button>
                     <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
@@ -173,75 +173,288 @@
                 </div>
 
                 <div class="tab-content" id="tabPrompts">
-                    <div class="sequencer-scroller">
-                        <div class="sequencer-toolbar">
-                            <div class="toolbar-header">
-                                <label class="sequencer-label">Prompting Interface</label>
-                                <div class="checks-row">
-                                    <div class="check-item">
-                                        <input type="checkbox" id="autoAssembleCheck" class="green-check">
-                                        <label for="autoAssembleCheck" class="color-green-bold">Auto-assemble</label>
+                    <!-- WORKFLOW SELECTOR - TOP OF EVERYTHING -->
+                    <div class="wf-selector-bar">
+                        <button class="wf-card active" data-workflow="t2i">
+                            <span class="wf-card-icon">🖼️</span>
+                            <span class="wf-card-name">FLUX IMAGE</span>
+                            <span class="wf-card-desc">Text to Image</span>
+                        </button>
+                        <button class="wf-card" data-workflow="t2v">
+                            <span class="wf-card-icon">🎬</span>
+                            <span class="wf-card-name">DIRECT VIDEO</span>
+                            <span class="wf-card-desc">Text to Video (LTX-2)</span>
+                        </button>
+                        <button class="wf-card" data-workflow="t2i2v">
+                            <span class="wf-card-icon">🔄</span>
+                            <span class="wf-card-name">TEXT→IMAGE→VIDEO</span>
+                            <span class="wf-card-desc">Image + Video Pipeline</span>
+                        </button>
+                        <button class="wf-card" data-workflow="i2v">
+                            <span class="wf-card-icon">📸</span>
+                            <span class="wf-card-name">I2V MANUAL</span>
+                            <span class="wf-card-desc">Upload Image + Prompt</span>
+                        </button>
+                        <button class="wf-card" data-workflow="chainvideo">
+                            <span class="wf-card-icon">🔗</span>
+                            <span class="wf-card-name">CHAINVIDEO</span>
+                            <span class="wf-card-desc">Wan2.2 Linked Videos</span>
+                        </button>
+                    </div>
+
+                    <!-- FLUX IMAGE (T2I) -->
+                    <div class="wf-panel active" data-panel="t2i">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Image Prompt</label>
+                                <textarea class="wf-textarea" id="t2iPrompt" placeholder="Describe the image you want to generate..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Reference Image (optional)</label>
+                                <div class="wf-upload-area" id="t2iUploadArea">
+                                    <div class="wf-upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; opacity: 0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        <p>Drop image for img2img (optional)</p>
                                     </div>
-                                    <div class="check-item">
-                                        <input type="checkbox" id="autoRenderCheck" class="orange-check">
-                                        <label for="autoRenderCheck" class="color-orange-bold">Auto-render</label>
+                                </div>
+                                <input type="file" id="t2iImageInput" accept="image/*" class="hidden-input">
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="t2iWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="t2iHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">25</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="25" class="wf-param-slider" data-bind="t2iSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed <span class="wf-val">-1</span></label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="t2iSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="t2iRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="t2i">🚀 GENERATE IMAGE</button>
+                            <!-- Live Preview for last generated T2I image -->
+                            <div class="t2i-preview-area" id="t2iPreview" style="display:none; margin-top: 12px; border: 1px solid rgba(168,85,247,0.3); border-radius: 10px; overflow: hidden; background: rgba(15,23,42,0.6);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(168,85,247,0.1); border-bottom: 1px solid rgba(168,85,247,0.2);">
+                                    <span style="font-size: 11px; font-weight: 700; color: #a855f7; text-transform: uppercase; letter-spacing: 0.5px;">🖼️ Last Generated</span>
+                                    <div style="display: flex; gap: 6px;">
+                                        <button class="t2i-preview-action" id="t2iPreviewViewBtn" title="View in Previz" style="background: rgba(168,85,247,0.2); border: 1px solid rgba(168,85,247,0.3); border-radius: 6px; color: #cbd5e1; cursor: pointer; font-size: 14px; padding: 4px 10px;">👁️ View</button>
+                                        <button class="t2i-preview-action" id="t2iPreviewCopyPromptBtn" title="Copy Prompt" style="background: rgba(168,85,247,0.2); border: 1px solid rgba(168,85,247,0.3); border-radius: 6px; color: #cbd5e1; cursor: pointer; font-size: 14px; padding: 4px 10px;">📋 Copy Prompt</button>
                                     </div>
-                                    <div class="check-item overlap-box" style="margin-left: 15px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 15px;">
-                                        <label style="font-size: 0.65em; color: #64748b; margin-right: 8px; font-weight: 800;">OVERLAP:</label>
-                                        <input type="range" id="autoOverlapSlider" min="0" max="100" value="15" style="width: 70px; height: 4px; cursor: pointer;">
-                                        <span id="autoOverlapValue" style="font-size: 0.7em; color: var(--primary); font-weight: 900; margin-left: 5px; min-width: 25px;">15%</span>
+                                </div>
+                                <div style="padding: 0;">
+                                    <img id="t2iPreviewImg" src="" style="width: 100%; display: block; max-height: 340px; object-fit: contain; background: #000;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DIRECT VIDEO (T2V) -->
+                    <div class="wf-panel" data-panel="t2v">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Video Prompt</label>
+                                <textarea class="wf-textarea" id="t2vPrompt" placeholder="Describe the video scene and camera movement..."></textarea>
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1280</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="t2vWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">720</span></label>
+                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="t2vHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Frames <span class="wf-val">121</span></label>
+                                    <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="t2vFrames">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">20</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="t2vSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>CFG <span class="wf-val">4.0</span></label>
+                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="t2vCFG">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed</label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="t2vSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="t2vRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="t2v">🚀 GENERATE VIDEO</button>
+                        </div>
+                    </div>
+
+                    <!-- TEXT→IMAGE→VIDEO (T2I→I2V) -->
+                    <div class="wf-panel" data-panel="t2i2v">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <div class="wf-dual-header">
+                                    <div class="wf-dual-prompt">
+                                        <label class="wf-label">Image Prompt (FLUX)</label>
+                                        <textarea class="wf-textarea wf-dual-ta" id="t2i2vImagePrompt" placeholder="Visual description for the reference image..."></textarea>
+                                    </div>
+                                    <div class="wf-dual-prompt">
+                                        <label class="wf-label">Video Prompt (LTX-2)</label>
+                                        <textarea class="wf-textarea wf-dual-ta" id="t2i2vVideoPrompt" placeholder="Animation, camera movement, plot..."></textarea>
                                     </div>
                                 </div>
                             </div>
-
-                            <div class="toolbar-actions-row">
-                                <button id="magicPromptBtn" class="primary-btn-outline magic-btn" title="Toggle AI Prompt Helper">🪄 MAGIC PROMPT</button>
-                                <button id="jsonExampleBtn" title="Copy JSON Example" class="icon-btn-std">📋</button>
-                                <button id="importJsonBtn" class="primary-btn-outline">📥 IMPORT JSON</button>
-                                <select id="defaultPromptMode" class="global-mode-select">
-                                    <option value="t2i2v" selected>🔄 T2I → I2V</option>
-                                    <option value="t2i">🖼️ T2I (Image)</option>
-                                    <option value="t2v">🎬 T2V (Video)</option>
-                                </select>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1280</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="t2i2vWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">720</span></label>
+                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="t2i2vHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Frames <span class="wf-val">121</span></label>
+                                    <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="t2i2vFrames">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Flux Steps <span class="wf-val">25</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="25" class="wf-param-slider" data-bind="t2i2vFluxSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Video Steps <span class="wf-val">20</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="t2i2vSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>CFG <span class="wf-val">4.0</span></label>
+                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="t2i2vCFG">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Ref Strength <span class="wf-val">1.0</span></label>
+                                    <input type="range" min="0.1" max="1.0" step="0.05" value="1.0" class="wf-param-slider" data-bind="t2i2vRef">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed</label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="t2i2vSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="t2i2vRandomSeed" checked> Random</label>
+                                </div>
                             </div>
-                        </div>
-
-                        <!-- MAGIC PROMPT AREA (AI HELPER) -->
-                        <div id="aiPromptArea" class="manual-prompt-area hidden">
-                            <div class="ai-controls-row">
-                                <select id="geminiModelSelect" class="model-select-std">
-                                    <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
-                                    <option value="gemini-flash-latest">Gemini Flash (Latest)</option>
-                                    <option value="gemini-pro-latest">Gemini Pro (Latest)</option>
-                                </select>
+                            <div class="wf-options-row">
+                                <label class="wf-check-label"><input type="checkbox" id="t2i2vAutoAssemble" checked> Auto Assemble in Timeline</label>
+                                <label class="wf-check-label"><input type="checkbox" id="t2i2vAutoRender"> Auto Render Final</label>
                             </div>
-                            <textarea id="manualBatchPrompt" class="manual-prompt-textarea" placeholder="Escribe tu idea (ej: 'Un vaquero en el espacio buscando agua'). El sistema generará el batch JSON completo..."></textarea>
-                            <button id="enhancePromptBtn" class="enhance-btn-std">✨ GENERATE CLIP FROM IDEA</button>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="t2i2v">🚀 GENERATE IMAGE + VIDEO</button>
                         </div>
-
-                        <div class="sequencer-settings-header">
-                            <label class="sequencer-sub-label">Global Style / Master</label>
-                        </div>
-
-                        <!-- JSON Import Panel -->
-                        <div id="jsonImportArea" class="json-import-panel hidden">
-                            <label class="sequencer-sub-label color-index">Paste JSON Sequence</label>
-                            <textarea id="jsonInputText" placeholder='{ "globalImage": "...", "globalVideo": "...", "steps": [...] }' class="json-textarea-field"></textarea>
-                            <div class="export-actions-row">
-                                <button id="confirmJsonImport" class="confirm-btn-sm">IMPORT</button>
-                                <button id="cancelJsonImport" class="cancel-btn-sm">CANCEL</button>
-                            </div>
-                        </div>
-
-                        <textarea id="globalImagePrompt" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all generated images (Flux)..."></textarea>
-                        <textarea id="globalVideoPrompt" class="prompt-general-textarea sequencer-textarea-sm" placeholder="Style to apply to all generated videos (LTX)..." style="margin-top: 10px;"></textarea>
-                        
-                        <div id="promptSequence"></div>
-
-                        <button id="addPromptButton" class="add-prompt-btn-dashed">+ Add Prompt Step</button>
                     </div>
-                    <div class="sequencer-controls-row">
-                        <button id="generateFromPrompting" class="generate-btn-main">🚀 GENERATE FROM PROMPTS</button>
+
+                    <!-- I2V MANUAL -->
+                    <div class="wf-panel" data-panel="i2v">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Reference Image <span class="wf-badge-req">REQUIRED</span></label>
+                                <div class="wf-upload-area" id="i2vUploadArea">
+                                    <div class="wf-upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; opacity: 0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        <p>Drop your reference image here</p>
+                                    </div>
+                                </div>
+                                <input type="file" id="i2vImageInput" accept="image/*" class="hidden-input">
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Video Prompt</label>
+                                <textarea class="wf-textarea" id="i2vPrompt" placeholder="Describe the animation and camera movement..."></textarea>
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1280</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="i2vWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">720</span></label>
+                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="i2vHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Frames <span class="wf-val">121</span></label>
+                                    <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="i2vFrames">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">20</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="i2vSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>CFG <span class="wf-val">4.0</span></label>
+                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="i2vCFG">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Ref Strength <span class="wf-val">1.0</span></label>
+                                    <input type="range" min="0.1" max="1.0" step="0.05" value="1.0" class="wf-param-slider" data-bind="i2vRef">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed</label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="i2vSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="i2vRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="i2v">🚀 GENERATE VIDEO FROM IMAGE</button>
+                        </div>
+                    </div>
+
+                    <!-- CHAINVIDEO (Wan2.2) -->
+                    <div class="wf-panel" data-panel="chainvideo">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-chain-toolbar">
+                                <button id="chainAddStepBtn" class="primary-btn-sm">+ ADD CHAIN STEP</button>
+                                <button id="chainImportJsonBtn" class="primary-btn-outline" style="border-color: rgba(168,85,247,0.5); color: #a855f7;">📥 IMPORT JSON</button>
+                                <button id="chainMagicBtn" class="primary-btn-outline magic-btn" style="border-color: rgba(34,197,94,0.5); color: #22c55e;">🪄 MAGIC</button>
+                            </div>
+                            <div id="chainPromptArea" class="manual-prompt-area hidden">
+                                <select id="chainOllamaModel" class="model-select-std">
+                                    <option value="">Loading Ollama models...</option>
+                                </select>
+                                <textarea id="chainBatchPrompt" class="manual-prompt-textarea" placeholder="Describe your video sequence idea..."></textarea>
+                                <button id="chainEnhanceBtn" class="enhance-btn-std">✨ GENERATE CHAIN FROM IDEA</button>
+                            </div>
+                            <div id="chainJsonImport" class="json-import-panel hidden">
+                                <textarea id="chainJsonInput" placeholder='{ "steps": [...] }' class="json-textarea-field"></textarea>
+                                <div class="export-actions-row">
+                                    <button id="chainConfirmJson" class="confirm-btn-sm">IMPORT</button>
+                                    <button id="chainCancelJson" class="cancel-btn-sm">CANCEL</button>
+                                </div>
+                            </div>
+                            <div id="chainSequence"></div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1280</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="chainWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">720</span></label>
+                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="chainHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Frames <span class="wf-val">121</span></label>
+                                    <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="chainFrames">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">20</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="chainSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>CFG <span class="wf-val">4.0</span></label>
+                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="chainCFG">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed</label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="chainSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="chainRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="chainvideo" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🚀 GENERATE CHAIN VIDEOS</button>
+                        </div>
                     </div>
                 </div>
 

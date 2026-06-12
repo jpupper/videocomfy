@@ -1,0 +1,153 @@
+{
+  "72": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "73": {
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "79": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "80": {
+    "inputs": {
+      "image": "start_image.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage"
+  },
+  "89": {
+    "inputs": {
+      "image": "end_image.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage"
+  },
+  "90": {
+    "inputs": {
+      "text": "video prompt here",
+      "clip": [
+        "72",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "78": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "72",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "81": {
+    "inputs": {
+      "width": 640,
+      "height": 640,
+      "length": 81,
+      "batch_size": 1,
+      "start_image": [
+        "80",
+        0
+      ],
+      "end_image": [
+        "89",
+        0
+      ],
+      "positive": [
+        "90",
+        0
+      ],
+      "negative": [
+        "78",
+        0
+      ],
+      "vae": [
+        "79",
+        0
+      ]
+    },
+    "class_type": "WanFirstLastFrameToVideo"
+  },
+  "84": {
+    "inputs": {
+      "add_noise": "enable",
+      "enable_denoise": "enable",
+      "noise_seed": 0,
+      "control_after_generate": "randomize",
+      "steps": 20,
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "73",
+        0
+      ],
+      "positive": [
+        "81",
+        0
+      ],
+      "negative": [
+        "81",
+        1
+      ],
+      "latent_image": [
+        "81",
+        2
+      ]
+    },
+    "class_type": "KSamplerAdvanced"
+  },
+  "85": {
+    "inputs": {
+      "samples": [
+        "84",
+        0
+      ],
+      "vae": [
+        "79",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "86": {
+    "inputs": {
+      "fps": 16,
+      "images": [
+        "85",
+        0
+      ]
+    },
+    "class_type": "CreateVideo"
+  },
+  "83": {
+    "inputs": {
+      "filename_prefix": "wan2.2_output",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "SaveVideo"
+  }
+}

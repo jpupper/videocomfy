@@ -1,0 +1,93 @@
+{
+  "title": "Crystal Demons: Oppression and Liberation",
+  "globalStyle": {
+    "image": "Cinematic epic fantasy digital painting, intricate detailed crystal formations, dramatic lighting, volumetric god rays, dark fantasy atmosphere, rich saturated colors, ultra detailed, 8K quality, by Zdzislaw Beksin and Roger Dean inspired",
+    "video": "Epic cinematic motion, dramatic slow camera pans, sweeping wide shots, intense emotional atmosphere, 24fps cinematic style, dynamic lighting shifts"
+  },
+  "steps": [
+    {
+      "title": "Opening Shot - The Crystal Demon Throne",
+      "imagePrompt": "Cinematic wide shot of a massive crystalline demon king seated on a throne of jagged multicolored crystals deep inside a dark cavern. The demon has sharp angular crystalline body facets that shimmer with prismatic colors — ruby red, emerald green, sapphire blue, amethyst purple, and golden yellow all refracting light. Huge curved crystal horns. Surrounding the throne, smaller crystal formations glow with inner light. Volumetric lighting rays pierce through crystal shards. Dark gothic atmosphere. Ultra detailed digital painting, dramatic composition.",
+      "videoPrompt": "Slow dramatic dolly zoom into the crystal demon throne room. The camera slowly advances toward the massive crystalline demon whose multicolored body facets catch and refract beams of light that sweep across the cavern. Deep resonant atmosphere. Cinematic 24fps motion with subtle camera breathing.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 97,
+        "samplerSteps": 20,
+        "cfgScale": 4.0,
+        "refStrength": 1.0
+      },
+      "duration": 4
+    },
+    {
+      "title": "The Oppressed Villagers in Crystal Mines",
+      "imagePrompt": "Dark cavern with emaciated desperate villagers with hollow eyes mining enormous multicolored crystals under harsh torchlight. The crystals loom above them in jagged clusters of purple, green, blue, orange and red. Crystal shards embedded in the walls glow with an eerie otherworldly light. Chains and shackles on workers. Miserable exhausted expressions. Dark fantasy art style. Dust particles floating in the air illuminated by the crystal glow. Dramatic chiaroscuro lighting.",
+      "videoPrompt": "Slow tracking shot moving through the mine tunnel, passing haggard villagers chained to massive crystal formations. The camera glides past their weary faces as they chip away at glowing multicolored crystals. Torches flicker casting dancing shadows. The crystals pulse with a faint inner light. Somber emotional tone.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 121,
+        "samplerSteps": 20,
+        "cfgScale": 4.0,
+        "refStrength": 1.0
+      },
+      "duration": 5
+    },
+    {
+      "title": "The Crystal Demon Overseers",
+      "imagePrompt": "Three towering crystal demons with faceted multicolored bodies standing over groups of terrified kneeling villagers. The demons have crystalline wings and sharp angular limbs. Their body surfaces shimmer with shifting rainbow patterns — intense cyan, magenta, gold, and violet. One demon holds a whip made of crystal thorns. Villagers cower in fear below. Background shows massive crystalline spires reaching into a dark red sky. Epic scale, dramatic perspective from low angle looking up at the demons.",
+      "videoPrompt": "Low angle dolly shot looking up at three crystalline demons towering over the villagers. The camera tilts up their faceted multicolored bodies as they radiate an oppressive presence. The crystals on their surfaces pulse slowly with shifting rainbow colors. One demon raises a crystal whip. Dramatic orchestral tension building.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 121,
+        "samplerSteps": 20,
+        "cfgScale": 4.5,
+        "refStrength": 1.0
+      },
+      "duration": 5
+    },
+    {
+      "title": "The Rebellion Begins - First Spark",
+      "imagePrompt": "A dramatic close-up of a defiant villager holding a glowing crystal shard like a weapon, their face illuminated by multicolored light from the crystal. Behind them, other villagers rise up, their chains breaking. The crystal shard in their hand pulses with intense magical energy — bright white core with rainbow edges. Sparks and particles of light fill the air. Expression of fierce determination. Cinematic portrait lighting, shallow depth of field.",
+      "videoPrompt": "Intense close-up dolly zoom on a villager's face as they rise, clutching a glowing crystal shard. The camera pushes in as the crystal ignites with rainbow energy, casting multicolored light across their determined features. Behind, other figures rise with chains breaking. Rapidly building intensity.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 73,
+        "samplerSteps": 22,
+        "cfgScale": 4.5,
+        "refStrength": 1.0
+      },
+      "duration": 3
+    },
+    {
+      "title": "Epic Battle - Crystal Demons vs Liberated People",
+      "imagePrompt": "Epic wide shot of the battle between the crystal demons and the liberated villagers. Massive crystalline demons with multicolored refracting bodies clash against waves of empowered humans wielding crystal weapons that glow with rainbow energy. Explosions of prismatic light and crystal shards fill the air. Villagers flying through the air attacking the demons with shards of pure magic. The dark cavern ceiling above has shattered to reveal a starry sky. Dramatic action composition, dynamic motion blur, epic scale.",
+      "videoPrompt": "Cinematic epic battle sequence: sweeping crane shot over the battlefield. Liberated villagers armed with rainbow crystal weapons charge at the massive crystalline demons. The camera circles around the conflict as explosions of multicolored light erupt. Crystal shards fly through the air catching the light. Fast-paced dramatic editing style with camera shake on impacts. Triumphant rising orchestral energy.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 145,
+        "samplerSteps": 25,
+        "cfgScale": 5.0,
+        "refStrength": 0.8
+      },
+      "duration": 6
+    },
+    {
+      "title": "Victory - The People Free",
+      "imagePrompt": "Triumphant scene: the last crystal demon shatters into thousands of multicolored crystal fragments that float upward like a rainbow aurora. The liberated villagers stand on a high cliff overlooking a landscape now bathed in warm golden sunrise. The broken crystal throne crumbles behind them. Children and families embracing. Hope and freedom. The shattered crystals form a beautiful colorful cloud in the sky. Epic fantasy painting, warm golden hour lighting, emotional composition, sense of triumph and peace.",
+      "videoPrompt": "Slow emotional dolly out and crane up: the camera pulls back from the liberated villagers as the last crystal demon explodes into a spectacular shower of multicolored fragments floating upward like a living aurora. The sunrise breaks over the horizon casting warm golden light. Children run free. The camera continues to rise revealing the vast landscape. Slow motion. Triumphant emotional crescendo.",
+      "params": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "videoLength": 145,
+        "samplerSteps": 25,
+        "cfgScale": 4.0,
+        "refStrength": 0.85
+      },
+      "duration": 6
+    }
+  ]
+}

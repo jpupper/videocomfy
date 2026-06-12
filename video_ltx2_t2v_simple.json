@@ -1,0 +1,273 @@
+{
+  "sg_92_1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": null
+    },
+    "_meta": {
+      "title": "CheckpointLoaderSimple"
+    }
+  },
+  "sg_92_60": {
+    "class_type": "LTXAVTextEncoderLoader",
+    "inputs": {
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": null,
+      "device": "ltx-2-19b-dev-fp8.safetensors"
+    },
+    "_meta": {
+      "title": "LTXAVTextEncoderLoader"
+    }
+  },
+  "sg_92_3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "sg_92_60",
+        0
+      ],
+      "text": 10
+    },
+    "_meta": {
+      "title": "CLIPTextEncode"
+    }
+  },
+  "sg_92_4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "sg_92_60",
+        0
+      ],
+      "text": "blurry, low quality, still frame, frames, watermark, overlay, titles, has blurbox, has subtitles"
+    },
+    "_meta": {
+      "title": "CLIPTextEncode"
+    }
+  },
+  "sg_92_22": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": [
+        "sg_92_3",
+        0
+      ],
+      "negative": [
+        "sg_92_4",
+        0
+      ],
+      "frame_rate": 25.0
+    },
+    "_meta": {
+      "title": "LTXVConditioning"
+    }
+  },
+  "sg_92_89": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": "Cinematic, ultra-photorealistic video, hyper-detailed 8k. A wide-angle landscape shot capturing a colossal, collapsing glacier under a stormy, ominous gray sky. The massive blue-white ice wall is violently crumbling, but as enormous chunks break off and fall into the dark, freezing ocean below, they miraculously and chaotically transform mid-air into a torrential downpour of thousands of crisp US dollar bills, flying and scattering everywhere with the wind. The ocean surface is littered with floating money and large blocks of ice.\n\nThe scene is filled with dynamic, frantic movement. The camera executes a slow, dramatic pull-back while panning across the scene to show the scale. Simultaneously, hundreds of birds, looking disoriented and exhausted, are raining down from the turbulent sky, their limp bodies falling alongside the cascading dollars and ice debris, dropping into the turbulent water.\n\nThe ground in the foreground is muddy, where a few figures in extreme weather gear stare up in shock at the spectacle of falling wealth and death, their faces contorted in a mix of greed and horror. The air is thick with mist, spray from the calving ice, and the visual chaos of falling objects. Realistic textures: wet feathers, crumpled paper money, jagged ice, and rough water. Natural lighting, raw film grain, handheld camera shake to emphasize the unsettling atmosphere.",
+      "height": 480,
+      "batch_size": 1280,
+      "color": 720
+    },
+    "_meta": {
+      "title": "EmptyImage"
+    }
+  },
+  "sg_92_90": {
+    "class_type": "ImageScaleBy",
+    "inputs": {
+      "image": [
+        "sg_92_89",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "scale_by": 0.5
+    },
+    "_meta": {
+      "title": "ImageScaleBy"
+    }
+  },
+  "sg_92_91": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "sg_92_90",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "GetImageSize"
+    }
+  },
+  "sg_92_62": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 1280
+    },
+    "_meta": {
+      "title": "Length"
+    }
+  },
+  "sg_92_43": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": [
+        "sg_92_91",
+        0
+      ],
+      "height": [
+        "sg_92_91",
+        1
+      ],
+      "length": [
+        "sg_92_62",
+        0
+      ],
+      "batch_size": 768
+    },
+    "_meta": {
+      "title": "EmptyLTXVLatentVideo"
+    }
+  },
+  "sg_92_11": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 720
+    },
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "sg_92_8": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "sg_92_9": {
+    "class_type": "LTXVScheduler",
+    "inputs": {
+      "latent": [
+        "sg_92_43",
+        0
+      ],
+      "steps": 20,
+      "max_shift": 2.05,
+      "base_shift": 0.95,
+      "stretch": true,
+      "terminal": 0.1
+    },
+    "_meta": {
+      "title": "LTXVScheduler"
+    }
+  },
+  "sg_92_47": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": [
+        "sg_92_1",
+        0
+      ],
+      "positive": [
+        "sg_92_22",
+        0
+      ],
+      "negative": [
+        "sg_92_22",
+        1
+      ],
+      "cfg": 4
+    },
+    "_meta": {
+      "title": "CFGGuider"
+    }
+  },
+  "sg_92_41": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "sg_92_11",
+        0
+      ],
+      "guider": [
+        "sg_92_47",
+        0
+      ],
+      "sampler": [
+        "sg_92_8",
+        0
+      ],
+      "sigmas": [
+        "sg_92_9",
+        0
+      ],
+      "latent_image": [
+        "sg_92_43",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "sg_92_80": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": {
+      "av_latent": [
+        "sg_92_41",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "LTXVSeparateAVLatent"
+    }
+  },
+  "sg_92_95": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "sg_92_80",
+        0
+      ],
+      "vae": [
+        "sg_92_1",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "sg_92_97": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "sg_92_95",
+        0
+      ],
+      "fps": 24.0
+    },
+    "_meta": {
+      "title": "CreateVideo"
+    }
+  },
+  "sg_92_75": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "sg_92_97",
+        0
+      ],
+      "filename_prefix": "video/test_simple",
+      "format": "mp4",
+      "codec": "auto"
+    },
+    "_meta": {
+      "title": "SaveVideo"
+    }
+  }
+}

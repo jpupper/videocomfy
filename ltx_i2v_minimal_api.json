@@ -1,0 +1,134 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-2-19b-dev-fp8.safetensors" },
+    "_meta": { "title": "Load Checkpoint" }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": { "image": "input.png", "upload": "image" },
+    "_meta": { "title": "Load Image" }
+  },
+  "3": {
+    "class_type": "LTXVPreprocess",
+    "inputs": { "image": ["2", 0], "img_compression": 33 },
+    "_meta": { "title": "LTXV Preprocess" }
+  },
+  "18": {
+    "class_type": "LTXAVTextEncoderLoader",
+    "inputs": {
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": "ltx-2-19b-dev-fp8.safetensors",
+      "device": "default"
+    },
+    "_meta": { "title": "LTX Text Encoder" }
+  },
+  "4": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": {
+      "width": 768,
+      "height": 512,
+      "length": 97,
+      "batch_size": 1
+    },
+    "_meta": { "title": "Empty LTXV Video Latent" }
+  },
+  "5": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": ["1", 2],
+      "image": ["3", 0],
+      "latent": ["4", 0],
+      "strength": 1,
+      "bypass": false
+    },
+    "_meta": { "title": "Image to Video" }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["18", 0],
+      "text": "a teletubbie walking on the beach, cinematic, smooth motion"
+    },
+    "_meta": { "title": "Positive Prompt" }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["18", 0],
+      "text": "blurry, low quality, watermark, still frame, static"
+    },
+    "_meta": { "title": "Negative Prompt" }
+  },
+  "8": {
+    "class_type": "LTXVConditioning",
+    "inputs": {
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "frame_rate": 25
+    },
+    "_meta": { "title": "LTXV Conditioning" }
+  },
+  "10": {
+    "class_type": "RandomNoise",
+    "inputs": { "noise_seed": 42 },
+    "_meta": { "title": "Random Noise" }
+  },
+  "11": {
+    "class_type": "LTXVScheduler",
+    "inputs": { "steps": 20, "max_shift": 2.05, "base_shift": 0.95, "stretch": true, "terminal": 0.1 },
+    "_meta": { "title": "LTXV Scheduler" }
+  },
+  "12": {
+    "class_type": "KSamplerSelect",
+    "inputs": { "sampler_name": "euler" },
+    "_meta": { "title": "KSampler Select" }
+  },
+  "13": {
+    "class_type": "CFGGuider",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["8", 0],
+      "negative": ["8", 1],
+      "cfg": 4
+    },
+    "_meta": { "title": "CFG Guider" }
+  },
+  "14": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["10", 0],
+      "guider": ["13", 0],
+      "sampler": ["12", 0],
+      "sigmas": ["11", 0],
+      "latent_image": ["5", 0]
+    },
+    "_meta": { "title": "Sampler Custom Advanced" }
+  },
+  "15": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["14", 0],
+      "vae": ["1", 2]
+    },
+    "_meta": { "title": "VAE Decode" }
+  },
+  "16": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": ["15", 0],
+      "fps": 25
+    },
+    "_meta": { "title": "Create Video" }
+  },
+  "17": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": ["16", 0],
+      "filename_prefix": "video/LTX_I2V",
+      "format": "mp4",
+      "codec": "auto"
+    },
+    "_meta": { "title": "Save Video" }
+  }
+}

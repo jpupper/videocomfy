@@ -1,21 +1,98 @@
 {
   "timeline": [
     {
-      "filename": "export_1774838069202.mp4",
-      "startTime": 5.28,
-      "duration": 6,
+      "filename": "LTX2_i2v_00310_.mp4",
+      "startTime": 0,
+      "duration": 4.84,
+      "track": "V1",
+      "muted": true,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 121,
+        "samplerSteps": 20,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "imagePrompt": "Sound of a finely-tuned luxury sports car engine purring. Gentle, sophisticated purrs from a cat. Elegant, smooth jazz instrumental music in the background. Character voice is a confident, slightly mischievous cat's meow., Static shot as the car door swings open. The cat gracefully jumps out, stretches luxuriously, then turns its head to take in the grandeur of the mansion. '¡Qué bienvenida!' the cat meows, its tail swaying.",
+        "videoPrompt": "Sound of a finely-tuned luxury sports car engine purring. Gentle, sophisticated purrs from a cat. Elegant, smooth jazz instrumental music in the background. Character voice is a confident, slightly mischievous cat's meow., Static shot as the car door swings open. The cat gracefully jumps out, stretches luxuriously, then turns its head to take in the grandeur of the mansion. '¡Qué bienvenida!' the cat meows, its tail swaying.",
+        "imageFilename": null,
+        "clipId": "clip_1775681205035_V",
+        "actualDuration": 4.84
+      }
+    },
+    {
+      "filename": "LTX2_i2v_00310_.mp4",
+      "startTime": 0,
+      "duration": 4.84,
+      "track": "A1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 704,
+        "videoLength": 121,
+        "samplerSteps": 20,
+        "cfgScale": 4,
+        "refStrength": 1,
+        "seed": -1,
+        "imagePrompt": "Sound of a finely-tuned luxury sports car engine purring. Gentle, sophisticated purrs from a cat. Elegant, smooth jazz instrumental music in the background. Character voice is a confident, slightly mischievous cat's meow., Static shot as the car door swings open. The cat gracefully jumps out, stretches luxuriously, then turns its head to take in the grandeur of the mansion. '¡Qué bienvenida!' the cat meows, its tail swaying.",
+        "videoPrompt": "Sound of a finely-tuned luxury sports car engine purring. Gentle, sophisticated purrs from a cat. Elegant, smooth jazz instrumental music in the background. Character voice is a confident, slightly mischievous cat's meow., Static shot as the car door swings open. The cat gracefully jumps out, stretches luxuriously, then turns its head to take in the grandeur of the mansion. '¡Qué bienvenida!' the cat meows, its tail swaying.",
+        "imageFilename": null,
+        "isAudioOnly": true,
+        "clipId": "clip_1775681205035_A",
+        "actualDuration": 4.84
+      }
+    },
+    {
+      "filename": "export_1775597104690.mp4",
+      "startTime": 2.52,
+      "duration": 22.2,
       "track": "V1",
       "muted": true,
       "metadata": {
         "videoWidth": 1280,
         "videoHeight": 720,
-        "clipId": "clip_1774844749275_V"
+        "imagePrompt": "Final Project Export",
+        "videoPrompt": "Final Project Export",
+        "imageFilename": null,
+        "clipId": "clip_1775681198868_V",
+        "actualDuration": 22.2
+      }
+    },
+    {
+      "filename": "export_1775597104690.mp4",
+      "startTime": 2.52,
+      "duration": 22.2,
+      "track": "A1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "imagePrompt": "Final Project Export",
+        "videoPrompt": "Final Project Export",
+        "imageFilename": null,
+        "isAudioOnly": true,
+        "clipId": "clip_1775681198868_A",
+        "actualDuration": 22.2
       }
     },
     {
       "filename": "export_1774838069202.mp4",
       "startTime": 5.28,
-      "duration": 6,
+      "duration": 61.96,
+      "track": "V1",
+      "muted": false,
+      "metadata": {
+        "videoWidth": 1280,
+        "videoHeight": 720,
+        "clipId": "clip_1774844749275_V",
+        "actualDuration": 61.96
+      }
+    },
+    {
+      "filename": "export_1774838069202.mp4",
+      "startTime": 5.28,
+      "duration": 5.04,
       "track": "A1",
       "muted": false,
       "metadata": {
@@ -28,9 +105,9 @@
     {
       "filename": "LTX2_i2v_00091_.mp4",
       "startTime": 11.32,
-      "duration": 6,
+      "duration": 16.04,
       "track": "V1",
-      "muted": true,
+      "muted": false,
       "metadata": {
         "videoWidth": 1280,
         "videoHeight": 704,
@@ -40,13 +117,14 @@
         "refStrength": 1,
         "seed": -1,
         "negativePrompt": "",
-        "clipId": "clip_1774844754888_V"
+        "clipId": "clip_1774844754888_V",
+        "actualDuration": 16.04
       }
     },
     {
       "filename": "LTX2_i2v_00091_.mp4",
       "startTime": 11.32,
-      "duration": 6,
+      "duration": 16.72,
       "track": "A1",
       "muted": false,
       "metadata": {
@@ -65,9 +143,9 @@
     {
       "filename": "LTX2_i2v_00090_.mp4",
       "startTime": 17.24,
-      "duration": 6,
+      "duration": 16.04,
       "track": "V1",
-      "muted": true,
+      "muted": false,
       "metadata": {
         "videoWidth": 1280,
         "videoHeight": 704,
@@ -77,13 +155,14 @@
         "refStrength": 1,
         "seed": -1,
         "negativePrompt": "",
-        "clipId": "clip_1774844756542_V"
+        "clipId": "clip_1774844756542_V",
+        "actualDuration": 16.04
       }
     },
     {
       "filename": "LTX2_i2v_00090_.mp4",
       "startTime": 17.24,
-      "duration": 6,
+      "duration": 16.72,
       "track": "A1",
       "muted": false,
       "metadata": {
@@ -100,12 +179,15 @@
       }
     }
   ],
-  "sequencer": {
-    "mode": "single",
-    "simplePrompt": "",
-    "globalPrompt": "",
+  "prompting": {
+    "globalImagePrompt": "",
+    "globalVideoPrompt": "",
     "sequence": [
-      ""
+      {
+        "prompt": "",
+        "videoPrompt": "",
+        "mode": "t2i2v"
+      }
     ],
     "autoAssemble": false,
     "autoRender": false
@@ -123,5 +205,5 @@
   },
   "storyboard": [],
   "uploadedImage": null,
-  "creationTime": 1774844777685
+  "creationTime": 1775681208289
 }
