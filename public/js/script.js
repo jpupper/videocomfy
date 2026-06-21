@@ -1559,7 +1559,15 @@ function checkGlobalQueue() {
             wanStepIndex: nextItem.wanStepIndex,
             queueItemId: nextItem.id
         };
-        ws.send(JSON.stringify(message));
+        try { ws.send(JSON.stringify(message)); } catch (e) {
+            console.error('WS send failed (flux_for_wan):', e);
+            nextItem.status = 'pending';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 2000);
+            return;
+        }
         appendConsoleLine(`>> Generating FLUX image for WAN2.2 (${nextItem.wanRole}): ${nextItem.prompt.substring(0, 30)}...`, 'system');
     } else if (nextItem.model === 'wan2.2') {
         // Generate WAN2.2 video
@@ -1573,7 +1581,15 @@ function checkGlobalQueue() {
             batchName: batchName,
             queueItemId: nextItem.id
         };
-        ws.send(JSON.stringify(message));
+        try { ws.send(JSON.stringify(message)); } catch (e) {
+            console.error('WS send failed (wan2.2):', e);
+            nextItem.status = 'pending';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 2000);
+            return;
+        }
         appendConsoleLine(`>> Launching WAN2.2 video: ${nextItem.prompt.substring(0, 30)}...`, 'system');
     } else {
         const message = {
@@ -1586,7 +1602,15 @@ function checkGlobalQueue() {
             batchName: batchName,
             queueItemId: nextItem.id
         };
-        ws.send(JSON.stringify(message));
+        try { ws.send(JSON.stringify(message)); } catch (e) {
+            console.error('WS send failed (storyboard/video):', e);
+            nextItem.status = 'pending';
+            isGeneratingGlobal = false;
+            currentExecutingId = null;
+            updateGlobalQueueUI();
+            setTimeout(() => checkGlobalQueue(), 2000);
+            return;
+        }
         appendConsoleLine(`>> Launching ${nextItem.type || 'generation'}: ${nextItem.prompt.substring(0, 30)}...`, 'system');
     }
 }
@@ -4969,6 +4993,327 @@ function setupChainJsonImport() {
 }
 
 // ============================================
+// WORKFLOW PRESETS (Save/Load per-workflow)
+// ============================================
+
+// Define what params to capture for each workflow
+const WORKFLOW_PRESET_CONFIG = {
+    t2i: {
+        fields: {
+            prompt: { selector: '#t2iPrompt', type: 'textarea' },
+            width: { bind: 't2iWidth', type: 'slider' },
+            height: { bind: 't2iHeight', type: 'slider' },
+            steps: { bind: 't2iSteps', type: 'slider' },
+            seed: { prefix: 't2i', type: 'seed' }
+        }
+    },
+    t2v: {
+        fields: {
+            prompt: { selector: '#t2vPrompt', type: 'textarea' },
+            width: { bind: 't2vWidth', type: 'slider' },
+            height: { bind: 't2vHeight', type: 'slider' },
+            frames: { bind: 't2vFrames', type: 'slider' },
+            steps: { bind: 't2vSteps', type: 'slider' },
+            cfg: { bind: 't2vCFG', type: 'slider' },
+            seed: { prefix: 't2v', type: 'seed' }
+        }
+    },
+    t2i2v: {
+        fields: {
+            imagePrompt: { selector: '#t2i2vImagePrompt', type: 'textarea' },
+            videoPrompt: { selector: '#t2i2vVideoPrompt', type: 'textarea' },
+            width: { bind: 't2i2vWidth', type: 'slider' },
+            height: { bind: 't2i2vHeight', type: 'slider' },
+            frames: { bind: 't2i2vFrames', type: 'slider' },
+            fluxSteps: { bind: 't2i2vFluxSteps', type: 'slider' },
+            steps: { bind: 't2i2vSteps', type: 'slider' },
+            cfg: { bind: 't2i2vCFG', type: 'slider' },
+            ref: { bind: 't2i2vRef', type: 'slider' },
+            seed: { prefix: 't2i2v', type: 'seed' },
+            autoAssemble: { selector: '#t2i2vAutoAssemble', type: 'checkbox' },
+            autoRender: { selector: '#t2i2vAutoRender', type: 'checkbox' }
+        }
+    },
+    i2v: {
+        fields: {
+            prompt: { selector: '#i2vPrompt', type: 'textarea' },
+            width: { bind: 'i2vWidth', type: 'slider' },
+            height: { bind: 'i2vHeight', type: 'slider' },
+            frames: { bind: 'i2vFrames', type: 'slider' },
+            steps: { bind: 'i2vSteps', type: 'slider' },
+            cfg: { bind: 'i2vCFG', type: 'slider' },
+            ref: { bind: 'i2vRef', type: 'slider' },
+            seed: { prefix: 'i2v', type: 'seed' }
+        }
+    },
+    chainvideo: {
+        fields: {
+            width: { bind: 'chainWidth', type: 'slider' },
+            height: { bind: 'chainHeight', type: 'slider' },
+            frames: { bind: 'chainFrames', type: 'slider' },
+            steps: { bind: 'chainSteps', type: 'slider' },
+            cfg: { bind: 'chainCFG', type: 'slider' },
+            seed: { prefix: 'chain', type: 'seed' }
+        }
+    }
+};
+
+// Collect current values from a workflow's UI into a preset data object
+function collectWorkflowPresetData(workflow) {
+    const config = WORKFLOW_PRESET_CONFIG[workflow];
+    if (!config) return {};
+
+    const data = {};
+    for (const [key, field] of Object.entries(config.fields)) {
+        switch (field.type) {
+            case 'textarea': {
+                const el = document.querySelector(field.selector);
+                if (el) data[key] = el.value;
+                break;
+            }
+            case 'slider': {
+                const val = getSliderVal(field.bind);
+                data[key] = val !== null ? val : '';
+                break;
+            }
+            case 'checkbox': {
+                const el = document.querySelector(field.selector);
+                if (el) data[key] = el.checked;
+                break;
+            }
+            case 'seed': {
+                const randomCheck = document.getElementById(`${field.prefix}RandomSeed`);
+                const seedInput = document.getElementById(`${field.prefix}Seed`);
+                data.seedRandom = randomCheck ? randomCheck.checked : true;
+                data.seedValue = seedInput ? parseInt(seedInput.value) || 0 : 0;
+                break;
+            }
+        }
+    }
+
+    // For chainvideo, also capture chain steps
+    if (workflow === 'chainvideo') {
+        const steps = [];
+        document.querySelectorAll('.chain-step-item').forEach(item => {
+            const start = item.querySelector('.chain-start-prompt')?.value || '';
+            const end = item.querySelector('.chain-end-prompt')?.value || '';
+            steps.push({ startPrompt: start, endPrompt: end });
+        });
+        data.chainSteps = steps;
+    }
+
+    return data;
+}
+
+// Apply preset data to a workflow's UI
+function applyWorkflowPresetData(workflow, data) {
+    const config = WORKFLOW_PRESET_CONFIG[workflow];
+    if (!config || !data) return;
+
+    for (const [key, field] of Object.entries(config.fields)) {
+        if (data[key] === undefined && key !== 'seedValue' && key !== 'seedRandom') continue;
+        switch (field.type) {
+            case 'textarea': {
+                const el = document.querySelector(field.selector);
+                if (el && data[key] !== undefined) el.value = data[key];
+                break;
+            }
+            case 'slider': {
+                const slider = document.querySelector(`.wf-param-slider[data-bind="${field.bind}"]`);
+                if (slider && data[key] !== undefined) {
+                    slider.value = data[key];
+                    // Update the display label
+                    const valEl = slider.parentElement.querySelector('.wf-val');
+                    if (valEl) {
+                        const val = parseFloat(slider.value);
+                        valEl.textContent = slider.step && slider.step.includes('.') ? val.toFixed(1) : val;
+                    }
+                    // Dispatch input event for any listeners
+                    slider.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                break;
+            }
+            case 'checkbox': {
+                const el = document.querySelector(field.selector);
+                if (el && data[key] !== undefined) el.checked = data[key];
+                break;
+            }
+            case 'seed': {
+                if (data.seedRandom !== undefined) {
+                    const randomCheck = document.getElementById(`${field.prefix}RandomSeed`);
+                    if (randomCheck) randomCheck.checked = data.seedRandom;
+                }
+                if (data.seedValue !== undefined) {
+                    const seedInput = document.getElementById(`${field.prefix}Seed`);
+                    if (seedInput) seedInput.value = data.seedValue;
+                }
+                break;
+            }
+        }
+    }
+
+    // For chainvideo, restore chain steps
+    if (workflow === 'chainvideo' && data.chainSteps && Array.isArray(data.chainSteps)) {
+        // Clear existing steps
+        const container = document.getElementById('chainSequence');
+        if (container) {
+            container.innerHTML = '';
+            // Re-add steps from preset
+            data.chainSteps.forEach(step => {
+                addChainStep(step.startPrompt || '', step.endPrompt || '');
+            });
+        }
+    }
+}
+
+// Prompt user for a preset name
+function promptPresetName() {
+    return new Promise((resolve) => {
+        const name = prompt('Enter a name for this preset:', '');
+        resolve(name ? name.trim() : null);
+    });
+}
+
+// Save a preset for a workflow
+async function saveWorkflowPreset(workflow) {
+    const name = await promptPresetName();
+    if (!name) return;
+
+    const data = collectWorkflowPresetData(workflow);
+    if (Object.keys(data).length === 0) {
+        appendConsoleLine(`⚠️ No data to save for workflow: ${workflow}`, 'warning');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/presets/${workflow}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, label: name, data })
+        });
+        const result = await res.json();
+        if (result.success) {
+            appendConsoleLine(`💾 Preset saved: ${workflow}/${name}`, 'system');
+            loadPresetsIntoDropdown(workflow);
+        } else {
+            appendConsoleLine(`❌ Failed to save preset: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        appendConsoleLine(`❌ Error saving preset: ${err.message}`, 'error');
+    }
+}
+
+// Delete a preset
+async function deleteWorkflowPreset(workflow, name) {
+    if (!name) return;
+    if (!confirm(`Delete preset "${name}"?`)) return;
+
+    try {
+        const res = await fetch(`/api/presets/${workflow}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+            appendConsoleLine(`🗑️ Preset deleted: ${workflow}/${name}`, 'system');
+            loadPresetsIntoDropdown(workflow);
+        } else {
+            appendConsoleLine(`❌ Failed to delete preset: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        appendConsoleLine(`❌ Error deleting preset: ${err.message}`, 'error');
+    }
+}
+
+// Load presets from server and populate dropdown
+async function loadPresetsIntoDropdown(workflow) {
+    const bar = document.querySelector(`.wf-preset-bar[data-workflow="${workflow}"]`);
+    if (!bar) return;
+    const select = bar.querySelector('.wf-preset-select');
+    if (!select) return;
+
+    try {
+        const res = await fetch(`/api/presets/${workflow}`);
+        const presets = await res.json();
+
+        // Remember current selection
+        const currentVal = select.value;
+
+        // Rebuild options
+        select.innerHTML = '<option value="">-- Presets --</option>';
+        presets.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.label || p.name;
+            select.appendChild(opt);
+        });
+
+        // Restore selection
+        if (currentVal && presets.some(p => p.name === currentVal)) {
+            select.value = currentVal;
+        }
+
+        // Show/hide delete button
+        const deleteBtn = bar.querySelector('.wf-preset-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.style.display = presets.length > 0 ? '' : 'none';
+        }
+    } catch (err) {
+        console.warn(`Failed to load presets for ${workflow}:`, err);
+    }
+}
+
+// Load a preset and apply it to the workflow UI
+async function loadWorkflowPreset(workflow, presetName) {
+    if (!presetName) return;
+
+    try {
+        const res = await fetch(`/api/presets/${workflow}`);
+        const presets = await res.json();
+        const preset = presets.find(p => p.name === presetName);
+        if (!preset || !preset.data) {
+            appendConsoleLine(`⚠️ Preset not found: ${presetName}`, 'warning');
+            return;
+        }
+
+        applyWorkflowPresetData(workflow, preset.data);
+        appendConsoleLine(`📂 Preset loaded: ${workflow}/${presetName}`, 'system');
+    } catch (err) {
+        appendConsoleLine(`❌ Error loading preset: ${err.message}`, 'error');
+    }
+}
+
+// Setup preset event handlers for all workflow bars
+function setupPresetHandlers() {
+    document.querySelectorAll('.wf-preset-bar').forEach(bar => {
+        const workflow = bar.dataset.workflow;
+        if (!workflow) return;
+
+        const select = bar.querySelector('.wf-preset-select');
+        const saveBtn = bar.querySelector('.wf-preset-save-btn');
+        const deleteBtn = bar.querySelector('.wf-preset-delete-btn');
+
+        if (select) {
+            select.addEventListener('change', () => {
+                loadWorkflowPreset(workflow, select.value);
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                saveWorkflowPreset(workflow);
+            });
+        }
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                deleteWorkflowPreset(workflow, select ? select.value : '');
+            });
+        }
+
+        // Initial load
+        loadPresetsIntoDropdown(workflow);
+    });
+}
+
+// ============================================
 // MODIFIED INITIALIZATION
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -4986,6 +5331,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupI2VUpload();
     setupChainMagic();
     setupChainJsonImport();
+    
+    // Setup preset save/load handlers
+    setupPresetHandlers();
     
     // Generate button handlers
     document.querySelectorAll('.wf-gen-btn').forEach(btn => {

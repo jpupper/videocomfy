@@ -205,6 +205,14 @@
                     <!-- FLUX IMAGE (T2I) -->
                     <div class="wf-panel active" data-panel="t2i">
                         <div class="wf-panel-scroll">
+                            <!-- Preset bar -->
+                            <div class="wf-preset-bar" data-workflow="t2i">
+                                <select class="wf-preset-select" title="Load a saved preset">
+                                    <option value="">-- Presets --</option>
+                                </select>
+                                <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
+                                <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
+                            </div>
                             <div class="wf-section">
                                 <label class="wf-label">Image Prompt</label>
                                 <textarea class="wf-textarea" id="t2iPrompt" placeholder="Describe the image you want to generate..."></textarea>
@@ -258,6 +266,14 @@
                     <!-- DIRECT VIDEO (T2V) -->
                     <div class="wf-panel" data-panel="t2v">
                         <div class="wf-panel-scroll">
+                            <!-- Preset bar -->
+                            <div class="wf-preset-bar" data-workflow="t2v">
+                                <select class="wf-preset-select" title="Load a saved preset">
+                                    <option value="">-- Presets --</option>
+                                </select>
+                                <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
+                                <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
+                            </div>
                             <div class="wf-section">
                                 <label class="wf-label">Video Prompt</label>
                                 <textarea class="wf-textarea" id="t2vPrompt" placeholder="Describe the video scene and camera movement..."></textarea>
@@ -296,6 +312,14 @@
                     <!-- TEXT→IMAGE→VIDEO (T2I→I2V) -->
                     <div class="wf-panel" data-panel="t2i2v">
                         <div class="wf-panel-scroll">
+                            <!-- Preset bar -->
+                            <div class="wf-preset-bar" data-workflow="t2i2v">
+                                <select class="wf-preset-select" title="Load a saved preset">
+                                    <option value="">-- Presets --</option>
+                                </select>
+                                <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
+                                <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
+                            </div>
                             <div class="wf-section">
                                 <div class="wf-dual-header">
                                     <div class="wf-dual-prompt">
@@ -354,6 +378,14 @@
                     <!-- I2V MANUAL -->
                     <div class="wf-panel" data-panel="i2v">
                         <div class="wf-panel-scroll">
+                            <!-- Preset bar -->
+                            <div class="wf-preset-bar" data-workflow="i2v">
+                                <select class="wf-preset-select" title="Load a saved preset">
+                                    <option value="">-- Presets --</option>
+                                </select>
+                                <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
+                                <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
+                            </div>
                             <div class="wf-section">
                                 <label class="wf-label">Reference Image <span class="wf-badge-req">REQUIRED</span></label>
                                 <div class="wf-upload-area" id="i2vUploadArea">
@@ -406,6 +438,14 @@
                     <!-- CHAINVIDEO (Wan2.2) -->
                     <div class="wf-panel" data-panel="chainvideo">
                         <div class="wf-panel-scroll">
+                            <!-- Preset bar -->
+                            <div class="wf-preset-bar" data-workflow="chainvideo">
+                                <select class="wf-preset-select" title="Load a saved preset">
+                                    <option value="">-- Presets --</option>
+                                </select>
+                                <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
+                                <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
+                            </div>
                             <div class="wf-chain-toolbar">
                                 <button id="chainAddStepBtn" class="primary-btn-sm">+ ADD CHAIN STEP</button>
                                 <button id="chainImportJsonBtn" class="primary-btn-outline" style="border-color: rgba(168,85,247,0.5); color: #a855f7;">📥 IMPORT JSON</button>

@@ -1354,14 +1354,26 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
 
         const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000);
         promptWorkflow["11"]["inputs"]["noise_seed"] = seedValue;
-        promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
+        if (promptWorkflow["67"]) promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
 
         if (params.videoWidth) promptWorkflow["89"]["inputs"]["width"] = params.videoWidth;
         if (params.videoHeight) promptWorkflow["89"]["inputs"]["height"] = params.videoHeight;
         if (params.cfgScale) promptWorkflow["47"]["inputs"]["cfg"] = params.cfgScale;
+
+        // SAFETY: Always fix EmptyImage batch_size=1 (workflow JSON may be corrupt)
+        if (promptWorkflow["89"] && promptWorkflow["89"].inputs) {
+            promptWorkflow["89"]["inputs"]["batch_size"] = 1;
+            promptWorkflow["89"]["inputs"]["color"] = 0;
+        }
+
+        // SAFETY: Clamp videoLength — 169 frames max (~7s at 24fps) to prevent OOM on 24GB VRAM
+        if (params.videoLength) {
+            promptWorkflow["62"]["inputs"]["value"] = Math.min(params.videoLength, 169);
+        } else {
+            promptWorkflow["62"]["inputs"]["value"] = 97; // default safe value
+        }
     }
 
-    if (params.videoLength) promptWorkflow["62"]["inputs"]["value"] = params.videoLength;
     if (params.samplerSteps) promptWorkflow["9"]["inputs"]["steps"] = params.samplerSteps;
 
     const promptId = await queuePrompt(promptWorkflow);
@@ -1557,6 +1569,80 @@ async function generarLongCat(message) {
         });
     });
 }
+
+// ============================================
+// PRESETS API (Save/Load per-workflow presets)
+// ============================================
+const PRESETS_DIR = path.join(__dirname, 'public', 'presets');
+if (!fs.existsSync(PRESETS_DIR)) fs.mkdirSync(PRESETS_DIR, { recursive: true });
+
+// GET /api/presets/:workflow — list all presets for a workflow
+app.get('/api/presets/:workflow', (req, res) => {
+    const { workflow } = req.params;
+    const wfDir = path.join(PRESETS_DIR, workflow);
+    if (!fs.existsSync(wfDir)) return res.json([]);
+    try {
+        const files = fs.readdirSync(wfDir)
+            .filter(f => f.endsWith('.json'))
+            .map(f => {
+                const name = f.replace(/\.json$/, '');
+                const fullPath = path.join(wfDir, f);
+                const data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+                return { name, ...data, _path: fullPath };
+            })
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/presets/:workflow — save a new preset
+app.post('/api/presets/:workflow', (req, res) => {
+    try {
+        const { workflow } = req.params;
+        const { name, label, data } = req.body;
+        if (!name || !data) return res.status(400).json({ error: 'name and data required' });
+        
+        const wfDir = path.join(PRESETS_DIR, workflow);
+        if (!fs.existsSync(wfDir)) fs.mkdirSync(wfDir, { recursive: true });
+        
+        const safeName = name.replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+        if (!safeName) return res.status(400).json({ error: 'Invalid preset name' });
+        
+        const presetPath = path.join(wfDir, `${safeName}.json`);
+        const preset = {
+            label: label || safeName,
+            data,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        fs.writeFileSync(presetPath, JSON.stringify(preset, null, 2));
+        
+        console.log(`💾 Preset saved: ${workflow}/${safeName}`);
+        res.json({ success: true, name: safeName });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /api/presets/:workflow/:name — delete a preset
+app.delete('/api/presets/:workflow/:name', (req, res) => {
+    try {
+        const { workflow, name } = req.params;
+        const safeName = name.replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+        const presetPath = path.join(PRESETS_DIR, workflow, `${safeName}.json`);
+        if (fs.existsSync(presetPath)) {
+            fs.unlinkSync(presetPath);
+            console.log(`🗑️ Preset deleted: ${workflow}/${safeName}`);
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Preset not found' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // Iniciar conexión con ComfyUI una vez que el servidor está listo
 connectToComfy();

@@ -242,6 +242,61 @@ body.tab-editor-active .timeline-editor-wrapper { display: flex; }
     gap: 15px;
 }
 
+/* Preset bar */
+.wf-preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 0;
+}
+.wf-preset-select {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 5px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+.wf-preset-select option {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+.wf-preset-save-btn {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 6px;
+    color: #a855f7;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+.wf-preset-save-btn:hover {
+    background: rgba(168, 85, 247, 0.25);
+}
+.wf-preset-delete-btn {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    padding: 5px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.wf-preset-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
 /* Sections */
 .wf-section {
     background: rgba(15, 23, 42, 0.4);
