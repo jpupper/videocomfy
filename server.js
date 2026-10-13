@@ -28,6 +28,10 @@ const ipglobal = process.env.COMFYUI_ADDRESS || "127.0.0.1"; // Default to local
 const serverAddress = ipglobal.includes(':') ? ipglobal : `${ipglobal}:8188`;
 const clientId = uuidv4();
 
+// Que tipo de trabajo se encolo ultimo ('imagen' | 'video'): sirve para saber
+// si hay que liberar la VRAM antes de un video (Flux ~17GB + LTX ~20GB = crash).
+let ultimoTrabajo = null;
+
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
@@ -312,36 +316,10 @@ function connectToComfy() {
 // connectToComfy();
 
 // ============================================
-// GENERATION TIMEOUT CHECKER
+// GENERATION TIMEOUT CHECKER — DISABLED (no hard timeout)
 // ============================================
-const GENERATION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max
-
-setInterval(() => {
-    const now = Date.now();
-    Object.keys(promptDetails).forEach(promptId => {
-        const details = promptDetails[promptId];
-        if (details && details.generationStartTime) {
-            const elapsed = now - details.generationStartTime;
-            if (elapsed > GENERATION_TIMEOUT_MS) {
-                console.error(`⏰ Hard timeout for prompt ${promptId}: ${Math.round(elapsed / 60000)} min`);
-                
-                // Notify frontend
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: 'queue_timeout',
-                            error: `⏰ Hard timeout: generation exceeded 30 minutes`,
-                            prompt_id: promptId
-                        }));
-                    }
-                });
-                
-                // Clean up
-                delete promptDetails[promptId];
-            }
-        }
-    });
-}, 60000); // Check every 60 seconds
+// Generations can run as long as needed. No timeout.
+// Only warnings are sent to frontend (handled client-side).
 
 // ============================================
 // ENDPOINTS API
@@ -548,7 +526,7 @@ app.post('/api/generate-avatar', upload.fields([
         
         // Responder inmediatamente con el filename
         // La generación corre en background
-        exec(cmd, { timeout: 1800000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        exec(cmd, { timeout: 86400000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
             if (error) {
                 console.error(`❌ [REST] LongCat error: ${error.message}`);
                 return;
@@ -1325,8 +1303,8 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
 
     // Configurar workflow
     if (isI2V) {
-        // Validate required nodes exist
-        ['3','4','11','67','98','47','107','108','62','9'].forEach(n => {
+        // Validate required nodes exist (67=2nd RandomNoise, 107/108=ImgToVideo are optional)
+        ['3','4','11','98','47','62','9'].forEach(n => {
             if (!promptWorkflow[n]) {
                 console.error(`[I2V] NODE ${n} MISSING after normalization!`);
                 console.error(`[I2V] Available keys (${Object.keys(promptWorkflow).length}):`, Object.keys(promptWorkflow).sort((a,b)=>Number(a)-Number(b)).join(', '));
@@ -1338,15 +1316,15 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
         
         const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000);
         promptWorkflow["11"]["inputs"]["noise_seed"] = seedValue;
-        promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
+        if (promptWorkflow["67"]) promptWorkflow["67"]["inputs"]["noise_seed"] = seedValue;
         
-        // Note: node 98 is LoadImage in the I2V workflow (was node 200 in old workflow)
+        // Note: node 98 is LoadImage in the I2V workflow
         promptWorkflow["98"]["inputs"]["image"] = imageFilename;
         
         if (params.cfgScale) promptWorkflow["47"]["inputs"]["cfg"] = params.cfgScale;
         if (params.refStrength) {
-            promptWorkflow["107"]["inputs"]["strength"] = params.refStrength;
-            promptWorkflow["108"]["inputs"]["strength"] = params.refStrength;
+            if (promptWorkflow["107"]) promptWorkflow["107"]["inputs"]["strength"] = params.refStrength;
+            if (promptWorkflow["108"]) promptWorkflow["108"]["inputs"]["strength"] = params.refStrength;
         }
     } else {
         promptWorkflow["3"]["inputs"]["text"] = promptText;
@@ -1374,15 +1352,69 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
         }
     }
 
-    if (params.samplerSteps) promptWorkflow["9"]["inputs"]["steps"] = params.samplerSteps;
+    // --- LIMITES DE SEGURIDAD + LIBERACION DE VRAM --------------------------
+    // La cadena "imagen y despues video" deja el modelo de imagen (Flux, ~17 GB)
+    // cargado: si encima entra LTX-2 (~20 GB) ComfyUI MUERE con segfault (exit
+    // 139) sin error legible, y el editor lo ve como "ComfyUI desconectado".
+    // Solucion: pedir /free antes del video si el trabajo anterior no fue video.
+    const MAX_FRAMES = 169;   // ~7 s a 24 fps: arriba de esto revienta en 24 GB
+    const MAX_STEPS = 30;     // arriba de esto tambien vimos crashes
+    let avisos = [];
+
+    let frames = Number(params.videoLength) || null;
+    if (frames && frames > MAX_FRAMES) {
+        avisos.push(`videoLength ${frames} -> ${MAX_FRAMES} (limite seguro en 24GB)`);
+        frames = MAX_FRAMES;
+    }
+    if (frames && promptWorkflow['62']) promptWorkflow['62']['inputs']['value'] = frames;
+
+    let steps = Number(params.samplerSteps) || null;
+    if (steps && steps > MAX_STEPS) {
+        avisos.push(`samplerSteps ${steps} -> ${MAX_STEPS} (limite seguro en 24GB)`);
+        steps = MAX_STEPS;
+    }
+    if (steps && promptWorkflow['9']) promptWorkflow['9']['inputs']['steps'] = steps;
+
+    if (avisos.length) console.warn('⚠️  Ajustes por memoria:', avisos.join(' | '));
+
+    if (ultimoTrabajo !== 'video') {
+        console.log('🧹 Liberando VRAM antes del video (el modelo de imagen no se descarga solo)...');
+        await liberarVram();
+    }
+    ultimoTrabajo = 'video';
 
     const promptId = await queuePrompt(promptWorkflow);
     console.log(`🚀 Prompt enviado a ComfyUI. ID: ${promptId}`);
     return promptId;
 }
 
+// Le pide a ComfyUI que suelte los modelos de la VRAM (y el cache).
+function liberarVram() {
+    const postData = JSON.stringify({ unload_models: true, free_memory: true });
+    const options = {
+        hostname: ipglobal, port: 8188, path: '/free', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    return new Promise((resolve) => {
+        const req = http.request(options, (res) => {
+            res.on('data', () => { });
+            res.on('end', () => setTimeout(resolve, 5000));   // margen para que suelte
+        });
+        req.on('error', () => resolve());
+        req.setTimeout(15000, () => { try { req.destroy(); } catch (e) { } resolve(); });
+        req.write(postData);
+        req.end();
+    });
+}
+
 async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, batchId = null) {
-    const workflowFile = 'flux_dev_full_text_to_image_api.json';
+    // Usar el checkpoint fused fp8 cuando está disponible: el workflow original
+    // (flux1-dev fp16 23.8GB + t5xxl fp16 9.3GB) no entra en 24GB de VRAM y
+    // hace crashear ComfyUI con segfault (exit 139) al cargar el CLIP.
+    const fp8File = 'flux_dev_fp8_api.json';
+    const workflowFile = fs.existsSync(path.join(__dirname, fp8File))
+        ? fp8File
+        : 'flux_dev_full_text_to_image_api.json';
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
@@ -1398,6 +1430,7 @@ async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, b
     
     const promptId = await queuePrompt(promptWorkflow);
     console.log(`🚀 Storyboard enviado a ComfyUI. ID: ${promptId}`);
+    ultimoTrabajo = 'imagen';   // deja Flux en VRAM: el proximo video libera antes
     return promptId;
 }
 
@@ -1454,6 +1487,7 @@ async function generarWan22Video(promptText, params = {}, startImageFilename = n
 
     const promptId = await queuePrompt(promptWorkflow);
     console.log(`🚀 WAN2.2 prompt enviado a ComfyUI. ID: ${promptId}`);
+    ultimoTrabajo = 'video';
     return promptId;
 }
 
@@ -1518,7 +1552,7 @@ async function generarLongCat(message) {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
         
-        exec(cmd, { timeout: 1800000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        exec(cmd, { timeout: 86400000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             
             if (error) {
