@@ -119,11 +119,20 @@ function arrancar(opciones) {
         });
     }
 
+    // La dirección puede venir como "127.0.0.1", "127.0.0.1:8188" o una URL
+    // completa (RunPod): la normalizamos para poder pegarle a /system_stats.
+    function urlComfy() {
+        let b = String(CFG.COMFY || process.env.COMFYUI_ADDRESS || '127.0.0.1').trim().replace(/\/+$/, '');
+        if (!/^https?:\/\//i.test(b)) b = 'http://' + b;
+        if (!/:[0-9]+$/.test(b.replace(/^https?:\/\//i, '')) && !/runpod|proxy/i.test(b)) b = b + ':8188';
+        return b;
+    }
+
     async function chequearComfy(desdeWebsocket) {
         if (desdeWebsocket) return;
         if (Date.now() - ultimoComfyCheck < 10000) return;
         ultimoComfyCheck = Date.now();
-        const base = (CFG.COMFY || 'http://127.0.0.1:8188').replace(/\/+$/, '');
+        const base = urlComfy();
         try {
             const r = await fetch(base + '/system_stats', { signal: AbortSignal.timeout(5000) });
             const nuevo = r.ok ? 'connected' : 'disconnected';
@@ -225,8 +234,17 @@ function arrancar(opciones) {
         });
 
         socket.on('red:evento', (d = {}) => {
+            // Los eventos pueden traer la imagen del resultado en base64 (megas):
+            // le sacamos lo pesado — el panel sólo necesita saber qué pasó.
+            let cuerpo = d || {};
+            try {
+                const texto = JSON.stringify(cuerpo);
+                if (texto.length > 400000) {
+                    cuerpo = JSON.parse(texto.replace(/"data:image\/[^"]{2000,}"/g, '"<imagen omitida>"'));
+                }
+            } catch (e) { cuerpo = { tipo: (d && d.tipo) || 'evento', grande: true }; }
             fetch(APP + '/api/red/evento', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d || {})
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
             }).catch(() => { });
         });
 
