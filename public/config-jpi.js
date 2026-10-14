@@ -11,7 +11,11 @@
     var esServidor = (h === 'localhost' || h === '127.0.0.1' ||
                       h.indexOf('localhost') !== -1 ||
                       h === 'vps-4455523-x.dattaweb.com');
-    var BASE = location.pathname.indexOf('/jpiassets') === 0 ? '/jpiassets' : '';
+    // La app se llama MegaComfy JP: en la web vive en /megacomfyjp (y sigue
+    // aceptando la ruta vieja /jpiassets para no romper enlaces guardados).
+    var BASE = location.pathname.indexOf('/megacomfyjp') === 0 ? '/megacomfyjp'
+             : location.pathname.indexOf('/jpiassets') === 0 ? '/jpiassets'
+             : '';
 
     var ORIGIN = esServidor
         ? (location.protocol + '//' + location.host)

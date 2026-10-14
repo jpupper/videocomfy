@@ -47,7 +47,12 @@
             if (r.status === 401 && esDeLaApi(url)) {
                 var copia = r.clone();
                 copia.json().then(function (d) {
-                    if (d && d.requiereLogin) { guardarToken(''); mostrarLogin('Tu sesión venció. Entrá de nuevo.'); }
+                    if (d && d.requiereLogin) {
+                        var vencio = !!token;         // mensaje correcto: vencida vs. primera vez
+                        guardarToken('');
+                        mostrarLogin(vencio ? 'Tu sesión venció. Entrá de nuevo.'
+                                            : 'Entrá con tu cuenta de fullscreencode para usar el editor.');
+                    }
                 }).catch(function () { });
             }
             return r;
@@ -63,8 +68,8 @@
         overlay.id = 'jpiLoginGate';
         overlay.innerHTML =
             '<div class="jpi-login-card">' +
-            '  <div class="jpi-login-logo">JPiAssets</div>' +
-            '  <div class="jpi-login-sub">VideoComfy Studio · fullscreencode.com</div>' +
+            '  <div class="jpi-login-logo">MegaComfy <span style="color:#00ffd5">JP</span></div>' +
+            '  <div class="jpi-login-sub">ComfyUI Studio · fullscreencode.com</div>' +
             '  <div class="jpi-login-msg" id="jpiLoginMsg">' + (mensaje || 'Entrá con tu cuenta de fullscreencode para usar el editor.') + '</div>' +
             '  <label>Usuario o email</label>' +
             '  <input id="jpiLoginUser" type="text" autocomplete="username" placeholder="usuario o email">' +

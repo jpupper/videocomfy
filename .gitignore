@@ -48,3 +48,4 @@ backup/
 
 # Herramientas locales de agentes
 .freebuff/
+config-local.json

@@ -27,6 +27,58 @@ if (TELEGRAM_ENABLED) {
 
 const ipglobal = process.env.COMFYUI_ADDRESS || "127.0.0.1"; // Default to localhost
 const serverAddress = ipglobal.includes(':') ? ipglobal : `${ipglobal}:8188`;
+
+// ============================================================
+// DIRECCIÓN DE COMFYUI (configurable desde SETTINGS)
+// ------------------------------------------------------------
+// Puede ser:
+//   - local:    127.0.0.1            -> http://127.0.0.1:8188
+//   - en tu red: 192.168.0.50:8188
+//   - RunPod u otra nube: https://xxxx-8188.proxy.runpod.net  (https => wss)
+// Se guarda en config-local.json (no se versiona) y se puede cambiar en
+// caliente con POST /api/config/comfy: reconecta el websocket sin reiniciar.
+// ============================================================
+const RUTA_CONFIG = path.join(__dirname, 'config-local.json');
+let comfyAddress = ipglobal;
+
+(function cargarConfigLocal() {
+    try {
+        if (fs.existsSync(RUTA_CONFIG)) {
+            const c = JSON.parse(fs.readFileSync(RUTA_CONFIG, 'utf8'));
+            if (c && typeof c.comfyAddress === 'string' && c.comfyAddress.trim()) {
+                comfyAddress = c.comfyAddress.trim();
+                console.log(`📌 Dirección de ComfyUI tomada de config-local.json: ${comfyAddress}`);
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️  No pude leer config-local.json:', e.message);
+    }
+})();
+
+function guardarConfigLocal() {
+    try {
+        fs.writeFileSync(RUTA_CONFIG, JSON.stringify({ comfyAddress }, null, 2));
+    } catch (e) {
+        console.warn('⚠️  No pude guardar config-local.json:', e.message);
+    }
+}
+
+// URL base http(s) de ComfyUI, sin barra final
+function comfyBase() {
+    let a = String(comfyAddress || '').trim().replace(/\/+$/, '');
+    if (/^https?:\/\//i.test(a)) return a;                 // URL completa (RunPod)
+    if (a.includes(':')) return 'http://' + a;             // host:puerto
+    return 'http://' + a + ':8188';                        // host -> puerto por defecto
+}
+
+// URL del websocket (wss cuando ComfyUI está detrás de https)
+function comfyWs() {
+    return comfyBase().replace(/^http/i, 'ws');
+}
+
+function esComfyLocal() {
+    return /(^|\/\/)(127\.0\.0\.1|localhost)(:|\/|$)/i.test(comfyBase());
+}
 const clientId = uuidv4();
 
 // Que tipo de trabajo se encolo ultimo ('imagen' | 'video'): sirve para saber
@@ -49,14 +101,52 @@ app.get('/api/status', (req, res) => {
         videocomfy: true,
         comfy: comfyOk,
         comfyTexto: comfyOk ? 'connected' : 'disconnected',
+        comfyAddress: comfyAddress,
+        comfyBase: comfyBase(),
+        comfyEsLocal: esComfyLocal(),
+        entorno: 'local',                       // este server ES la app local
         host: os.hostname(),
         reporteHaceSegundos: 0,
         datoFresco: true,
         mensaje: comfyOk
-            ? 'Todo listo: videocomfy + ComfyUI (local)'
-            : 'ComfyUI esta apagado: corré D:\\IA\\comfynew\\ComfyUI\\start_network.bat',
+            ? 'Todo listo: videocomfy + ComfyUI'
+            : `ComfyUI no responde en ${comfyBase()} (revisá SETTINGS → COMFY)`,
         actualizado: new Date().toISOString()
     });
+});
+
+// ============================================================
+// CONFIG DE COMFYUI (lo usa la pestaña SETTINGS del editor)
+// ============================================================
+app.get('/api/config/comfy', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        success: true,
+        address: comfyAddress,
+        base: comfyBase(),
+        ws: comfyWs(),
+        esLocal: esComfyLocal(),
+        conectado: !!(wsComfy && wsComfy.readyState === 1)
+    });
+});
+
+app.post('/api/config/comfy', bodyParser.json(), async (req, res) => {
+    const nueva = String((req.body && req.body.address) || '').trim();
+    if (!nueva) return res.status(400).json({ success: false, message: 'Falta la dirección.' });
+    if (!/^(https?:\/\/)?[\w.-]+(:\d+)?(\/.*)?$/i.test(nueva)) {
+        return res.status(400).json({ success: false, message: 'Esa dirección no parece válida.' });
+    }
+
+    const anterior = comfyAddress;
+    comfyAddress = nueva;
+    guardarConfigLocal();
+    console.log(`🔧 Dirección de ComfyUI: ${anterior} -> ${comfyAddress} (${comfyBase()})`);
+
+    // Reconectar al nuevo ComfyUI sin reiniciar la app
+    try { if (wsComfy) wsComfy.close(); } catch (e) { }
+    setTimeout(() => { try { connectToComfy(); } catch (e) { } }, 300);
+
+    res.json({ success: true, address: comfyAddress, base: comfyBase(), ws: comfyWs(), esLocal: esComfyLocal() });
 });
 app.use(bodyParser.json());
 
@@ -80,8 +170,8 @@ let lastPromptDetails = null; // Fallback por si acaso el ID falla
 
 let wsComfy;
 function connectToComfy() {
-    console.log(`Conectando a ComfyUI en ws://${serverAddress}/ws?clientId=${clientId}...`);
-    wsComfy = new WebSocket(`ws://${serverAddress}/ws?clientId=${clientId}`);
+    console.log(`Conectando a ComfyUI en ${comfyWs()}/ws?clientId=${clientId}...`);
+    wsComfy = new WebSocket(`${comfyWs()}/ws?clientId=${clientId}`);
 
     wsComfy.on('open', () => {
         console.log('✅ Conexión establecida con ComfyUI');
@@ -197,7 +287,7 @@ function connectToComfy() {
                         console.log(`📦 Procesando ${assetType} encontrado:`, asset.filename);
 
                         const subfolder = asset.subfolder || '';
-                        const assetUrl = `http://${serverAddress}/view?filename=${encodeURIComponent(asset.filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(asset.type || 'output')}`;
+                        const assetUrl = `${comfyBase()}/view?filename=${encodeURIComponent(asset.filename)}&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(asset.type || 'output')}`;
 
                         const filenameOnly = path.basename(asset.filename);
                         const targetSubdir = assetType === 'video' ? 'videos' : 'uploads'; // Guardamos storyboard en uploads para I2V
@@ -1245,63 +1335,43 @@ wss.on('connection', (ws) => {
 async function uploadImageToComfy(filePath, filename) {
     const formData = new FormData();
     formData.append('image', fs.createReadStream(filePath), { filename });
-    const options = {
-        hostname: ipglobal, port: 8188, path: '/upload/image', method: 'POST',
-        headers: formData.getHeaders()
-    };
-    return new Promise((resolve, reject) => {
-        const req = http.request(options, (res) => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => resolve(JSON.parse(data)));
-        });
-        req.on('error', reject);
-        formData.pipe(req);
-    });
+    // fetch en vez de http.request: soporta local, red y RunPod (https) por igual
+    const res = await fetch(comfyBase() + '/upload/image', { method: 'POST', body: formData, headers: formData.getHeaders() });
+    const texto = await res.text();
+    if (!res.ok) throw new Error(`ComfyUI /upload/image respondió ${res.status}: ${texto.slice(0, 200)}`);
+    try { return JSON.parse(texto); } catch (e) { return {}; }
 }
 
 async function queuePrompt(promptWorkflow) {
-    const postData = JSON.stringify({ prompt: promptWorkflow, client_id: clientId });
-    const options = {
-        hostname: ipglobal, port: 8188, path: '/prompt', method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
-    };
-    return new Promise((resolve, reject) => {
-        const req = http.request(options, (res) => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.error) {
-                        const errorDetail = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
-                        const nodeErrors = parsed.node_errors ? '\nNode errors: ' + JSON.stringify(parsed.node_errors) : '';
-                        reject(new Error(`ComfyUI rejected the prompt: ${errorDetail}${nodeErrors}`));
-                    } else if (!parsed.prompt_id) {
-                        reject(new Error(`ComfyUI returned no prompt_id. Response: ${data.substring(0, 300)}`));
-                    } else {
-                        resolve(parsed.prompt_id);
-                    }
-                } catch (e) {
-                    reject(new Error(`Failed to parse ComfyUI response: ${e.message}. Raw: ${data.substring(0, 300)}`));
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(postData);
-        req.end();
+    const res = await fetch(comfyBase() + '/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptWorkflow, client_id: clientId })
     });
+    const data = await res.text();
+    let parsed;
+    try {
+        parsed = JSON.parse(data);
+    } catch (e) {
+        throw new Error(`Failed to parse ComfyUI response: ${e.message}. Raw: ${data.substring(0, 300)}`);
+    }
+    if (parsed.error) {
+        const errorDetail = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+        const nodeErrors = parsed.node_errors ? '\nNode errors: ' + JSON.stringify(parsed.node_errors) : '';
+        throw new Error(`ComfyUI rejected the prompt: ${errorDetail}${nodeErrors}`);
+    }
+    if (!parsed.prompt_id) {
+        throw new Error(`ComfyUI returned no prompt_id. Response: ${data.substring(0, 300)}`);
+    }
+    return parsed.prompt_id;
 }
 
 async function downloadImage(url, targetPath) {
-    return new Promise((resolve, reject) => {
-        http.get(url, (res) => {
-            if (res.statusCode !== 200) return reject(new Error(`Status: ${res.statusCode}`));
-            const file = fs.createWriteStream(targetPath);
-            res.pipe(file);
-            file.on('finish', () => file.close(resolve));
-        }).on('error', reject);
-    });
+    // fetch: sirve igual para http local que para https (RunPod)
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Status: ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    await fs.promises.writeFile(targetPath, buffer);
 }
 
 async function generarVideo(promptText, params = {}, imageFilename = null) {
@@ -1422,22 +1492,17 @@ async function generarVideo(promptText, params = {}, imageFilename = null) {
 }
 
 // Le pide a ComfyUI que suelte los modelos de la VRAM (y el cache).
-function liberarVram() {
-    const postData = JSON.stringify({ unload_models: true, free_memory: true });
-    const options = {
-        hostname: ipglobal, port: 8188, path: '/free', method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
-    };
-    return new Promise((resolve) => {
-        const req = http.request(options, (res) => {
-            res.on('data', () => { });
-            res.on('end', () => setTimeout(resolve, 5000));   // margen para que suelte
+async function liberarVram() {
+    try {
+        await fetch(comfyBase() + '/free', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unload_models: true, free_memory: true })
         });
-        req.on('error', () => resolve());
-        req.setTimeout(15000, () => { try { req.destroy(); } catch (e) { } resolve(); });
-        req.write(postData);
-        req.end();
-    });
+    } catch (e) {
+        // si ComfyUI no está, no hay nada que liberar
+    }
+    await new Promise((r) => setTimeout(r, 5000));   // margen para que suelte
 }
 
 // ============================================================

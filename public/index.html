@@ -9,11 +9,13 @@
     <link rel="stylesheet" href="css/estado.css?v=1">
     <link rel="stylesheet" href="css/cola-pausa.css?v=1">
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
+    <link rel="stylesheet" href="css/energia.css?v=1">
+    <link rel="stylesheet" href="css/settings-jpi.css?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <title>AI Video Generator — LTX-2</title>
+    <title>MegaComfy JP — ComfyUI Studio</title>
     <meta name="description"
         content="Generate stunning AI videos with LTX-2. Text-to-Video and Image-to-Video generation powered by ComfyUI."></head>
 <body>
@@ -21,7 +23,7 @@
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
             <h1>
-                Studio Generator
+                MegaComfy<span class="ck-logo-jp">JP</span>
                 <span id="comfyStatusDot" class="status-dot disconnected" title="ComfyUI Status"></span>
             </h1>
             
@@ -93,7 +95,7 @@
             <header class="workspace-header">
                 <div class="header-title-container">
                     <div class="header-title-row">
-                        <h1>VideoComfy Studio</h1>
+                        <h1>Mega<span class="ck-logo-comfy">Comfy</span> JP</h1>
                         <div class="mode-indicator t2v" id="modeIndicator">
                             <span id="modeText">T2V ACTIVE</span>
                         </div>
@@ -108,6 +110,7 @@
                     <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
+                    <button class="tab-button tab-button-std" id="tabSettingsBtn" data-target="tabSettings">⚙️ Settings</button>
                 </div>
             </header>
             
@@ -641,6 +644,39 @@
                         </div>
                     </div>
                 </div>
+                <!-- ============ SETTINGS ============ -->
+                <div class="tab-content" id="tabSettings">
+                    <div class="ck-set-wrap">
+                        <div class="ck-set-card">
+                            <div class="ck-set-titulo">⚙️ <span>COMFO</span> — dónde está tu ComfyUI</div>
+                            <div class="ck-set-desc">
+                                Poné la dirección del ComfyUI que va a generar. Puede ser <b>local</b>
+                                (<code>127.0.0.1</code>), otra máquina de tu red (<code>192.168.0.50:8188</code>) o
+                                una nube tipo <b>RunPod</b> (<code>https://xxxx-8188.proxy.runpod.net</code>).
+                                Se guarda en la app y el websocket se reconecta solo.
+                            </div>
+                            <label class="ck-set-label">Dirección de ComfyUI</label>
+                            <input id="ckComfyAddress" class="ck-set-input" type="text" placeholder="127.0.0.1  ·  https://xxxx-8188.proxy.runpod.net">
+                            <div class="ck-set-row">
+                                <button id="ckComfyGuardar" class="ck-set-btn">GUARDAR Y CONECTAR</button>
+                                <button id="ckComfyProbar" class="ck-set-btn ghost">PROBAR</button>
+                            </div>
+                            <div id="ckComfyMsg" class="ck-set-msg"></div>
+                            <div class="ck-set-estado" id="ckComfyEstado"></div>
+                        </div>
+
+                        <div class="ck-set-card">
+                            <div class="ck-set-titulo">🧭 ENTORNO</div>
+                            <div class="ck-set-desc">
+                                Esta copia del editor está corriendo en <b id="ckSetEntorno">—</b>.
+                                En <b>web</b> el trabajo lo hace la PC conectada (por el VPS); en <b>local</b> usa
+                                directamente el ComfyUI de esta máquina.
+                            </div>
+                            <div class="ck-set-estado" id="ckSetDetalle"></div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- THE PROFESSIONAL TIMELINE (Fixed Placement) -->
@@ -807,6 +843,7 @@
     <script src="js/cola-pausa.js?v=2"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=1"></script>
+    <script src="js/entorno-jpi.js?v=1"></script>
 </body>
 
 </html>

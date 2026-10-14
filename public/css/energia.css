@@ -1,0 +1,107 @@
+/* ============================================================
+   MegaComfy JP — barra de energía ciberpunk (durante la generación)
+   ------------------------------------------------------------
+   Reestiliza la barra de progreso que ya existe (#progressFill) y le
+   agrega el estado "generando" (body.ck-generando) con barrido, pulso y
+   una chispa en la punta. No requiere tocar el JS de la app.
+   ============================================================ */
+
+.progress-container-std {
+    position: relative;
+}
+
+.progress-bar-bg {
+    position: relative;
+    height: 18px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: linear-gradient(90deg, rgba(8, 10, 18, .96), rgba(14, 18, 30, .96));
+    border: 1px solid rgba(0, 255, 213, .22);
+    box-shadow: inset 0 0 14px rgba(0, 255, 213, .07);
+}
+
+/* Segmentos tipo celda de energía */
+.progress-bar-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(90deg,
+            transparent 0 13px,
+            rgba(0, 0, 0, .55) 13px 16px);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.progress-bar-fill {
+    position: relative;
+    height: 100%;
+    width: 0;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #00ffd5 0%, #22d3ee 35%, #a855f7 72%, #ff2bd6 100%);
+    box-shadow: 0 0 10px rgba(0, 255, 213, .65), 0 0 26px rgba(168, 85, 247, .5);
+    transition: width .35s cubic-bezier(.2, .9, .2, 1);
+    z-index: 2;
+}
+
+/* Barrido de luz */
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .6), transparent);
+    transform: translateX(-100%);
+}
+
+body.ck-generando .progress-bar-fill::after {
+    animation: ck-barrido 1.5s linear infinite;
+}
+
+@keyframes ck-barrido {
+    to { transform: translateX(100%); }
+}
+
+body.ck-generando .progress-bar-bg {
+    animation: ck-pulso 1.8s ease-in-out infinite;
+}
+
+@keyframes ck-pulso {
+    50% {
+        box-shadow: inset 0 0 20px rgba(0, 255, 213, .22), 0 0 16px rgba(0, 255, 213, .28);
+        border-color: rgba(0, 255, 213, .5);
+    }
+}
+
+/* Chispa en la punta del llenado */
+.ck-chispa {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    width: 10px;
+    height: 26px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, #ffffff, #00ffd5 60%, transparent);
+    filter: blur(1px);
+    opacity: 0;
+    transition: left .35s linear;
+    pointer-events: none;
+    z-index: 4;
+}
+
+body.ck-generando .ck-chispa {
+    opacity: 1;
+    animation: ck-chispa .9s ease-in-out infinite;
+}
+
+@keyframes ck-chispa {
+    50% { transform: scaleY(1.25); }
+}
+
+/* Etiquetas del progreso en tono neón cuando genera */
+body.ck-generando #progressPct {
+    color: #00ffd5;
+    text-shadow: 0 0 10px rgba(0, 255, 213, .7);
+}
+
+body.ck-generando #progressText {
+    color: #e2e8f0;
+}
