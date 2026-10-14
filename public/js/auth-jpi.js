@@ -119,13 +119,24 @@
 
         var btn = document.createElement('button');
         btn.id = 'jpiCuentaBtn';
-        btn.className = 'tab-button tab-button-std';
+        // Va en la barra de herramientas del editor (al lado de RED): la fila de
+        // pestañas se desborda y ahí el título H2 tapa el botón (el click no llega).
+        btn.className = 'tab-button cuenta-tab-btn';
         btn.setAttribute('data-target', 'tabCuenta');
         btn.textContent = '👤 Perfil';
         btn.title = 'Tu perfil de fullscreencode';
-        var ref = document.getElementById('tabEditorBtn') || document.getElementById('tabSettingsBtn');
-        if (ref && ref.parentNode) ref.parentNode.insertBefore(btn, ref);
-        else (document.querySelector('.workspace-header .tabs') || document.body).appendChild(btn);
+        var barra = document.getElementById('projectTabsNav');
+        var red = document.getElementById('tabRedBtn');
+        if (barra) {
+            if (red && red.parentNode === barra) barra.insertBefore(btn, red.nextSibling);
+            else barra.appendChild(btn);
+        } else if (red && red.parentNode) {
+            red.parentNode.insertBefore(btn, red.nextSibling);
+        } else {
+            var ref = document.getElementById('tabEditorBtn') || document.getElementById('tabSettingsBtn');
+            if (ref && ref.parentNode) ref.parentNode.insertBefore(btn, ref);
+            else (document.querySelector('.workspace-header .tabs') || document.body).appendChild(btn);
+        }
 
         var cont = document.querySelector('.workspace-content') || document.querySelector('main') || document.body;
         var panel = document.createElement('div');
@@ -186,8 +197,13 @@
         }
 
         var inicial = String(u.displayName || u.username || '?').trim().charAt(0).toUpperCase();
-        var avatar = u.avatar
-            ? '<img src="' + u.avatar + '" alt="">'
+        // el avatar puede venir como ruta relativa (/uploads/...) -> la completamos
+        var foto = u.avatar || '';
+        if (foto && !/^https?:\/\//i.test(foto)) {
+            foto = foto.charAt(0) === '/' ? (FSCAUTH + foto) : (FSCAUTH + '/' + foto);
+        }
+        var avatar = foto
+            ? '<img src="' + foto + '" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'cuenta-avatar-inicial\',textContent:\'' + inicial + '\'}))">'
             : '<div class="cuenta-avatar-inicial">' + inicial + '</div>';
 
         panel.innerHTML = [

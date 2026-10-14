@@ -176,7 +176,9 @@
 
     function init() {
         pintarEntorno();
-        pintarPanelIzq();
+        // El bloque de ENTORNO ya no va en el panel izquierdo: vive en la
+        // pestaña RED (ver red.js → bloqueEquipo). El panel izq queda limpio.
+        /* pintarPanelIzq(); -> movido a la pestaña RED */
         conectarSettings();
         energia();
         actualizarVistas();

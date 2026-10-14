@@ -1482,7 +1482,36 @@ asegurarIdentidadRed();
 
 server.listen(port, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
+
+    // --- NODO DE LA RED: va DENTRO de la app, no hace falta ningún .bat ----
+    // Al abrir COMFYLATAM la app se conecta sola al hub; el switch de la
+    // pestaña RED sólo decide si otros pueden usar este Comfy.
+    try {
+        const nodo = require('./nodo.js');
+        global.__comfylatamNodo = nodo.arrancar({ puerto: port, app: `http://127.0.0.1:${port}`, comfy: comfyAddress });
+        console.log('🌐 Nodo de la red iniciado (embebido en la app)');
+    } catch (e) {
+        console.log('⚠️  No pude iniciar el nodo de la red:', e.message);
+    }
 });
+
+// --- perfil del usuario logueado (local): se lo pedimos al hub -------------
+// En la web el front habla directo con el hub; en local la app hace de proxy
+// para que la pestaña PERFIL muestre tu ficha y tu avatar.
+app.get('/api/me', async (req, res) => {
+    try {
+        const host = (process.env.RED_HUB || 'https://vps-4455523-x.dattaweb.com').replace(/\/+$/, '');
+        const base = (process.env.RED_BASE || '/comfylatam').replace(/\/+$/, '');
+        const cabeceras = { Accept: 'application/json' };
+        if (req.headers.authorization) cabeceras.Authorization = req.headers.authorization;
+        const r = await fetch(host + base + '/api/me', { headers: cabeceras, signal: AbortSignal.timeout(8000) });
+        const texto = await r.text();
+        res.status(r.status).type('application/json').send(texto);
+    } catch (e) {
+        res.status(502).json({ success: false, message: 'No pude consultar el perfil: ' + e.message });
+    }
+});
+
 
 wss.on('connection', (ws) => {
     console.log('🔌 Cliente conectado');

@@ -151,3 +151,16 @@ en `config-local.json` (no se versiona).
 
 `PORT` y `RED_PEER_ID` / `RED_NODO_NOMBRE` / `RED_COMPARTIR` / `RED_CONFIG` por
 entorno permiten correr varios nodos en la misma máquina (pruebas).
+
+## Red COMFYLATAM (nodo embebido)
+
+La app **se conecta sola al hub** al arrancar: no hay que correr ningun `.bat`
+aparte. `nodo.js` viaja dentro de la app y hace de puente (socket.io) entre tu
+ComfyUI local y la red en el VPS.
+
+- `npm start` -> la app se publica en la red automaticamente.
+- El switch **Transmitir mi Comfy** (pestana RED) decide si *otros* pueden generar
+  en tu PC. Apagado, igual apareces en la lista (marcado sin transmitir).
+- En **SETTINGS** cambias la direccion de ComfyUI (local o RunPod) y en la pestana
+  **PERFIL** inicias sesion con fullscreencode (opcional en local) para publicar
+  tu nombre y avatar en la red.

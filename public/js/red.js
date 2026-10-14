@@ -127,6 +127,18 @@
 
             '<div id="redMio"></div>',
 
+            // Esto antes vivía en el panel izquierdo (⚡ COMFYLATAM / Entorno /
+            // ComfyUI / Estado): se movió acá, que es donde tiene sentido.
+            '<div class="red-equipo" id="redEquipo">',
+            '  <h3 class="red-titulo">⚡ TU EQUIPO</h3>',
+            '  <div class="red-eq-filas">',
+            '    <div class="red-eq-fila"><span>Entorno</span><b id="redEqEntorno">—</b></div>',
+            '    <div class="red-eq-fila"><span>ComfyUI</span><b id="redEqComfy">—</b></div>',
+            '    <div class="red-eq-fila"><span>Estado</span><b id="redEqEstado">—</b></div>',
+            '  </div>',
+            '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
+            '</div>',
+
             '<div class="red-gen">',
             '  <h3>🎯 GENERAR EN LA RED</h3>',
             '  <textarea id="redPrompt" placeholder="Escribí el prompt... el trabajo va al nodo elegido"></textarea>',
@@ -378,6 +390,11 @@
                     });
                 });
             }
+            var ec = document.getElementById('redEqConfig');
+            if (ec) ec.addEventListener('click', function () {
+                var b = document.getElementById('tabSettingsBtn');
+                if (b) b.click();
+            });
             var gb = document.getElementById('redGuardarNombre');
             if (gb) {
                 gb.addEventListener('click', function () {
@@ -477,6 +494,28 @@
         ].join('\n');
     }
 
+    // --- el equipo: entorno, ComfyUI en uso y estado (antes en el panel izq) ---
+    function pintarEquipo() {
+        var ent = document.getElementById('redEqEntorno');
+        var com = document.getElementById('redEqComfy');
+        var est = document.getElementById('redEqEstado');
+        if (!ent) return;
+        ent.textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
+
+        api('/api/config/comfy').then(function (r) {
+            var d = r.datos || {};
+            if (com) com.textContent = d.base || d.address || '—';
+        }).catch(function () { });
+
+        api('/api/status').then(function (r) {
+            var d = r.datos || {};
+            if (est) {
+                est.textContent = d.comfy ? '🟢 Conectado' : '🔴 Sin ComfyUI';
+                est.className = d.comfy ? 'bien' : 'mal';
+            }
+        }).catch(function () { });
+    }
+
     function refrescar(manual) {
         var ruta = esLocal ? '/api/red/estado' : '/api/red/peers';
         return api(ruta).then(function (r) {
@@ -502,6 +541,7 @@
             }
             if (manual) log('🔄 Red actualizada: ' + ESTADO.peers.length + ' nodo(s)');
             pintar();
+            pintarEquipo();
         }).catch(function (e) { if (manual) log('⚠️ ' + e.message); });
     }
 

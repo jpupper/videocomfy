@@ -108,6 +108,24 @@
 }
 .red-tab-btn.active { background: var(--accent); color: #04121a; }
 
+/* Botón de PERFIL en la barra (mismo tamaño que el de RED, sin glow) */
+.cuenta-tab-btn {
+    position: relative;
+    z-index: 30;
+    margin-left: 8px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--bg-input);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: .78em;
+    font-weight: 700;
+    letter-spacing: .3px;
+    cursor: pointer;
+}
+.cuenta-tab-btn:hover { color: var(--foreground); }
+.cuenta-tab-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0, 255, 213, .08); }
+
 /* --- a quién le voy a mandar el trabajo (banner) --- */
 .red-elegido {
     border: 1px solid var(--accent);
@@ -331,3 +349,50 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .cuenta-linea.estado { margin-top: 4px; color: var(--accent); }
 .cuenta-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
 .red-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-right: 4px; }
+
+/* ============================================================
+   STUDIO ASSETS con el mismo lenguaje visual que la pestaña RED
+   (tarjetas de nodos + botón verde relleno)
+   ============================================================ */
+.asset-tabs-container { gap: 8px; }
+.asset-tab-btn {
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border-radius: 9px;
+    font-weight: 800;
+    letter-spacing: .4px;
+    transition: color .18s, border-color .18s, background .18s;
+}
+.asset-tab-btn:hover { color: var(--foreground); border-color: var(--accent); }
+.asset-tab-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04121a;
+    box-shadow: 0 6px 18px rgba(0, 255, 213, .22);
+}
+.asset-gallery-grid > * ,
+.assets-grid > * {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-input);
+    transition: transform .18s, border-color .18s;
+}
+.asset-gallery-grid > *:hover,
+.assets-grid > *:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+/* --- ⚡ TU EQUIPO (entorno / ComfyUI / estado) dentro de la pestaña RED --- */
+.red-equipo {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-input);
+    padding: 14px 16px;
+    margin: 16px 0;
+}
+.red-equipo .red-titulo { margin: 0 0 10px; }
+.red-eq-filas { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-bottom: 12px; }
+.red-eq-fila { display: flex; flex-direction: column; gap: 2px; }
+.red-eq-fila span { color: var(--text-muted); font-size: .72em; text-transform: uppercase; letter-spacing: .5px; }
+.red-eq-fila b { font-size: .92em; font-weight: 700; }
+.red-eq-fila b.bien { color: var(--accent); }
+.red-eq-fila b.mal { color: #ff6b6b; }
