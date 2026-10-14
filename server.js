@@ -1375,6 +1375,53 @@ async function refrescarNodosDelHub() {
 setInterval(refrescarNodosDelHub, 6000);
 setTimeout(refrescarNodosDelHub, 1500);
 
+// --- conectar la app a la red (lanza el agente/nodo) ----------------------
+// El agente vive en el repo jpiassets; acá lo arrancamos desprendido para que
+// el usuario no tenga que buscar el .bat. Se puede fijar con AGENT_PATH en .env.
+function rutaDelAgente() {
+    if (process.env.AGENT_PATH && fs.existsSync(process.env.AGENT_PATH)) return process.env.AGENT_PATH;
+    const candidatos = [
+        path.join(__dirname, 'agent', 'comfylatam-agent.js'),
+        path.join(__dirname, '..', 'jpiassets', 'agent', 'comfylatam-agent.js'),
+        path.join(__dirname, '..', 'sistemasfullscreen', 'jpiassets', 'agent', 'comfylatam-agent.js')
+    ];
+    for (const c of candidatos) if (fs.existsSync(c)) return c;
+    return '';
+}
+
+app.post('/api/red/agente', async (req, res) => {
+    if (RED.nodos.some((p) => p && p.id === RED.peerId)) {
+        return res.json({ success: true, ya: true, message: 'Ya estás publicado en la red.' });
+    }
+    if (!RED_TOKEN) {
+        return res.status(400).json({ success: false, message: 'Falta AGENT_TOKEN en el .env de la app (el mismo token del hub).' });
+    }
+    const ruta = rutaDelAgente();
+    if (!ruta) {
+        return res.status(400).json({
+            success: false,
+            message: 'No encontré el agente. Poné AGENT_PATH en el .env apuntando a agent/comfylatam-agent.js del repo jpiassets.'
+        });
+    }
+    try {
+        const { spawn } = require('child_process');
+        const hijo = spawn(process.execPath, [ruta], {
+            cwd: path.dirname(path.dirname(ruta)),
+            detached: true,
+            stdio: 'ignore',
+            env: Object.assign({}, process.env, {
+                VIDEOCOMFY_HTTP: 'http://127.0.0.1:' + port,
+                VIDEOCOMFY_WS: 'ws://127.0.0.1:' + port
+            })
+        });
+        hijo.unref();
+        console.log(`🔌 Agente lanzado desde la app (pid ${hijo.pid}) — ${ruta}`);
+        res.json({ success: true, lanzado: true, pid: hijo.pid, agente: ruta });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // --- identidad del nodo: se crea una vez y queda en config-local.json ------
 function leerIdentidadRedDeConfig() {
     try {

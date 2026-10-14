@@ -344,6 +344,9 @@
                 '    <span class="meta">' + (conectadoRed
                     ? 'publicado en la red · id ' + esc(ESTADO.yo.peerId)
                     : 'sin publicar todavía — corré <b>conectar-comfylatam.bat</b> para entrar a la red') + '</span>',
+                (!conectadoRed
+                    ? '    <span class="red-nombre-fila"><button class="red-btn chico" id="redConectar">🔌 Conectar a la red</button></span>'
+                    : '') +
                 '    <span class="red-nombre-fila">',
                 '      <input type="text" id="redNombre" maxlength="40" placeholder="nombre con el que te ve la red" value="' + esc(ESTADO.yo.nombre) + '">',
                 '      <button class="red-btn secundario chico" id="redGuardarNombre">Guardar nombre</button>',
@@ -353,6 +356,19 @@
                 '    <span class="pista"></span><span>🌐 Transmitir mi Comfy a la red (que otros generen en esta PC)</span></label>',
                 '</div>'
             ].join('\n');
+            var bc = document.getElementById('redConectar');
+            if (bc) {
+                bc.addEventListener('click', function () {
+                    bc.disabled = true;
+                    bc.textContent = '⏳ Conectando...';
+                    log('🔌 Arrancando el agente del nodo...');
+                    api('/api/red/agente', { json: {} }).then(function (r) {
+                        if (r.ok) log(r.datos.ya ? '✅ Ya estabas publicado' : '✅ Agente lanzado, en unos segundos aparecés en la red');
+                        else log('⚠️ ' + (r.datos.message || 'No pude arrancarlo'));
+                        setTimeout(function () { refrescar(true); }, 6000);
+                    });
+                });
+            }
             var gb = document.getElementById('redGuardarNombre');
             if (gb) {
                 gb.addEventListener('click', function () {
