@@ -1,0 +1,255 @@
+/* ============================================================
+   JPiAssets - capa responsive (celular / tablet)
+   ------------------------------------------------------------
+   El CSS original de VideoComfy Studio es de escritorio puro:
+   .container es un grid de 3 columnas (340px | 1fr | 380px) sin
+   una sola @media. En un celular la columna del medio queda en 0
+   px, el header se desarma y los botones de pestañas desaparecen.
+
+   Esta capa (se carga DESPUES de style.css) lo lleva a:
+     1) una sola columna,
+     2) pestañas siempre visibles y desplazables,
+     3) los dos paneles laterales como cajones con una barra
+        inferior para abrirlos,
+     4) grillas internas a 1 columna y tipografia/áreas táctiles
+        de celular.
+   Nada de esto toca el escritorio (todo vive dentro de @media).
+   ============================================================ */
+
+/* Elementos que sólo existen en mobile (los crea js/mobile.js) */
+.jpi-mobile-bar,
+.jpi-scrim,
+.jpi-panel-close { display: none; }
+
+@media (max-width: 1024px) {
+
+    /* ---------- 1. LAYOUT DE UNA COLUMNA ---------- */
+    html, body { height: auto; max-width: 100vw; overflow-x: hidden; }
+
+    .container {
+        display: block;          /* adios grid de 3 columnas */
+        width: 100%;
+        height: auto;
+        padding-bottom: calc(76px + env(safe-area-inset-bottom));
+    }
+
+    .main-workspace {
+        height: auto;
+        min-height: 100dvh;
+        overflow: visible;
+    }
+
+    /* ---------- 2. HEADER + PESTAÑAS SIEMPRE VISIBLES ---------- */
+    .workspace-header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        height: auto;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 8px 10px 0;
+        gap: 8px;
+    }
+
+    .header-title-container { width: 100%; min-width: 0; }
+    .header-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .tabs-container {
+        width: 100%;
+        height: auto;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 0 8px;
+        border-bottom: 1px solid var(--border);
+    }
+    .tabs-container::-webkit-scrollbar { display: none; height: 0; }
+
+    .tab-button {
+        flex: 0 0 auto !important;
+        min-height: 44px;
+        min-width: 84px;
+        padding: 10px 14px !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        text-align: center;
+    }
+
+    /* Navegación de sesiones/proyectos: desplazable, no se corta */
+    .project-tabs-nav {
+        padding: 6px 10px;
+        gap: 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .project-tabs-nav::-webkit-scrollbar { display: none; }
+    .project-tabs-list {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+        max-width: 100%;
+    }
+    .project-tab-item,
+    .project-tab { flex: 0 0 auto; min-height: 40px; }
+
+    /* ---------- 3. CONTENIDO ---------- */
+    .workspace-content { padding: 12px; overflow: visible; min-height: 0; }
+    .tab-content { height: auto; min-height: 0; }
+    .tab-content.active { display: flex; flex-direction: column; }
+
+    /* ---------- 4. PANELES LATERALES = CAJONES ---------- */
+    .sidebar-left,
+    .sidebar-right {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        height: 100dvh;
+        width: min(90vw, 380px);
+        max-width: 90vw;
+        padding: 16px 16px 28px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        z-index: 70;
+        background: var(--bg-card);
+        transition: transform 0.25s ease;
+    }
+    .sidebar-left { left: 0; transform: translateX(-104%); box-shadow: none; }
+    .sidebar-right {
+        left: auto;
+        right: 0;
+        transform: translateX(104%);
+        border-left: 1px solid var(--border);
+    }
+    .sidebar-left h1 { font-size: 1rem; margin-bottom: 14px; }
+    .sidebar-left h2, .sidebar-right h2 { margin-bottom: 12px; }
+
+    body.panel-left-open .sidebar-left,
+    body.panel-right-open .sidebar-right {
+        transform: translateX(0);
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.65);
+    }
+
+    .jpi-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 65;
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(2px);
+    }
+    body.panel-left-open .jpi-scrim,
+    body.panel-right-open .jpi-scrim { display: block; }
+
+    .jpi-panel-close {
+        display: inline-flex;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-input);
+        color: var(--text-main);
+        font-size: 1rem;
+        cursor: pointer;
+        z-index: 2;
+    }
+
+    /* ---------- 5. BARRA INFERIOR (abre los cajones) ---------- */
+    .jpi-mobile-bar {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 80;
+        gap: 8px;
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+        background: rgba(15, 23, 42, 0.97);
+        border-top: 1px solid var(--border);
+        backdrop-filter: blur(8px);
+    }
+    .jpi-mobile-bar button {
+        flex: 1 1 0;
+        min-height: 50px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-input);
+        color: var(--text-main);
+        font-weight: 700;
+        font-size: 0.78rem;
+        letter-spacing: 0.03em;
+        cursor: pointer;
+    }
+    .jpi-mobile-bar button:active { background: var(--primary); }
+
+    /* ---------- 6. GRILLAS Y CONTROLES INTERNOS ---------- */
+    .params-grid,
+    .wf-params-grid,
+    .assets-grid,
+    .storyboard-grid,
+    .projects-grid,
+    .presets-grid,
+    .form-grid { grid-template-columns: 1fr !important; }
+
+    .assets-grid > *,
+    .storyboard-grid > * { width: 100% !important; }
+
+    /* Targets táctiles y sin zoom automatico en iOS */
+    textarea, input, select { font-size: 16px !important; }
+    input[type="range"] { width: 100%; height: 34px; }
+    button, .tab-button, .btn { touch-action: manipulation; }
+
+    .wf-upload-area,
+    .image-upload-area { min-height: 120px; }
+
+    /* Preview de la ultima imagen: que entre en pantalla */
+    .t2i-preview-area img,
+    #t2iPreviewImg { max-height: 60vh; width: auto; max-width: 100%; }
+
+    /* Modales / paneles flotantes a pantalla completa */
+    .modal-content,
+    .settings-panel,
+    .floating-panel { width: 94vw !important; max-width: 94vw !important; max-height: 90dvh; }
+
+    /* Videos y visores */
+    video, .preview-video, .stage-video { max-width: 100%; height: auto; }
+}
+
+@media (max-width: 560px) {
+    .sidebar-left, .sidebar-right { width: 94vw; max-width: 94vw; }
+    .workspace-content { padding: 10px; }
+    /* En pantalla chica las 6 pestañas se ven SIEMPRE: dos filas en vez de
+       scroll horizontal (que dejaba Engine Logs escondido). */
+    .tabs-container {
+        flex-wrap: wrap;
+        overflow-x: visible;
+        gap: 6px;
+        padding-bottom: 6px;
+    }
+    .tab-button {
+        flex: 1 1 calc(33.333% - 6px) !important;
+        min-width: 0 !important;
+        padding: 10px 4px !important;
+        font-size: 0.64rem !important;
+        letter-spacing: 0.03em;
+    }
+    .workspace-header { padding: 6px 8px 0; }
+    .jpi-mobile-bar button { font-size: 0.74rem; }
+}

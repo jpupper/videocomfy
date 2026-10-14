@@ -1,0 +1,77 @@
+[
+  {
+    "product": "vinos",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "aceite-oliva",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "miel-dulces",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "tomate-triturado",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "frutos-secos",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "conservas",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "gin",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "licor",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "yerba-mate",
+    "filename": null,
+    "status": "failed"
+  },
+  {
+    "product": "banana",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  },
+  {
+    "product": "cafe",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  },
+  {
+    "product": "cacao",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  },
+  {
+    "product": "coco",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  },
+  {
+    "product": "anana",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  },
+  {
+    "product": "palta",
+    "status": "error",
+    "error": "connect ECONNREFUSED 127.0.0.1:8188"
+  }
+]

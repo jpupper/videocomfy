@@ -60,13 +60,8 @@ if (params.storyboardIndex !== undefined) {
 }
 
 // Connect to videocomfy
+// No hard timeout — generation runs as long as it needs
 const ws = new WebSocket('ws://localhost:5634');
-const TIMEOUT_MS = 900000; // 15 min
-const timeout = setTimeout(() => {
-  ws.close();
-  console.error('\nTIMEOUT after 15 minutes');
-  process.exit(2);
-}, TIMEOUT_MS);
 
 let resolved = false;
 
@@ -98,7 +93,6 @@ ws.on('message', (data) => {
 
     // Result: video generated
     if (msg.type === 'video_generated' || msg.type === 'storyboard_generated') {
-      clearTimeout(timeout);
       resolved = true;
       ws.close();
       const isVideo = msg.type === 'video_generated';
@@ -115,7 +109,6 @@ ws.on('message', (data) => {
 
     // Error
     if (msg.type === 'generation_error' || msg.type === 'error') {
-      clearTimeout(timeout);
       resolved = true;
       ws.close();
       console.error(`\n[videocomfy] ERROR: ${msg.error || msg.message || JSON.stringify(msg)}`);
@@ -140,7 +133,6 @@ ws.on('message', (data) => {
 });
 
 ws.on('error', (err) => {
-  clearTimeout(timeout);
   if (!resolved) {
     console.error(`\n[videocomfy] WebSocket error: ${err.message}`);
     process.exit(1);
@@ -148,7 +140,6 @@ ws.on('error', (err) => {
 });
 
 ws.on('close', () => {
-  clearTimeout(timeout);
   if (!resolved) {
     // If it closes without resolution, check if it was quick (connection refused)
     console.error('\n[videocomfy] Connection closed unexpectedly');

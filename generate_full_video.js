@@ -68,7 +68,7 @@ class FullVideoGenerator {
     }
   }
 
-  _waitForMessage(type, timeout = 1800000) {
+  _waitForMessage(type, timeout = 86400000) { // 24h = effectively no timeout
     return new Promise((resolve, reject) => {
       this.pendingPromises[type] = { resolve, reject };
       setTimeout(() => {
@@ -151,7 +151,7 @@ class FullVideoGenerator {
 
   async generateImage(prompt, index) {
     console.log(`\n[GENERATOR] 🖼️ Imagen FLUX #${index + 1}...`);
-    const promise = this._waitForMessage('image', 600000);
+    const promise = this._waitForMessage('image', 86400000);
     this._send({ type: 'generarStoryboard', prompt, params: { videoWidth: 768, videoHeight: 768, storyboardSteps: 20 }, storyboardIndex: index, batchId: this.batchId });
     const result = await promise;
     console.log(`[GENERATOR] ✅ Imagen #${index + 1}: ${result.filename}`);
@@ -160,7 +160,7 @@ class FullVideoGenerator {
 
   async generateVideoFromImage(prompt, imageFilename, index) {
     console.log(`\n[GENERATOR] 🎬 Video I2V #${index + 1}...`);
-    const promise = this._waitForMessage('video', 600000);
+    const promise = this._waitForMessage('video', 86400000);
     this._send({ type: 'generarImagen', prompt, imageFilename, params: { videoWidth: 768, videoHeight: 768, videoLength: 97, samplerSteps: 20, cfgScale: 4.0, refStrength: 1.0 }, batchId: this.batchId });
     const result = await promise;
     console.log(`[GENERATOR] ✅ Video #${index + 1}: ${result.filename}`);

@@ -334,8 +334,8 @@ def main():
                         help="Parallel size (default: 1 para single GPU)")
     parser.add_argument("--num_inference_steps", type=int,
                         help="Pasos de inferencia (default: 8 con distill)")
-    parser.add_argument("--timeout", type=int, default=600,
-                        help="Timeout en segundos (default: 600)")
+    parser.add_argument("--timeout", type=int, default=86400,
+                        help="Timeout en segundos (default: 86400 = 24h)")
     
     args = parser.parse_args()
     

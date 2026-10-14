@@ -1,0 +1,13 @@
+{
+  "label": "minim",
+  "data": {
+    "prompt": "teletubbie",
+    "width": 1024,
+    "height": 1024,
+    "steps": 10,
+    "seedRandom": true,
+    "seedValue": -1
+  },
+  "createdAt": 1782066520798,
+  "updatedAt": 1782066520798
+}

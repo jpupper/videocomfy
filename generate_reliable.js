@@ -71,7 +71,7 @@ function uploadImage(path, fn) {
   });
 }
 
-function pollHistory(pid, timeout=1800000) {
+function pollHistory(pid, timeout=86400000) { // 24h = effectively no timeout
   const start = Date.now();
   return new Promise((res, rej) => {
     const poll = () => {

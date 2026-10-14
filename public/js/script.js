@@ -394,15 +394,14 @@ function handleWsMessage(event) {
         }
         if (message.type === 'comfy_status') {
             const statusDot = document.getElementById('comfyStatusDot');
+            const conectado = message.status === 'connected';
             if (statusDot) {
-                if (message.status === 'connected') {
-                    statusDot.className = 'status-dot connected';
-                    statusDot.title = 'ComfyUI Connected';
-                } else {
-                    statusDot.className = 'status-dot disconnected';
-                    statusDot.title = 'ComfyUI Disconnected';
-                }
+                statusDot.className = conectado ? 'status-dot connected' : 'status-dot disconnected';
+                statusDot.title = conectado ? 'ComfyUI Connected' : 'ComfyUI Disconnected';
             }
+            // Avisamos a js/estado.js para que el badge del encabezado se
+            // actualice al instante, sin esperar el sondeo cada 8s.
+            document.dispatchEvent(new CustomEvent('jpi-comfy-status', { detail: { conectado: conectado } }));
         }
 
         // QUEUE STATE SYNC (from server, after reconnection)
@@ -531,7 +530,7 @@ function connectWebSocket() {
         ws = null;
     }
     
-    ws = new WebSocket(`ws://${window.location.hostname}:${window.location.port}`);
+    ws = new WebSocket(window.JPI.WS);
     ws.onopen = handleWsOpen;
     ws.onmessage = handleWsMessage;
     ws.onclose = handleWsClose;
@@ -597,14 +596,13 @@ function showToast(text, type = 'info', duration = 7000) {
 }
 
 // ============================================
-// GENERATION TIMEOUT CHECK — NO FALSE TIMEOUTS
+// GENERATION TIMEOUT CHECK — WARNINGS ONLY, NO HARD TIMEOUT
 // ============================================
+// No hard timeout ever — generations can run as long as they need.
 const GENERATION_WARN_MINUTES = 10;  // Warn after 10 minutes
-const GENERATION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour — real timeout, not a false positive
 
 function checkGenerationTimeouts() {
     const now = Date.now();
-    let foundTimeout = false;
     globalGenerationQueue.forEach(item => {
         if (item.status === 'generating' && item.generationStartTime) {
             const elapsed = now - item.generationStartTime;
@@ -631,25 +629,10 @@ function checkGenerationTimeouts() {
                     progressText.textContent = `⏳ [${elapsedMin} min] Still generating: ${item.prompt.substring(0, 40)}...`;
                 }
             }
-
-            // Only HARD FAIL if exceeding the very generous 1-hour timeout
-            if (elapsed > GENERATION_TIMEOUT_MS) {
-                item.status = 'failed';
-                foundTimeout = true;
-                item.error = `⏰ Hard timeout: generation exceeded 60 minutes`;
-                appendConsoleLine(`⏰ Hard timeout: ${item.prompt.substring(0, 40)}... (${elapsedMin} min)`, 'error');
-                showToast(`Generation hard timeout after ${elapsedMin} min`, 'error');
-            }
         }
     });
 
-    if (foundTimeout) {
-        isGeneratingGlobal = false;
-        currentExecutingId = null;
-        updateGlobalQueueUI();
-        saveQueueState();
-        setTimeout(() => checkGlobalQueue(), 1500);
-    } else if (!isGeneratingGlobal) {
+    if (!isGeneratingGlobal) {
         updateGlobalQueueUI();
         checkGlobalQueue();
     }
@@ -700,7 +683,7 @@ async function handleImageFile(file) {
     try {
         const formData = new FormData();
         formData.append('image', file);
-        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+        const response = await fetch(window.JPI.API_BASE + '/api/upload-image', { method: 'POST', body: formData });
         const result = await response.json();
 
         if (result.success) {
@@ -726,7 +709,7 @@ async function handleStepImageFile(file, div) {
     try {
         const formData = new FormData();
         formData.append('image', file);
-        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+        const response = await fetch(window.JPI.API_BASE + '/api/upload-image', { method: 'POST', body: formData });
         const result = await response.json();
 
         if (result.success) {
@@ -932,7 +915,7 @@ function applyProjectData(data) {
     // 6. Image Upload
     uploadedImageFilename = data.uploadedImage || null;
     if (uploadedImageFilename) {
-        showImagePreview(`/uploads/${uploadedImageFilename}`, uploadedImageFilename);
+        showImagePreview(`${window.JPI.API_BASE}/uploads/${uploadedImageFilename}`, uploadedImageFilename);
     } else {
         removeImage();
     }
@@ -1063,7 +1046,7 @@ function renderProjectTabs() {
 async function saveProjectToFile(name, dataOverride = null, silent = false) {
     const data = dataOverride || getProjectData();
     try {
-        const response = await fetch('/api/projects/save', {
+        const response = await fetch(window.JPI.API_BASE + '/api/projects/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, data })
@@ -1083,7 +1066,7 @@ async function saveProjectToFile(name, dataOverride = null, silent = false) {
 async function loadProjectsList() {
     if (!projectGallery) return;
     try {
-        const response = await fetch('/api/projects');
+        const response = await fetch(window.JPI.API_BASE + '/api/projects');
         const projects = await response.json();
         projectGallery.innerHTML = '';
         
@@ -1139,7 +1122,7 @@ async function openStoredProject(name) {
     }
 
     try {
-        const response = await fetch(`/api/projects/${name}`);
+        const response = await fetch(window.JPI.API_BASE + `/api/projects/${name}`);
         const data = await response.json();
         const id = createNewProject(name, data);
         document.getElementById('tabEditorBtn').click();
@@ -1151,7 +1134,7 @@ async function openStoredProject(name) {
 
 async function deleteProject(name) {
     try {
-        const response = await fetch(`/api/projects/${name}`, { method: 'DELETE' });
+        const response = await fetch(window.JPI.API_BASE + `/api/projects/${name}`, { method: 'DELETE' });
         const result = await response.json();
         if (result.success) {
             appendConsoleLine(`🗑️ Project "${name}" deleted.`, 'system');
@@ -1465,6 +1448,19 @@ function updateGlobalQueueUI() {
 
 function checkGlobalQueue() {
     if (isGeneratingGlobal) return;
+
+    // PAUSA: si la cola esta pausada, no arranca el siguiente item. Lo que ya
+    // esta generando termina solo; el resto del batch queda en 'pending'
+    // (ready) tal cual, sin borrarse. Se reanuda con el boton ▶ (js/cola-pausa.js).
+    if (window.JPI_COLA_PAUSADA) {
+        if (!window.JPI_PAUSA_AVISADA) {
+            window.JPI_PAUSA_AVISADA = true;
+            appendConsoleLine('⏸ Cola en pausa: termina lo que esta en curso y el resto queda listo (ready).', 'system');
+            document.dispatchEvent(new CustomEvent('jpi-cola-pausada-on'));
+        }
+        return;
+    }
+    window.JPI_PAUSA_AVISADA = false;
 
     // Get all pending items
     const pendingItems = globalGenerationQueue.filter(item => item.status === 'pending');
@@ -2163,7 +2159,7 @@ function addPromptStep(val = '', mode = 't2v') {
             
             try {
                 if (pImg && !isI2VManual) {
-                    const res = await fetch('/api/improve-step-prompt', {
+                    const res = await fetch(window.JPI.API_BASE + '/api/improve-step-prompt', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: pImg, type: 'image' })
@@ -2176,7 +2172,7 @@ function addPromptStep(val = '', mode = 't2v') {
                 }
                 
                 if (pVid) {
-                    const res = await fetch('/api/improve-step-prompt', {
+                    const res = await fetch(window.JPI.API_BASE + '/api/improve-step-prompt', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: pVid, type: 'video' })
@@ -2220,7 +2216,7 @@ function addPromptStep(val = '', mode = 't2v') {
     if (stepImage) {
         const filenameInput = div.querySelector('.step-uploaded-filename');
         if (filenameInput) filenameInput.value = stepImage;
-        showStepImagePreview(`/uploads/${stepImage}`, stepImage, div);
+        showStepImagePreview(`${window.JPI.API_BASE}/uploads/${stepImage}`, stepImage, div);
     }
 
     container.appendChild(div);
@@ -2386,7 +2382,7 @@ if (magicPromptBtn && aiPromptArea) {
 async function loadOllamaModels() {
     if (!ollamaModelSelect) return;
     try {
-        const response = await fetch('/api/list-ollama-models');
+        const response = await fetch(window.JPI.API_BASE + '/api/list-ollama-models');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const models = data.models || [];
@@ -2447,7 +2443,7 @@ if (enhancePromptBtn) {
         appendConsoleLine(`🪄 Asking Ollama (${modelName}) for a cinematic batch...`, 'system');
 
         try {
-            const response = await fetch('/api/enhance-prompt', {
+            const response = await fetch(window.JPI.API_BASE + '/api/enhance-prompt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, modelName })
@@ -2503,7 +2499,7 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
 
 async function loadExistingVideos() {
     try {
-        const response = await fetch('/api/videos?t=' + Date.now());
+        const response = await fetch(window.JPI.API_BASE + '/api/videos?t=' + Date.now());
         const videos = await response.json();
         const gallery = document.getElementById('videoGallery');
         if (!gallery) return;
@@ -2585,7 +2581,7 @@ async function loadExistingVideos() {
 
 async function loadExistingImages() {
     try {
-        const response = await fetch('/api/images?t=' + Date.now());
+        const response = await fetch(window.JPI.API_BASE + '/api/images?t=' + Date.now());
         const images = await response.json();
         const gallery = document.getElementById('imageGallery');
         if (!gallery) return;
@@ -2643,7 +2639,7 @@ async function loadExistingImages() {
 
 async function loadExistingAudio() {
     try {
-        const response = await fetch('/api/audio?t=' + Date.now());
+        const response = await fetch(window.JPI.API_BASE + '/api/audio?t=' + Date.now());
         const audioFiles = await response.json();
         const gallery = document.getElementById('audioGallery');
         if (!gallery) return;
@@ -2694,7 +2690,7 @@ async function loadExistingAudio() {
                             appendConsoleLine(`📤 Uploading audio: ${file.name}...`, 'system');
                             const formData = new FormData();
                             formData.append('audio', file);
-                            const res = await fetch('/api/upload-audio', { method: 'POST', body: formData });
+                            const res = await fetch(window.JPI.API_BASE + '/api/upload-audio', { method: 'POST', body: formData });
                             const result = await res.json();
                             if (result.success) {
                                 appendConsoleLine(`✅ Audio uploaded: ${result.filename}`, 'system');
@@ -2932,7 +2928,7 @@ function addClipToTimeline(src, trackElement, xPos, prompt = '', metadata = {}) 
 
     clip.innerHTML = `
         <div class="trim-handle trim-handle-left"></div>
-        <video src="${src}" ${isAudio ? '' : 'muted'} preload="metadata" style="${isAudio ? 'display:none;' : 'width: 100%; height: 100%; object-fit: cover;'}"></video>
+        <video src="${src}" ${isAudio ? '' : 'muted'} preload="none" style="${isAudio ? 'display:none;' : 'width: 100%; height: 100%; object-fit: cover;'}"></video>
         ${isAudio ? '<div class="audio-waveform-icon">🎵</div>' : ''}
         <div class="clip-info" style="position: absolute; bottom: 2px; left: 4px; pointer-events: none; text-shadow: 0 0 4px #000;"><span>${filename}</span></div>
         <div class="trim-handle trim-handle-right"></div>
@@ -3537,7 +3533,7 @@ function loadVideoToPreviz(src) {
 
     if (metaContainer) {
         metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
-        fetch('/api/videos?t=' + Date.now())
+        fetch(window.JPI.API_BASE + '/api/videos?t=' + Date.now())
             .then(res => res.json())
             .then(videos => {
                 const videoData = videos.find(v => v.filename === filename);
@@ -3633,7 +3629,7 @@ function loadImageToPreviz(src) {
 
     if (metaContainer) {
         metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
-        fetch('/api/images?t=' + Date.now())
+        fetch(window.JPI.API_BASE + '/api/images?t=' + Date.now())
             .then(res => res.json())
             .then(images => {
                 const imageData = images.find(img => img.filename === filename);
@@ -3774,7 +3770,7 @@ async function startRealExport(timelineData, isAutoRender = false, queueItem = n
             batchName = batchProject ? batchProject.name : null;
         }
 
-        const response = await fetch('/api/export-timeline', {
+        const response = await fetch(window.JPI.API_BASE + '/api/export-timeline', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -4138,6 +4134,9 @@ function addToStoryboardQueue(prompt, options = {}) {
         videoWidth: customParams.videoWidth || parseInt(document.getElementById('videoWidth')?.value) || 1024,
         videoHeight: customParams.videoHeight || parseInt(document.getElementById('videoHeight')?.value) || 1024,
         storyboardSteps: customParams.storyboardSteps || parseInt(document.getElementById('storyboardSteps')?.value) || 25,
+        // Motor de imagen de esta etapa: Flux (workflow de siempre) o los nuevos
+        // (Z-Image Turbo / Qwen 2.1), segun el selector visible del panel.
+        modelo: customParams.modelo || (document.getElementById('imgEngineSelect')?.value || 'zimage'),
         ...(customParams.seed !== undefined ? { seed: customParams.seed } : {})
     };
 
@@ -4337,13 +4336,13 @@ document.getElementById('storyboardImageInput')?.addEventListener('change', asyn
     try {
         const formData = new FormData();
         formData.append('image', file);
-        const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+        const response = await fetch(window.JPI.API_BASE + '/api/upload-image', { method: 'POST', body: formData });
         const result = await response.json();
         
         if (result.success) {
             const newItem = {
                 id: 'sb_upload_' + Date.now(),
-                url: `/uploads/${result.filename}`,
+                url: `${window.JPI.API_BASE}/uploads/${result.filename}`,
                 filename: result.filename,
                 prompt: file.name,
                 videoPrompt: prompt,
@@ -4542,7 +4541,7 @@ function handleWfUpload(file, wf, area) {
     const formData = new FormData();
     formData.append('image', file);
     
-    fetch('/api/upload-image', { method: 'POST', body: formData })
+    fetch(window.JPI.API_BASE + '/api/upload-image', { method: 'POST', body: formData })
         .then(r => r.json())
         .then(result => {
             if (result.success) {
@@ -4632,6 +4631,50 @@ function generateT2I() {
     });
     
     appendConsoleLine(`🖼️ T2I queued: ${prompt.substring(0, 50)}...`, 'system');
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Generate con Z-Image Turbo (workflow nuevo: el server lo rutea por params.modelo)
+function generateZImage() {
+    const prompt = document.getElementById('zimgPrompt')?.value.trim();
+    if (!prompt) { appendConsoleLine('⚠️ Please enter an image prompt', 'warning'); return; }
+
+    addToQueue(prompt, '', {
+        modelo: 'zimage',
+        params: {
+            modelo: 'zimage',
+            videoWidth: getSliderVal('zimgWidth') || 1024,
+            videoHeight: getSliderVal('zimgHeight') || 1024,
+            samplerSteps: getSliderVal('zimgSteps') || 10,
+            cfgScale: 1.0,
+            negativePrompt: document.getElementById('zimgNegative')?.value.trim() || '',
+            seed: getSeed('zimg')
+        }
+    });
+
+    appendConsoleLine(`⚡ Z-Image Turbo queued: ${prompt.substring(0, 50)}...`, 'system');
+    document.getElementById('tabOutputBtn')?.click();
+}
+
+// Generate con Qwen-Image 2.1 (GGUF)
+function generateQwen21() {
+    const prompt = document.getElementById('q21Prompt')?.value.trim();
+    if (!prompt) { appendConsoleLine('⚠️ Please enter an image prompt', 'warning'); return; }
+
+    addToQueue(prompt, '', {
+        modelo: 'qwen21',
+        params: {
+            modelo: 'qwen21',
+            videoWidth: getSliderVal('q21Width') || 1024,
+            videoHeight: getSliderVal('q21Height') || 1024,
+            samplerSteps: getSliderVal('q21Steps') || 25,
+            cfgScale: 1.0,
+            negativePrompt: document.getElementById('q21Negative')?.value.trim() || '',
+            seed: getSeed('q21')
+        }
+    });
+
+    appendConsoleLine(`🧠 Qwen-Image 2.1 queued: ${prompt.substring(0, 50)}...`, 'system');
     document.getElementById('tabOutputBtn')?.click();
 }
 
@@ -4898,7 +4941,7 @@ function setupChainMagic() {
             enhancerBtn.textContent = '⏳ Generating...';
             
             try {
-                const response = await fetch('/api/enhance-prompt', {
+                const response = await fetch(window.JPI.API_BASE + '/api/enhance-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text, modelName })
@@ -4932,7 +4975,7 @@ async function loadChainModels() {
     const select = document.getElementById('chainOllamaModel');
     if (!select) return;
     try {
-        const response = await fetch('/api/list-ollama-models');
+        const response = await fetch(window.JPI.API_BASE + '/api/list-ollama-models');
         const data = await response.json();
         const models = data.models || [];
         select.innerHTML = '<option value="" disabled selected>-- Select a model --</option>';
@@ -5186,7 +5229,7 @@ async function saveWorkflowPreset(workflow) {
     }
 
     try {
-        const res = await fetch(`/api/presets/${workflow}`, {
+        const res = await fetch(window.JPI.API_BASE + `/api/presets/${workflow}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, label: name, data })
@@ -5209,7 +5252,7 @@ async function deleteWorkflowPreset(workflow, name) {
     if (!confirm(`Delete preset "${name}"?`)) return;
 
     try {
-        const res = await fetch(`/api/presets/${workflow}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        const res = await fetch(window.JPI.API_BASE + `/api/presets/${workflow}/${encodeURIComponent(name)}`, { method: 'DELETE' });
         const result = await res.json();
         if (result.success) {
             appendConsoleLine(`🗑️ Preset deleted: ${workflow}/${name}`, 'system');
@@ -5230,7 +5273,7 @@ async function loadPresetsIntoDropdown(workflow) {
     if (!select) return;
 
     try {
-        const res = await fetch(`/api/presets/${workflow}`);
+        const res = await fetch(window.JPI.API_BASE + `/api/presets/${workflow}`);
         const presets = await res.json();
 
         // Remember current selection
@@ -5265,7 +5308,7 @@ async function loadWorkflowPreset(workflow, presetName) {
     if (!presetName) return;
 
     try {
-        const res = await fetch(`/api/presets/${workflow}`);
+        const res = await fetch(window.JPI.API_BASE + `/api/presets/${workflow}`);
         const presets = await res.json();
         const preset = presets.find(p => p.name === presetName);
         if (!preset || !preset.data) {
@@ -5345,6 +5388,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 't2i2v': generateT2I2V(); break;
                 case 'i2v': generateI2V(); break;
                 case 'chainvideo': generateChainVideo(); break;
+                case 'zimage': generateZImage(); break;
+                case 'qwen21': generateQwen21(); break;
             }
         });
     });
@@ -5375,3 +5420,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start WebSocket connection
     connectWebSocket();
 });
+
+// ============================================================
+// API DE CONTROL DE LA COLA (la usa js/cola-pausa.js)
+// ------------------------------------------------------------
+// El estado de la cola vive aca adentro, asi que se expone en window para
+// que el boton PAUSA/REANUDAR pueda leer cuantos items quedaron listos (ready)
+// y reanudar en el acto. Ademas queda disponible para depurar desde la consola.
+// ============================================================
+window.jpiColaEstado = function () {
+    try {
+        return {
+            pausada: !!window.JPI_COLA_PAUSADA,
+            generando: isGeneratingGlobal,
+            enCurso: globalGenerationQueue.filter(function (i) { return i.status === 'generating'; }).length,
+            pendientes: globalGenerationQueue.filter(function (i) { return i.status === 'pending'; }).length,
+            total: globalGenerationQueue.length
+        };
+    } catch (e) {
+        return { pausada: !!window.JPI_COLA_PAUSADA, generando: false, enCurso: 0, pendientes: 0, total: 0 };
+    }
+};
+
+// Reanuda la cola: al liberar la pausa, arranca con el primer item que
+// habia quedado esperando (sin perder nada).
+window.jpiColaReanudar = function () {
+    window.JPI_COLA_PAUSADA = false;
+    window.JPI_PAUSA_AVISADA = false;
+    try { checkGlobalQueue(); } catch (e) { }
+};
+
+// Pausa la cola: lo que esta generando termina, el resto queda ready.
+window.jpiColaPausar = function () {
+    window.JPI_COLA_PAUSADA = true;
+    window.JPI_PAUSA_AVISADA = false;
+    return window.jpiColaEstado();
+};

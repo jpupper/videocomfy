@@ -128,7 +128,7 @@ class VideoComfyClient {
   /**
    * Wait for a specific message type with timeout
    */
-  _waitForMessage(type, timeout = 300000) {
+  _waitForMessage(type, timeout = 86400000) { // 24h = effectively no timeout
     return new Promise((resolve, reject) => {
       this.pendingPromises[type] = { resolve, reject };
       setTimeout(() => {

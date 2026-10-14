@@ -42,3 +42,9 @@ public/projects/**/*
 
 # Windows reserved device names (accidental creation)
 NUL
+
+# Copias de seguridad locales (no van al repo: pesan cientos de MB)
+backup/
+
+# Herramientas locales de agentes
+.freebuff/

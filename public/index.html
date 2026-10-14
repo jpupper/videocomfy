@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/style.css?v=2">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/estado.css?v=1">
+    <link rel="stylesheet" href="css/cola-pausa.css?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -38,6 +41,11 @@
                 <input type="file" id="imageUploadInput" accept="image/png,image/jpeg,image/webp,image/jpg" class="hidden-input">
             </div>
 
+            <!-- Panel de parámetros viejo: OCULTO a proposito.
+                 Todos los parametros viven en la pestaña CREATE (cada workflow
+                 tiene sus sliders). Los inputs se dejan en el DOM porque el JS
+                 del editor los sigue leyendo como respaldo en algunos flujos. -->
+            <div id="jpi-params-viejos" style="display:none">
             <h2 class="section-label">⚙️ Generation Params</h2>
             
             <div class="params-grid" id="dimensionControls">
@@ -75,6 +83,7 @@
                     <input type="number" id="seed" value="0" class="seed-input">
                 </div>
             </div>
+            </div><!-- /#jpi-params-viejos -->
 
         </aside>
 
@@ -87,6 +96,8 @@
                         <div class="mode-indicator t2v" id="modeIndicator">
                             <span id="modeText">T2V ACTIVE</span>
                         </div>
+                        <!-- Estado real de la cadena: PC + videocomfy + ComfyUI -->
+                        <button type="button" class="jpi-estado" id="jpiEstado" title="Estado de la conexión">⏳ Verificando…</button>
                     </div>
                 </div>
                 <div class="tabs-container">
@@ -200,6 +211,86 @@
                             <span class="wf-card-name">CHAINVIDEO</span>
                             <span class="wf-card-desc">Wan2.2 Linked Videos</span>
                         </button>
+                        <button class="wf-card" data-workflow="zimage">
+                            <span class="wf-card-icon">⚡</span>
+                            <span class="wf-card-name">Z-IMAGE TURBO</span>
+                            <span class="wf-card-desc">Text to Image (10 steps)</span>
+                        </button>
+                        <button class="wf-card" data-workflow="qwen21">
+                            <span class="wf-card-icon">🧠</span>
+                            <span class="wf-card-name">QWEN IMAGE 2.1</span>
+                            <span class="wf-card-desc">Text to Image (GGUF Q8)</span>
+                        </button>
+                    </div>
+
+                    <!-- Z-IMAGE TURBO (T2I) -->
+                    <div class="wf-panel" data-panel="zimage">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Image Prompt</label>
+                                <textarea class="wf-textarea" id="zimgPrompt" placeholder="Describe la imagen que querés (Z-Image Turbo)..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Negative Prompt (opcional)</label>
+                                <textarea class="wf-textarea" id="zimgNegative" placeholder="render, cartoon, illustration, cgi, blender"></textarea>
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="zimgWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="zimgHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">10</span></label>
+                                    <input type="range" min="4" max="30" step="1" value="10" class="wf-param-slider" data-bind="zimgSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed <span class="wf-val">-1</span></label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="zimgSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="zimgRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">⚡ Turbo: 10 steps y cfg 1. Modelos: <code>z_image_turbo_int8_convrot</code> + <code>qwen_3_4b</code> + <code>ae</code></div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="zimage">🚀 GENERATE IMAGE</button>
+                        </div>
+                    </div>
+
+                    <!-- QWEN IMAGE 2.1 (T2I) -->
+                    <div class="wf-panel" data-panel="qwen21">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Image Prompt</label>
+                                <textarea class="wf-textarea" id="q21Prompt" placeholder="Describe la imagen que querés (Qwen-Image 2.1)..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Negative Prompt (opcional)</label>
+                                <textarea class="wf-textarea" id="q21Negative" placeholder="blurry, low quality, watermark"></textarea>
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="q21Width">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1920" step="64" value="1024" class="wf-param-slider" data-bind="q21Height">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">25</span></label>
+                                    <input type="range" min="10" max="40" step="1" value="25" class="wf-param-slider" data-bind="q21Steps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed <span class="wf-val">-1</span></label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="q21Seed">
+                                    <label class="wf-check-label"><input type="checkbox" id="q21RandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🧠 Qwen-Image 2.1 (GGUF Q8_0, 25 steps, cfg 1). Modelos: <code>qwen_image_2.1_Q8_0.gguf</code> + <code>qwen3vl_8b_int8_convrot</code> + <code>qwen_image_2.1_vae_bf16</code></div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="qwen21">🚀 GENERATE IMAGE</button>
+                        </div>
                     </div>
 
                     <!-- FLUX IMAGE (T2I) -->
@@ -330,6 +421,15 @@
                                         <label class="wf-label">Video Prompt (LTX-2)</label>
                                         <textarea class="wf-textarea wf-dual-ta" id="t2i2vVideoPrompt" placeholder="Animation, camera movement, plot..."></textarea>
                                     </div>
+                                </div>
+                                <div style="margin-top:10px;">
+                                    <label class="wf-label">Motor de imagen de esta etapa</label>
+                                    <select id="imgEngineSelect" class="wf-preset-select" style="width:100%; max-width:320px;">
+                                        <option value="zimage">⚡ Z-Image Turbo (10 steps, rápido)</option>
+                                        <option value="qwen21">🧠 Qwen-Image 2.1 (25 steps, más fiel)</option>
+                                        <option value="flux">🎨 Flux (el de siempre)</option>
+                                    </select>
+                                    <div style="font-size:11px; opacity:.65; margin-top:4px;">Aplica a la imagen de este pipeline y a las regeneraciones de storyboard.</div>
                                 </div>
                             </div>
                             <div class="wf-params-grid">
@@ -697,7 +797,14 @@
         </div>
     </div>
 
-    <script src="js/script.js?v=2"></script>
+    <script src="config-jpi.js?v=1"></script>
+    <script src="js/script.js?v=4"></script>
+    <script src="js/mobile.js?v=1"></script>
+    <script src="js/estado.js?v=1"></script>
+    <script src="js/scroll-guard.js?v=1"></script>
+    <script src="js/assets-thumbs.js?v=1"></script>
+    <script src="js/cola-pausa.js?v=2"></script>
+    <script src="js/motor-imagen.js?v=1"></script>
 </body>
 
 </html>

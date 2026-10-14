@@ -55,7 +55,7 @@ function queuePrompt(workflow) {
   }, data);
 }
 
-function pollHistory(promptId, timeout = 1800000) {
+function pollHistory(promptId, timeout = 86400000) { // 24h = effectively no timeout
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
@@ -191,7 +191,7 @@ async function generateFluxImage(prompt, index) {
   if (result.error) throw new Error(`FLUX queue error: ${JSON.stringify(result.error)}`);
   console.log(`[FIX] ⏳ Esperando imagen... (prompt_id: ${result.prompt_id.slice(0, 12)}...)`);
   
-  const history = await pollHistory(result.prompt_id, 600000);
+  const history = await pollHistory(result.prompt_id, 86400000);
   
   let filename = null;
   for (const nodeId of Object.keys(history.outputs)) {
@@ -242,7 +242,7 @@ async function generateI2VVideo(prompt, imageFilename, index) {
   if (result.error) throw new Error(`I2V queue error: ${JSON.stringify(result.error)}`);
   console.log(`[FIX] ⏳ Esperando video... (prompt_id: ${result.prompt_id.slice(0, 12)}...)`);
   
-  const history = await pollHistory(result.prompt_id, 600000);
+  const history = await pollHistory(result.prompt_id, 86400000);
   
   let filename = null;
   for (const nodeId of Object.keys(history.outputs)) {

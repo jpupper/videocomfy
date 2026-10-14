@@ -1,3 +1,4 @@
 @echo off
-cd /d D:\IA\comfynew\ComfyUI
-D:\IA\comfynew\ComfyUI\venv\Scripts\python.exe -u main.py --listen 0.0.0.0 --port 8188 --disable-cuda-malloc --reserve-vram 1 > D:\IA\comfynew\ComfyUI\comfy_start.log 2>&1
+REM  Arranca ComfyUI con la configuracion buena (ver start_network.bat):
+REM  libera el puerto 8188, encoder/allocator seguros y modo normal de VRAM.
+call "D:\IA\comfynew\ComfyUI\start_network.bat"

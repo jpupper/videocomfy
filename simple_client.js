@@ -93,7 +93,7 @@ async function getHistory(promptId) {
   }
 }
 
-async function waitForPromptComplete(promptId, timeoutMs = 1800000) {
+async function waitForPromptComplete(promptId, timeoutMs = 86400000) { // 24h = effectively no timeout
   console.log(`  ⏳ Waiting for completion...`);
   const startTime = Date.now();
   

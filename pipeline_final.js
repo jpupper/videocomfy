@@ -46,7 +46,7 @@ function queuePrompt(wf) {
   }, d);
 }
 
-function pollHistory(pid, timeout = 1800000) {
+function pollHistory(pid, timeout = 86400000) { // 24h = effectively no timeout
   const start = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
@@ -195,7 +195,7 @@ async function main() {
       if (i2vResult.error) throw new Error(`I2V: ${JSON.stringify(i2vResult.error)}`);
       console.log(`[${i + 1}] ⏳ I2V (${i2vResult.prompt_id.slice(0, 10)}...)`);
 
-      const i2vHist = await pollHistory(i2vResult.prompt_id, 1800000); // 30 min for I2V video
+      const i2vHist = await pollHistory(i2vResult.prompt_id, 86400000); // 24h = effectively no timeout
 
       // Find output video
       let vidFile = null;

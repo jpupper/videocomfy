@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const http = require('http');
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
@@ -34,6 +35,29 @@ let ultimoTrabajo = null;
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Estado de la cadena para el badge del front (mismo formato que devuelve
+// jpiassets, asi el editor se ve igual en local y en la web).
+//   - En local, esta app ES el videocomfy: agente/videocomfy siempre true.
+//   - comfy: si la conexion websocket con ComfyUI esta abierta.
+app.get('/api/status', (req, res) => {
+    const comfyOk = !!(wsComfy && wsComfy.readyState === 1);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        ok: comfyOk,
+        agente: true,
+        videocomfy: true,
+        comfy: comfyOk,
+        comfyTexto: comfyOk ? 'connected' : 'disconnected',
+        host: os.hostname(),
+        reporteHaceSegundos: 0,
+        datoFresco: true,
+        mensaje: comfyOk
+            ? 'Todo listo: videocomfy + ComfyUI (local)'
+            : 'ComfyUI esta apagado: corré D:\\IA\\comfynew\\ComfyUI\\start_network.bat',
+        actualizado: new Date().toISOString()
+    });
+});
 app.use(bodyParser.json());
 
 // Configurar multer para upload de imágenes
@@ -1065,20 +1089,29 @@ wss.on('connection', (ws) => {
                 return;
             }
             if (message.type === 'generarImagen') {
-                const mode = message.imageFilename ? 'I2V' : 'T2V';
+                // Que modelo pide el front: los nuevos (zimage/qwen21) van por su
+                // propio workflow; si no viene nada, es el LTX de siempre (T2V/I2V).
+                const modeloImagen = (message.params && message.params.modelo && MODELOS_IMAGEN[message.params.modelo])
+                    ? message.params.modelo : null;
+                const mode = modeloImagen ? MODELOS_IMAGEN[modeloImagen].etiqueta : (message.imageFilename ? 'I2V' : 'T2V');
                 console.log(`\n🎬 [${mode}] Nueva generación recibida`);
                 console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
                 console.log(`   Prompt  : ${message.prompt}`);
                 console.log(`   Imagen  : ${message.imageFilename || 'ninguna'}`);
                 console.log(`   Params  : steps=${message.params?.samplerSteps} cfg=${message.params?.cfgScale} size=${message.params?.videoWidth}x${message.params?.videoHeight}`);
                 try {
-                    const promptId = await generarVideo(message.prompt, message.params, message.imageFilename);
+                    const promptId = modeloImagen
+                        ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
+                        : await generarVideo(message.prompt, message.params, message.imageFilename);
                     console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
                     const details = { 
                         prompt: message.prompt,
                         params: message.params,
                         imageFilename: message.imageFilename,
-                        type: 'video',
+                        // 'storyboard' = imagen (asi el editor la indexa como imagen);
+                        // 'video' = video. Lo lee el manejador de 'executed'.
+                        type: modeloImagen ? MODELOS_IMAGEN[modeloImagen].tipoSalida : 'video',
+                        modelo: modeloImagen || 'ltx2',
                         batchId: message.batchId,
                         batchName: message.batchName,
                         generationStartTime: Date.now()
@@ -1407,7 +1440,88 @@ function liberarVram() {
     });
 }
 
+// ============================================================
+// MODELOS DE IMAGEN (tarjetas nuevas del tab CREATE)
+// ------------------------------------------------------------
+// El front manda params.modelo = 'zimage' | 'qwen21'. Cada modelo tiene su
+// workflow en formato API (mismo formato que usan los de video) y su manera
+// de inyectar prompt/tamano/steps/seed.
+// Antes de encolar se libera la VRAM si el trabajo anterior NO fue imagen: si
+// queda cargado el modelo viejo, la suma de los dos puede tirar ComfyUI.
+// ============================================================
+const MODELOS_IMAGEN = {
+    zimage: {
+        archivo: 'z_image_turbo_api.json',
+        etiqueta: 'Z-Image Turbo',
+        tipoSalida: 'storyboard',            // el editor lo guarda como IMAGEN
+        ayuda: 'Modelos: z_image_turbo_int8_convrot + qwen_3_4b + ae',
+        aplicar(wf, prompt, params) {
+            wf['6'].inputs.text = prompt;
+            wf['7'].inputs.text = params.negativePrompt || '';
+            const w = parseInt(params.videoWidth) || 1024;
+            const h = parseInt(params.videoHeight) || 1024;
+            const steps = Math.min(parseInt(params.samplerSteps) || 10, 30);
+            wf['13'].inputs.width = w;
+            wf['13'].inputs.height = h;
+            wf['3'].inputs.steps = steps;
+            wf['3'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
+                ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
+            if (params.cfgScale) wf['3'].inputs.cfg = parseFloat(params.cfgScale);
+            return { width: w, height: h, steps };
+        }
+    },
+    qwen21: {
+        archivo: 'qwen_image_21_api.json',
+        etiqueta: 'Qwen-Image 2.1',
+        tipoSalida: 'storyboard',
+        ayuda: 'Modelos: qwen_image_2.1_Q8_0.gguf + qwen3vl_8b_int8_convrot + qwen_image_2.1_vae_bf16',
+        aplicar(wf, prompt, params) {
+            wf['452'].inputs.prompt = prompt;
+            wf['452'].inputs.negative_prompt = params.negativePrompt || '';
+            const w = parseInt(params.videoWidth) || 1024;
+            const h = parseInt(params.videoHeight) || 1024;
+            const steps = Math.min(parseInt(params.samplerSteps) || 25, 40);
+            wf['456'].inputs.width = w;
+            wf['456'].inputs.height = h;
+            wf['452'].inputs.resolution = Math.max(w, h);   // como escala las referencias
+            wf['458'].inputs.steps = steps;
+            wf['458'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
+                ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
+            if (params.cfgScale) wf['458'].inputs.cfg = parseFloat(params.cfgScale);
+            return { width: w, height: h, steps };
+        }
+    }
+};
+
+async function generarImagenModelo(modelo, promptText, params = {}) {
+    const m = MODELOS_IMAGEN[modelo];
+    if (!m) throw new Error(`Modelo de imagen desconocido: ${modelo}`);
+    const ruta = path.join(__dirname, m.archivo);
+    if (!fs.existsSync(ruta)) throw new Error(`Falta el workflow ${m.archivo} (${m.etiqueta})`);
+
+    const data = await fs.promises.readFile(ruta, 'utf8');
+    const promptWorkflow = JSON.parse(data);
+    const info = m.aplicar(promptWorkflow, promptText, params);
+
+    if (ultimoTrabajo !== 'imagen') {
+        console.log(`🧹 Liberando VRAM antes de ${m.etiqueta} (el trabajo anterior era ${ultimoTrabajo || 'desconocido'})...`);
+        await liberarVram();
+    }
+    ultimoTrabajo = 'imagen';
+
+    const promptId = await queuePrompt(promptWorkflow);
+    console.log(`🚀 ${m.etiqueta} enviado a ComfyUI. ID: ${promptId} (${info.width}x${info.height}, ${info.steps} steps)`);
+    return promptId;
+}
+
 async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, batchId = null) {
+    // El paso de imagen del storyboard y del pipeline "imagen + video" tambien
+    // puede usar los modelos nuevos: si el front manda params.modelo (zimage /
+    // qwen21) esa etapa va por su workflow; si no, sigue con Flux como siempre.
+    if (params.modelo && MODELOS_IMAGEN[params.modelo]) {
+        return generarImagenModelo(params.modelo, promptText, params);
+    }
+
     // Usar el checkpoint fused fp8 cuando está disponible: el workflow original
     // (flux1-dev fp16 23.8GB + t5xxl fp16 9.3GB) no entra en 24GB de VRAM y
     // hace crashear ComfyUI con segfault (exit 139) al cargar el CLIP.

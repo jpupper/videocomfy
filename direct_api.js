@@ -112,20 +112,17 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function waitForPrompt(promptId, timeoutMs = 1800000) {
+async function waitForPrompt(promptId, timeoutMs = 86400000) { // 24h default = effectively no timeout
   const wsUrl = `ws://${COMFY_HOST}:${COMFY_PORT}/ws?clientId=watcher_${Date.now()}`;
   const WebSocket = require('ws');
   
-  console.log(`  ⏳ Waiting for execution to complete (timeout: ${Math.round(timeoutMs/1000)}s)...`);
+  console.log(`  ⏳ Waiting for execution to complete (no hard timeout)...`);
   
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     let lastProgress = 0;
     const startTime = Date.now();
-    let timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error(`Timeout after ${timeoutMs/1000}s waiting for prompt ${promptId}`));
-    }, timeoutMs);
+    // No hard timeout — generation runs as long as it needs
     
     ws.on('open', () => {
       console.log('  📡 Connected to ComfyUI WebSocket for progress tracking');
@@ -156,14 +153,12 @@ async function waitForPrompt(promptId, timeoutMs = 1800000) {
         
         if (msg.type === 'executing' && msg.data.prompt_id === promptId && msg.data.node === null) {
           // Null node means execution of this prompt is fully done
-          clearTimeout(timeout);
           console.log(`  ✅ Prompt ${promptId} fully executed!`);
           ws.close();
           resolve(ws.output || {});
         }
         
         if (msg.type === 'execution_error' && msg.data.prompt_id === promptId) {
-          clearTimeout(timeout);
           ws.close();
           const errMsg = msg.data.exception_message || 'Unknown execution error';
           reject(new Error(`ComfyUI execution error: ${errMsg}`));
@@ -182,12 +177,10 @@ async function waitForPrompt(promptId, timeoutMs = 1800000) {
     });
     
     ws.on('error', (err) => {
-      clearTimeout(timeout);
       reject(new Error(`WebSocket error: ${err.message}`));
     });
     
     ws.on('close', () => {
-      clearTimeout(timeout);
     });
   });
 }
@@ -377,7 +370,7 @@ async function generateVideoDirect(prompt, params = {}) {
   if (params.steps) workflow["9"]["inputs"]["steps"] = params.steps;
   
   const promptId = await queuePrompt(workflow);
-  const output = await waitForPrompt(promptId, 600000);
+  const output = await waitForPrompt(promptId); // no timeout — generation runs as long as it needs
   
   const asset = await getOutputFilename(output, 'video');
   if (asset) {
