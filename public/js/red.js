@@ -1,13 +1,13 @@
 // ============================================================
 // COMFYLATAM — pestaña RED (red de Comfys)
 // ------------------------------------------------------------
-// Cada app que corre en una PC se publica como NODO. Acá se ve la
-// lista de nodos conectados, se elige en cuál generar y (si estoy
-// corriendo la app en local) se habilita compartir mi Comfy.
+// Lista los NODOS conectados (cada app corriendo en una PC con su
+// Comfy), deja ELEGIR en cuál generar y muestra cuál está elegido.
+// Si esta app corre en local, además deja compartir SU Comfy.
 //
-//   local : hablo con MI app (/api/red/estado) y con su websocket.
+//   local : hablo con MI app (/api/red/estado + su websocket)
 //   web   : hablo con el hub (/api/red/peers, /api/red/generar) y
-//           escucho socket.io (red:peers / red:evento).
+//           escucho socket.io (red:peers / red:evento)
 // ============================================================
 (function () {
     'use strict';
@@ -15,17 +15,23 @@
     var J = window.JPI || {};
     var BASE = J.API_BASE || '';
     var esLocal = !!J.esServidor;
-    var ESTADO = { peers: [], yo: null, elegido: null, nodos: 0 };
-    var logLineas = [];
+    var CLAVE_ELEGIDO = 'comfylatam_nodo_elegido';
+
+    var ESTADO = {
+        peers: [],
+        yo: null,            // solo en local: mi nodo
+        elegido: null,       // peerId al que le voy a mandar los trabajos
+        log: []
+    };
+
     var socket = null;
+    var wsLocal = null;
 
     // ---------- helpers ----------
     function api(ruta, opciones) {
         var url = (ruta.indexOf('http') === 0) ? ruta : (BASE + ruta);
         var o = opciones || {};
         o.headers = Object.assign({}, o.headers || {});
-        // el token se lee en vivo: si el usuario entra después de cargar la
-        // página, la pestaña RED ya anda sin recargar
         var token = J.TOKEN;
         try { token = localStorage.getItem('fsc_token_jpi') || token; } catch (e) { }
         if (token) o.headers['Authorization'] = 'Bearer ' + token;
@@ -44,10 +50,10 @@
 
     function log(txt) {
         var hora = new Date().toLocaleTimeString('es-AR');
-        logLineas.push('[' + hora + '] ' + txt);
-        if (logLineas.length > 120) logLineas.shift();
+        ESTADO.log.push('[' + hora + '] ' + txt);
+        if (ESTADO.log.length > 140) ESTADO.log.shift();
         var caja = document.getElementById('redLog');
-        if (caja) { caja.textContent = logLineas.join('\n'); caja.scrollTop = caja.scrollHeight; }
+        if (caja) { caja.textContent = ESTADO.log.join('\n'); caja.scrollTop = caja.scrollHeight; }
     }
 
     function esc(s) {
@@ -55,59 +61,97 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function guardarElegido(id) {
+        ESTADO.elegido = id;
+        try { localStorage.setItem(CLAVE_ELEGIDO, id || ''); } catch (e) { }
+    }
+    function leerElegido() {
+        try { return localStorage.getItem(CLAVE_ELEGIDO) || ''; } catch (e) { return ''; }
+    }
+
     // ---------- UI ----------
     function montarUI() {
-        if (document.getElementById('tabRedBtn')) return;
+        if (document.getElementById('panelRed')) return;
 
-        // botón de pestaña, al lado de SETTINGS
-        var nav = document.querySelector('.workspace-header .tabs') ||
-            document.querySelector('.workspace-header nav') ||
-            document.querySelector('.workspace-header');
+        // Botón visible: en la barra de pestañas del proyecto (la del borde
+        // inferior del header). El header recorta su contenido y esa barra
+        // tiene z-index propio, así que un botón dentro del header queda
+        // tapado y el click no llega.
         var btn = document.createElement('button');
-        btn.className = 'tab-btn';
+        btn.className = 'tab-button red-tab-btn';
         btn.id = 'tabRedBtn';
+        btn.setAttribute('data-target', 'panelRed');
         btn.textContent = '🌎 RED';
-        btn.title = 'Red ComfyLatam: usar el Comfy de otras personas';
-        if (nav) nav.appendChild(btn);
+        btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
+        var barra = document.getElementById('projectTabsNav');
+        var badge = document.getElementById('jpiEstado');
+        if (barra) barra.appendChild(btn);
+        else if (badge && badge.parentNode) badge.parentNode.insertBefore(btn, badge.nextSibling);
+        else {
+            var nav = document.querySelector('.workspace-header .tabs') ||
+                document.querySelector('.workspace-header nav') ||
+                document.querySelector('.workspace-header');
+            if (nav) nav.appendChild(btn);
+        }
 
-        // panel (dentro de .workspace-content: así el editor lo trata como una
-        // pestaña más y lo desactiva solo cuando tocás otra)
-        var main = document.querySelector('.workspace-content') || document.querySelector('main') || document.body;
+        // panel dentro de .workspace-content (así convive con las otras pestañas)
+        var contenedor = document.querySelector('.workspace-content') ||
+            document.querySelector('main') || document.body;
         var panel = document.createElement('div');
         panel.className = 'tab-content red-panel';
         panel.id = 'panelRed';
         panel.innerHTML = [
-            '<div class="red-head"><h2>🌎 RED COMFYLATAM</h2>',
-            '<span class="red-badge" id="redModo"></span>',
-            '<button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
+            '<div class="red-head">',
+            '  <h2>🌎 RED COMFYLATAM</h2>',
+            '  <span class="red-badge" id="redModo"></span>',
+            '  <span class="red-badge" id="redResumen"></span>',
+            '  <button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
             '</div>',
             '<p class="red-sub">Cada persona que corre la app en su PC aporta su Comfy a la red. ',
-            'El trabajo se hace en la máquina del nodo que elijas: acá llega el resultado.</p>',
-            '<div id="redMio"></div>',
+            'Elegí el nodo, escribí el prompt y el trabajo se hace en la máquina de esa persona: acá llega el resultado.</p>',
+
+            '<div class="red-elegido" id="redElegidoCaja"></div>',
             '<div class="red-aviso" id="redAviso"></div>',
+
+            '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span></h3>',
             '<div class="red-grid" id="redNodos"></div>',
+
+            '<div id="redMio"></div>',
+
             '<div class="red-gen">',
             '  <h3>🎯 GENERAR EN LA RED</h3>',
-            '  <textarea id="redPrompt" placeholder="Escribí el prompt y elegí en qué nodo generarlo..."></textarea>',
+            '  <textarea id="redPrompt" placeholder="Escribí el prompt... el trabajo va al nodo elegido"></textarea>',
             '  <div class="red-fila">',
+            '    <label class="red-etiqueta">Nodo</label>',
+            '    <select id="redDestino"></select>',
+            '    <label class="red-etiqueta">Modelo</label>',
             '    <select id="redModelo">',
             '      <option value="zimage">Z-Image Turbo (imagen, rápido)</option>',
             '      <option value="qwen21">Qwen-Image 2.1 (imagen, mejor calidad)</option>',
             '      <option value="ltx2">LTX-2 (video)</option>',
             '    </select>',
-            '    <select id="redDestino"></select>',
-            '    <input type="number" id="redSteps" value="10" min="1" max="40" style="width:82px" title="steps">',
-            '    <input type="number" id="redAncho" value="1024" min="256" max="2048" step="64" style="width:92px" title="ancho">',
+            '    <input type="number" id="redSteps" value="10" min="1" max="40" style="width:78px" title="steps">',
+            '    <input type="number" id="redAncho" value="1024" min="256" max="2048" step="64" style="width:88px" title="ancho">',
             '    <button class="red-btn" id="redGenerar">GENERAR EN LA RED</button>',
             '  </div>',
             '  <div class="red-log" id="redLog">Todavía no hay movimientos.</div>',
             '</div>'
         ].join('\n');
-        if (main) main.appendChild(panel);
+        if (contenedor) contenedor.appendChild(panel);
 
-        // botón/cajón mobile si existe la barra inferior
+        // Botón gemelo en el panel izquierdo (la fila de pestañas se recorta
+        // en ventanas angostas) y en la barra mobile.
+        var izq = document.querySelector('.ck-panel-izq');
+        if (izq && !document.getElementById('ckPiRed')) {
+            var bi = document.createElement('button');
+            bi.id = 'ckPiRed';
+            bi.textContent = '🌎 Red ComfyLatam';
+            bi.style.marginTop = '6px';
+            bi.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
+            izq.appendChild(bi);
+        }
         var barra = document.querySelector('.mobile-bar, #mobileBar');
-        if (barra) {
+        if (barra && !document.getElementById('mobRed')) {
             var mb = document.createElement('button');
             mb.type = 'button';
             mb.id = 'mobRed';
@@ -117,45 +161,156 @@
             mb.addEventListener('click', function () { abrir(); });
         }
 
-        btn.addEventListener('click', function () { abrir(); });
-        document.getElementById('redRefrescar').addEventListener('click', function () { refrescar(true); });
-        document.getElementById('redGenerar').addEventListener('click', generar);
-        document.getElementById('redNodos').addEventListener('click', function (e) {
-            var card = e.target.closest('.red-nodo');
-            if (!card) return;
-            ESTADO.elegido = card.getAttribute('data-peer');
-            pintar();
+        btn.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
+
+        // Al tocar cualquier OTRA pestaña del editor, escondo la mía (el editor
+        // capturó sus .tab-content al cargar y no conoce este panel).
+        document.querySelectorAll('.workspace-header .tab-button').forEach(function (b) {
+            if (b.id === 'tabRedBtn') return;
+            b.addEventListener('click', function () {
+                var p = document.getElementById('panelRed');
+                if (p) p.classList.remove('active');
+            });
         });
 
-        document.getElementById('redModo').textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
+        document.getElementById('redRefrescar').addEventListener('click', function () { refrescar(true); });
+        document.getElementById('redGenerar').addEventListener('click', generar);
+        document.getElementById('redModelo').addEventListener('change', actualizarModelos);
+        document.getElementById('redDestino').addEventListener('change', function (e) {
+            guardarElegido(e.target.value);
+            pintar();
+        });
+        document.getElementById('redNodos').addEventListener('click', function (e) {
+            var b = e.target.closest('[data-usar]');
+            if (!b) return;
+            var id = b.getAttribute('data-usar');
+            if (b.disabled) return;
+            guardarElegido(id);
+            log('🎯 Nodo elegido: ' + nombreDe(id));
+            pintar();
+        });
+    }
+
+    function nombreDe(id) {
+        if (esLocal && ESTADO.yo && ESTADO.yo.peerId === id) return 'esta PC (mi Comfy)';
+        var p = ESTADO.peers.filter(function (x) { return x.id === id; })[0];
+        return p ? p.nombre : id;
     }
 
     function abrir() {
         var panel = document.getElementById('panelRed');
         if (!panel) return;
-        // misma mecánica que las otras pestañas del editor
-        document.querySelectorAll('.workspace-content .tab-content').forEach(function (p) {
-            p.classList.toggle('active', p === panel);
+        // misma mecánica que las pestañas del editor, pero en vivo
+        document.querySelectorAll('.tab-button').forEach(function (b) {
+            b.classList.toggle('active', b.id === 'tabRedBtn');
         });
-        panel.classList.add('active');
-        if (typeof window.cerrarCajonesMobile === 'function') try { window.cerrarCajonesMobile(); } catch (e) { }
+        document.querySelectorAll('.tab-content').forEach(function (c) {
+            c.classList.toggle('active', c === panel);
+        });
+        document.body.classList.remove('tab-editor-active');
+        if (typeof window.cerrarCajonesMobile === 'function') { try { window.cerrarCajonesMobile(); } catch (e) { } }
         refrescar(false);
     }
-    window.cerrarRed = abrir;
+    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir };
 
-    // ---------- datos ----------
+    // ---------- pintado ----------
     function pintar() {
         var cont = document.getElementById('redNodos');
         if (!cont) return;
 
-        // mi nodo (solo en local)
+        var peers = ESTADO.peers.slice();
+        // mi propio nodo (en local): no lo repito en la grilla si ya viene en la lista
+        var yoId = (esLocal && ESTADO.yo) ? ESTADO.yo.peerId : null;
+        var otros = peers.filter(function (p) { return p.id !== yoId; });
+
+        document.getElementById('redModo').textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
+        var compartiendo = peers.filter(function (p) { return p.compartir; }).length;
+        document.getElementById('redResumen').textContent =
+            peers.length + ' en la red · ' + compartiendo + ' compartiendo';
+        document.getElementById('redCantidad').textContent = '(' + otros.length + ')';
+
+        // aviso de permiso (web sin sesión)
+        var aviso = document.getElementById('redAviso');
+        if (!esLocal && !tokenActual()) {
+            aviso.style.display = 'block';
+            aviso.textContent = 'Para ver y usar los nodos de la red entrá con tu cuenta de fullscreencode.';
+        } else {
+            aviso.style.display = 'none';
+        }
+
+        // ¿a quién le voy a mandar? (banner grande, también en la web)
+        var caja = document.getElementById('redElegidoCaja');
+        var elegido = ESTADO.elegido;
+        var existeElegido = elegido && (elegido === yoId || peers.some(function (p) { return p.id === elegido; }));
+        if (!existeElegido) { guardarElegido(''); elegido = ''; }
+        if (!elegido) {
+            // default: mi Comfy si estoy en local, si no el primer nodo que comparte
+            if (yoId) { guardarElegido(yoId); elegido = yoId; }
+            else {
+                var libre = peers.filter(function (p) { return p.compartir; })[0];
+                if (libre) { guardarElegido(libre.id); elegido = libre.id; }
+            }
+        }
+        if (elegido) {
+            var esMio = (elegido === yoId);
+            var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
+            caja.innerHTML = '🎯 Vas a generar en: <b>' + esc(nombreDe(elegido)) + '</b>' +
+                (esMio ? ' <span class="red-badge comparto">tu Comfy</span>'
+                    : (p2 ? ' <span class="red-badge">' + esc(p2.host) + (p2.encolados ? ' · ' + p2.encolados + ' en cola' : ' · libre') + '</span>' : ''));
+        } else {
+            caja.innerHTML = '🎯 No hay ningún nodo para generar. Prendé compartir en tu app (o esperá que alguien entre a la red).';
+        }
+        caja.className = 'red-elegido' + (elegido ? '' : ' vacio');
+
+        // grilla de nodos
+        var tarjetas = [];
+        if (esLocal && ESTADO.yo) {
+            tarjetas.push(tarjeta({
+                id: yoId,
+                nombre: ESTADO.yo.nombre,
+                host: (ESTADO.yo.host || 'esta PC'),
+                gpu: '',
+                modelos: ESTADO.yo.modelos || [],
+                compartir: !!ESTADO.yo.compartir,
+                comfy: true,
+                encolados: 0,
+                propio: true,          // "tu nodo": siempre usable desde acá
+                conectado: !!ESTADO.yo.conectado
+            }));
+        }
+        otros.forEach(function (p) { tarjetas.push(tarjeta(p)); });
+
+        cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
+            : '<div class="red-nodo vacio"><div class="nombre">😴 No hay otros nodos conectados</div>' +
+              '<div class="linea">Cuando otra persona abra la app y habilite "compartir", aparece acá para que la uses.</div></div>';
+
+        // selector del generador (espejo de la grilla)
+        var sel = document.getElementById('redDestino');
+        if (sel) {
+            var ops = [];
+            if (esLocal && ESTADO.yo) ops.push(opcion(yoId, '💻 ' + ESTADO.yo.nombre + ' (esta PC)'));
+            otros.forEach(function (p) {
+                if (!p.compartir) return;
+                ops.push(opcion(p.id, (p.principal ? '⭐ ' : '') + p.nombre + (p.encolados ? ' (' + p.encolados + ' en cola)' : '')));
+            });
+            sel.innerHTML = ops.join('') || '<option value="">sin nodos</option>';
+            sel.value = elegido || '';
+            sel.disabled = !ops.length;
+        }
+
+        actualizarModelos();
+
+        // mi nodo (switch de compartir), solo en local
         var cajaMio = document.getElementById('redMio');
         if (esLocal && ESTADO.yo) {
+            var conectadoRed = !!ESTADO.yo.conectado;
             cajaMio.innerHTML = [
                 '<div class="red-mio">',
                 '  <div class="datos">',
-                '    <span class="titulo">💻 ' + esc(ESTADO.yo.nombre) + ' <span class="red-badge principal">tu nodo</span></span>',
-                '    <span class="meta">id ' + esc(ESTADO.yo.peerId) + ' · conectado a la red: ' + (ESTADO.yo.conectado ? 'sí' : 'no (corré conectar-comfylatam.bat)') + '</span>',
+                '    <span class="titulo">💻 ' + esc(ESTADO.yo.nombre) + ' <span class="red-badge">tu nodo</span></span>',
+                '    <span class="meta">' + (conectadoRed
+                    ? 'publicado en la red · id ' + esc(ESTADO.yo.peerId)
+                    : 'sin publicar todavía — corré <b>conectar-comfylatam.bat</b> para entrar a la red') + '</span>',
                 '  </div>',
                 '  <label class="red-switch"><input type="checkbox" id="redCompartir"' + (ESTADO.yo.compartir ? ' checked' : '') + '>',
                 '    <span class="pista"></span><span>Compartir mi Comfy en la red</span></label>',
@@ -164,9 +319,12 @@
             var chk = document.getElementById('redCompartir');
             if (chk) {
                 chk.addEventListener('change', function () {
+                    log(chk.checked ? '⏳ Compartiendo mi Comfy...' : '⏳ Dejando de compartir...');
                     api('/api/red/compartir', { json: { compartir: chk.checked } }).then(function (r) {
-                        log(chk.checked ? '✅ Compartiendo mi Comfy con la red' : '🔒 Dejé de compartir mi Comfy');
-                        if (r.datos && r.datos.hub && r.datos.hub.ok === false) log('⚠️ hub: ' + (r.datos.hub.motivo || 'no pude avisarle'));
+                        log(chk.checked ? '✅ Compartiendo mi Comfy con la red' : '🔒 Ya no comparto mi Comfy');
+                        if (r.datos && r.datos.hub && r.datos.hub.ok === false) {
+                            log('⚠️ Al hub:' + (r.datos.hub.motivo || 'no pude avisarle') + ' → corré conectar-comfylatam.bat');
+                        }
                         refrescar(true);
                     });
                 });
@@ -174,54 +332,60 @@
         } else {
             cajaMio.innerHTML = '';
         }
+    }
 
-        // aviso de login en la web
-        var aviso = document.getElementById('redAviso');
-        if (!esLocal && !J.TOKEN) {
-            aviso.style.display = 'block';
-            aviso.textContent = 'Para usar la red tenés que entrar con tu cuenta de fullscreencode.';
-        } else {
-            aviso.style.display = 'none';
-        }
+    function opcion(id, texto) {
+        return '<option value="' + esc(id) + '">' + esc(texto) + '</option>';
+    }
 
-        // grilla
-        var peers = ESTADO.peers.filter(function (p) { return esLocal ? true : p.compartir; });
-        if (!peers.length) {
-            cont.innerHTML = '<div class="red-nodo"><div class="nombre">😴 No hay nodos ofreciendo Comfy</div>' +
-                '<div class="linea">Cuando alguien más abra la app y habilite compartir, aparece acá.</div></div>';
-        } else {
-            cont.innerHTML = peers.map(function (p) {
-                var punto = p.compartir === false ? 'off' : (p.encolados > 0 ? 'ocupado' : (p.comfy ? 'ok' : 'off'));
-                var modelo = (p.modelos || []).map(function (m) { return m.nombre || m.id; }).join(', ') || '—';
-                return [
-                    '<div class="red-nodo' + (ESTADO.elegido === p.id ? ' elegido' : '') + '" data-peer="' + esc(p.id) + '">',
-                    '  <div class="nombre">' + (p.principal ? '⭐ ' : '🖥️ ') + esc(p.nombre),
-                    p.principal ? '<span class="red-badge principal">principal</span>' : '',
-                    p.compartir ? '<span class="red-badge comparte">comparte</span>' : '<span class="red-badge">privado</span>',
-                    '  </div>',
-                    '  <div class="linea">' + esc(p.host) + (p.gpu ? ' · ' + esc(p.gpu) : '') + '</div>',
-                    '  <div class="linea">' + esc(modelo) + '</div>',
-                    '  <div class="estado"><span class="red-punto ' + punto + '"></span>',
-                    (p.comfy ? 'Comfy listo' : 'Comfy apagado') + (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre'),
-                    '  </div>',
-                    '</div>'
-                ].join('\n');
-            }).join('\n');
-        }
+    function tokenActual() {
+        var t = J.TOKEN;
+        try { t = localStorage.getItem('fsc_token_jpi') || t; } catch (e) { }
+        return t;
+    }
 
-        // selector de destino
-        var sel = document.getElementById('redDestino');
-        if (sel) {
-            var opciones = [];
-            if (esLocal && ESTADO.yo) opciones.push('<option value="' + esc(ESTADO.yo.peerId) + '">💻 Esta PC (mi Comfy)</option>');
-            peers.forEach(function (p) {
-                if (esLocal && ESTADO.yo && p.id === ESTADO.yo.peerId) return;
-                opciones.push('<option value="' + esc(p.id) + '">' + (p.principal ? '⭐ ' : '') + esc(p.nombre) +
-                    (p.encolados ? ' (' + p.encolados + ' en cola)' : '') + '</option>');
-            });
-            sel.innerHTML = opciones.join('') || '<option value="">sin nodos</option>';
-            if (ESTADO.elegido) sel.value = ESTADO.elegido;
+    // El modelo que el nodo elegido puede correr (si no sé, muestro todos).
+    function actualizarModelos() {
+        var sel = document.getElementById('redModelo');
+        if (!sel) return;
+        var p = ESTADO.peers.filter(function (x) { return x.id === ESTADO.elegido; })[0];
+        var ids = (p && p.modelos && p.modelos.length) ? p.modelos.map(function (m) { return m.id; }) : null;
+        Array.prototype.forEach.call(sel.options, function (o) {
+            var sirve = !ids || ids.indexOf(o.value) !== -1 || o.value === 'ltx2';
+            o.disabled = !sirve;
+            o.hidden = !sirve;
+        });
+        if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) {
+            var primera = Array.prototype.filter.call(sel.options, function (o) { return !o.disabled; })[0];
+            if (primera) sel.value = primera.value;
         }
+    }
+
+    function tarjeta(p) {
+        var mio = !!p.propio;
+        var elegido = ESTADO.elegido === p.id;
+        var punto = !p.conectado ? 'off' : (p.encolados > 0 ? 'ocupado' : (p.comfy ? 'ok' : 'off'));
+        var modelos = (p.modelos || []).map(function (m) { return m.nombre || m.id; }).join(' · ') || '—';
+        var puede = mio || (p.compartir && p.conectado);
+        var boton = elegido
+            ? '<button class="red-btn chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>✅ ELEGIDO</button>'
+            : '<button class="red-btn secundario chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>' +
+              (puede ? 'Usar este Comfy' : 'No disponible') + '</button>';
+        return [
+            '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
+            '  <div class="nombre">' + (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ ')) + esc(p.nombre),
+            mio ? '<span class="red-badge comparto">tu nodo</span>'
+                : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'no comparte') + '</span>',
+            (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
+            '  </div>',
+            '  <div class="linea">' + esc(p.host) + (p.gpu ? ' · ' + esc(p.gpu) : '') + '</div>',
+            '  <div class="linea">' + esc(modelos) + '</div>',
+            '  <div class="estado"><span class="red-punto ' + punto + '"></span>' +
+            (p.conectado ? (p.comfy ? 'Comfy listo' : 'Comfy apagado') : 'sin conexión') +
+            (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre') + '</div>',
+            '  <div class="red-accion">' + boton + '</div>',
+            '</div>'
+        ].join('\n');
     }
 
     function refrescar(manual) {
@@ -233,14 +397,19 @@
                 return;
             }
             if (esLocal) {
-                ESTADO.yo = { peerId: r.datos.peerId, nombre: r.datos.nombre, compartir: !!r.datos.compartir, conectado: !!r.datos.conectado };
+                ESTADO.yo = {
+                    peerId: r.datos.peerId,
+                    nombre: r.datos.nombre,
+                    compartir: !!r.datos.compartir,
+                    conectado: !!r.datos.conectado,
+                    modelos: r.datos.modelos || []
+                };
                 ESTADO.peers = r.datos.nodos || [];
             } else {
                 ESTADO.yo = null;
                 ESTADO.peers = r.datos.peers || [];
             }
-            ESTADO.nodos = ESTADO.peers.length;
-            if (manual) log('🔄 Red actualizada: ' + ESTADO.nodos + ' nodo(s)');
+            if (manual) log('🔄 Red actualizada: ' + ESTADO.peers.length + ' nodo(s)');
             pintar();
         }).catch(function (e) { if (manual) log('⚠️ ' + e.message); });
     }
@@ -249,14 +418,14 @@
     function generar() {
         var prompt = (document.getElementById('redPrompt').value || '').trim();
         if (!prompt) { log('⚠️ Falta el prompt'); return; }
-        var destino = document.getElementById('redDestino').value;
-        if (!destino) { log('⚠️ No hay nodo destino'); return; }
+        var destino = document.getElementById('redDestino').value || ESTADO.elegido;
+        if (!destino) { log('⚠️ No hay ningún nodo para generar'); return; }
         var modelo = document.getElementById('redModelo').value;
         var steps = parseInt(document.getElementById('redSteps').value) || 10;
         var ancho = parseInt(document.getElementById('redAncho').value) || 1024;
         var btn = document.getElementById('redGenerar');
         btn.disabled = true;
-        log('🚀 Mandando el trabajo a ' + destino + ' (' + modelo + ', ' + ancho + 'px, ' + steps + ' steps)...');
+        log('🚀 Mandando a ' + nombreDe(destino) + ' (' + modelo + ', ' + ancho + 'px, ' + steps + ' steps)...');
         api('/api/red/generar', {
             json: {
                 peerId: destino,
@@ -266,63 +435,65 @@
                 params: { videoWidth: ancho, videoHeight: ancho, samplerSteps: steps, seed: -1 }
             }
         }).then(function (r) {
-            if (!r.ok || r.datos.success === false) {
-                log('❌ ' + (r.datos.message || ('HTTP ' + r.status)));
-            } else {
-                log('✅ Trabajo aceptado' + (r.datos.local ? ' (acá mismo)' : ' por ' + ((r.datos.peer && r.datos.peer.nombre) || destino)) +
-                    (r.datos.jobId ? ' · job ' + r.datos.jobId : ''));
-            }
+            if (!r.ok || r.datos.success === false) log('❌ ' + (r.datos.message || ('HTTP ' + r.status)));
+            else log('✅ Trabajo aceptado' + (r.datos.local ? ' (acá mismo)' : ' por ' + ((r.datos.peer && r.datos.peer.nombre) || nombreDe(destino))) +
+                (r.datos.jobId ? ' · job ' + r.datos.jobId : ''));
         }).catch(function (e) { log('❌ ' + e.message); })
             .then(function () { btn.disabled = false; });
     }
 
     // ---------- eventos en vivo ----------
     function conectarEventos() {
-        // LOCAL: el websocket de la app avisa de la red (el agente le pasa los nodos)
-        if (esLocal && J.WS) {
+        if (esLocal) {
+            if (!J.WS) return;
             try {
-                var ws = new WebSocket(J.WS);
-                ws.onmessage = function (ev) {
+                wsLocal = new WebSocket(J.WS);
+                wsLocal.onmessage = function (ev) {
                     var m = null;
                     try { m = JSON.parse(ev.data); } catch (e) { return; }
                     if (!m) return;
                     if (m.type === 'red_estado' && m.red) {
-                        ESTADO.yo = { peerId: m.red.peerId, nombre: m.red.nombre, compartir: !!m.red.compartir, conectado: !!m.red.conectado };
+                        ESTADO.yo = {
+                            peerId: m.red.peerId, nombre: m.red.nombre,
+                            compartir: !!m.red.compartir, conectado: !!m.red.conectado,
+                            modelos: m.red.modelos || []
+                        };
                         ESTADO.peers = m.red.nodos || [];
                         pintar();
                     }
-                    if (m.type === 'red_job') log('🎯 Trabajo de ' + (m.job && m.job.de || '?') + ' encolado acá');
+                    if (m.type === 'red_job' && m.job) log('🎯 Trabajo de ' + (m.job.de || '?') + ' encolado acá');
+                    if (m.type === 'red_evento' && m.evento) verEvento(m.evento);
                 };
-                ws.onclose = function () { setTimeout(conectarEventos, 4000); };
+                wsLocal.onclose = function () { setTimeout(conectarEventos, 4000); };
             } catch (e) { }
             return;
         }
-        // WEB: socket.io del hub
-        if (!esLocal && typeof io === 'function') {
+        if (typeof io === 'function') {
             try {
                 socket = io(J.ORIGIN, { path: J.BASE + '/socket.io', transports: ['websocket', 'polling'] });
                 socket.on('red:peers', function (d) {
                     ESTADO.peers = (d && d.peers) || [];
                     pintar();
                 });
-                socket.on('red:evento', function (d) {
-                    if (!d || !d.data) return;
-                    var m = null;
-                    try { m = JSON.parse(d.data); } catch (e) { return; }
-                    if (!m) return;
-                    if (m.type === 'storyboard_generated' || m.type === 'video_generated') {
-                        log('🖼️ ' + (d.nombre || d.peerId) + ' terminó: ' + m.filename);
-                        if (ESTADO.elegido && d.peerId === ESTADO.elegido && m.url) {
-                            log('   resultado: ' + m.url);
-                        }
-                    }
-                });
+                socket.on('red:evento', function (d) { verEvento(d); });
             } catch (e) { log('⚠️ socket.io: ' + e.message); }
+        }
+    }
+
+    function verEvento(d) {
+        if (!d || !d.data) return;
+        var m = null;
+        try { m = JSON.parse(d.data); } catch (e) { return; }
+        if (!m) return;
+        if (m.type === 'storyboard_generated' || m.type === 'video_generated') {
+            log('🖼️ ' + (d.nombre || d.peerId) + ' terminó: ' + m.filename);
+            if (ESTADO.elegido && d.peerId === ESTADO.elegido && m.url) log('   resultado: ' + m.url);
         }
     }
 
     function arrancar() {
         montarUI();
+        ESTADO.elegido = leerElegido();
         refrescar(false);
         conectarEventos();
         setInterval(function () { refrescar(false); }, 7000);
@@ -330,6 +501,4 @@
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
     else arrancar();
-
-    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir };
 })();
