@@ -1181,6 +1181,7 @@ const RED = {
     nombre: '',
     compartir: false,
     nodos: [],
+    pasados: [],
     enVuelo: 0,
     hub: RED_HUB + RED_BASE
 };
@@ -1204,7 +1205,8 @@ function estadoRed() {
         // "conectado" = MI nodo aparece publicado en la red (lo dice el hub)
         conectado: RED.nodos.some((p) => p && p.id === RED.peerId),
         enVuelo: RED.enVuelo,
-        nodos: RED.nodos
+        nodos: RED.nodos,
+        pasados: RED.pasados
     };
 }
 
@@ -1356,15 +1358,17 @@ let ultimoJsonNodos = '';
 async function refrescarNodosDelHub() {
     if (!RED_TOKEN) return;
     try {
-        const r = await fetch(RED.hub + '/api/red/peers', {
+        const r = await fetch(RED.hub + '/api/red/peers?pasados=1', {
             headers: { 'x-agent-token': RED_TOKEN },
             signal: AbortSignal.timeout(6000)
         });
         if (!r.ok) return;
         const d = await r.json().catch(() => ({}));
         const lista = Array.isArray(d.peers) ? d.peers : [];
-        const j = JSON.stringify(lista);
+        const viejos = Array.isArray(d.pasados) ? d.pasados : [];
+        const j = JSON.stringify(lista) + '|' + JSON.stringify(viejos);
         RED.nodos = lista;
+        RED.pasados = viejos;
         if (j !== ultimoJsonNodos) { ultimoJsonNodos = j; avisarRedATodos(); }
     } catch (e) { /* sin red: se reintenta */ }
 }

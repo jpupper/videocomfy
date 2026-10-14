@@ -17,12 +17,16 @@
     var esLocal = !!J.esServidor;
     var CLAVE_ELEGIDO = 'comfylatam_nodo_elegido';
 
+    var CLAVE_PASADOS = 'comfylatam_ver_pasados';
     var ESTADO = {
         peers: [],
+        pasados: [],         // conexiones pasadas (desconectados / sin transmisión)
         yo: null,            // solo en local: mi nodo
         elegido: null,       // peerId al que le voy a mandar los trabajos
+        verPasados: false,   // ojito: por defecto NO se indexan
         log: []
     };
+    try { ESTADO.verPasados = localStorage.getItem(CLAVE_PASADOS) === '1'; } catch (e) { }
 
     var socket = null;
     var wsLocal = null;
@@ -113,7 +117,11 @@
             '<div class="red-elegido" id="redElegidoCaja"></div>',
             '<div class="red-aviso" id="redAviso"></div>',
 
-            '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span></h3>',
+            '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
+            '  <button class="red-ojo" id="redOjo" title="Ver también los que no están transmitiendo y las conexiones pasadas"></button>',
+            '</h3>',
+            '<div class="red-leyenda">🟢 listo para generar · 🟡 ocupado (en cola) · ⚪ apagado / sin transmitir · ',
+            'el nodo sale de la lista cuando se desconecta (queda en las conexiones pasadas, con el ojito).</div>',
             '<div class="red-grid" id="redNodos"></div>',
 
             '<div id="redMio"></div>',
@@ -174,6 +182,12 @@
         });
 
         document.getElementById('redRefrescar').addEventListener('click', function () { refrescar(true); });
+        document.getElementById('redOjo').addEventListener('click', function () {
+            ESTADO.verPasados = !ESTADO.verPasados;
+            try { localStorage.setItem(CLAVE_PASADOS, ESTADO.verPasados ? '1' : '0'); } catch (e) { }
+            log(ESTADO.verPasados ? '👁 Mostrando también los que no transmiten' : '👁 Mostrando sólo los disponibles');
+            pintar();
+        });
         document.getElementById('redGenerar').addEventListener('click', generar);
         document.getElementById('redModelo').addEventListener('change', actualizarModelos);
         document.getElementById('redDestino').addEventListener('change', function (e) {
@@ -221,13 +235,32 @@
         var peers = ESTADO.peers.slice();
         // mi propio nodo (en local): no lo repito en la grilla si ya viene en la lista
         var yoId = (esLocal && ESTADO.yo) ? ESTADO.yo.peerId : null;
-        var otros = peers.filter(function (p) { return p.id !== yoId; });
+        var todos = peers.filter(function (p) { return p.id !== yoId; });
+        // Por defecto SÓLO se indexan los que están conectados Y transmitiendo.
+        // El ojito revela el resto + las conexiones pasadas.
+        var usables = todos.filter(function (p) { return p.conectado && p.compartir; });
+        var ocultos = todos.filter(function (p) { return !(p.conectado && p.compartir); });
+        if (ESTADO.verPasados) {
+            ocultos = ocultos.concat((ESTADO.pasados || []).filter(function (h) {
+                return !todos.some(function (p) { return p.id === h.id; });
+            }));
+        }
+        var otros = ESTADO.verPasados ? usables.concat(ocultos) : usables;
 
         document.getElementById('redModo').textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
-        var compartiendo = peers.filter(function (p) { return p.compartir; }).length;
+        var compartiendo = peers.filter(function (p) { return p.compartir && p.conectado; }).length;
         document.getElementById('redResumen').textContent =
-            peers.length + ' en la red · ' + compartiendo + ' compartiendo';
-        document.getElementById('redCantidad').textContent = '(' + otros.length + ')';
+            compartiendo + ' dando Comfy · ' + peers.length + ' en la red';
+        var ojoBtn = document.getElementById('redOjo');
+        if (ojoBtn) {
+            ojoBtn.textContent = ESTADO.verPasados ? '👁 ▾' : '👁 ▸';
+            ojoBtn.classList.toggle('activo', ESTADO.verPasados);
+            ojoBtn.title = ESTADO.verPasados
+                ? 'Ocultar los que no transmiten y las conexiones pasadas'
+                : 'Ver también los que no transmiten (' + ocultos.length + ') y las conexiones pasadas';
+        }
+        document.getElementById('redCantidad').textContent =
+            '(' + usables.length + ' disponibles' + (ESTADO.verPasados && ocultos.length ? ' + ' + ocultos.length + ' ocultos' : '') + ')';
 
         // aviso de permiso (web sin sesión)
         var aviso = document.getElementById('redAviso');
@@ -391,9 +424,16 @@
         if (mio) {
             estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
         } else {
-            estado = p.conectado
-                ? (p.comfy ? 'Comfy listo' : 'Comfy apagado') + (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre')
-                : 'sin conexión (se desconectó)';
+            if (p.conectado) {
+                estado = (p.comfy ? 'Comfy listo' : 'Comfy apagado') + (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre');
+            } else {
+                var hace = '';
+                if (p.visto) {
+                    var min = Math.round((Date.now() - Number(p.visto)) / 60000);
+                    hace = min < 1 ? ' · hace instantes' : (min < 60 ? ' · hace ' + min + ' min' : ' · hace ' + Math.round(min / 60) + ' h');
+                }
+                estado = (p.visto ? 'conexión pasada' : 'sin conexión') + hace;
+            }
         }
         return [
             '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
@@ -427,9 +467,11 @@
                     modelos: r.datos.modelos || []
                 };
                 ESTADO.peers = r.datos.nodos || [];
+                ESTADO.pasados = r.datos.pasados || [];
             } else {
                 ESTADO.yo = null;
                 ESTADO.peers = r.datos.peers || [];
+                ESTADO.pasados = r.datos.pasados || [];
             }
             if (manual) log('🔄 Red actualizada: ' + ESTADO.peers.length + ' nodo(s)');
             pintar();
@@ -481,6 +523,7 @@
                             modelos: m.red.modelos || []
                         };
                         ESTADO.peers = m.red.nodos || [];
+                        ESTADO.pasados = m.red.pasados || [];
                         pintar();
                     }
                     if (m.type === 'red_job' && m.job) log('🎯 Trabajo de ' + (m.job.de || '?') + ' encolado acá');

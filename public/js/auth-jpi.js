@@ -109,17 +109,24 @@
         });
     };
 
-    // --- 4) pestaña CUENTA --------------------------------------------------
+    // --- 4) pestaña CUENTA (igual que las otras: tab-button + tab-button-std) --
     function crearPestana() {
         if (document.getElementById('jpiCuentaBtn')) return;
-        var barra = document.querySelector('.tab-nav, .tabs-nav, .main-tabs, #projectTabsNav');
         var btn = document.createElement('button');
         btn.id = 'jpiCuentaBtn';
-        btn.className = 'tab-button';
-        btn.textContent = '👤 CUENTA';
+        btn.className = 'tab-button tab-button-std';
+        btn.textContent = '👤 Cuenta';
         btn.title = 'Tu sesión de fullscreencode';
-        if (barra) barra.appendChild(btn);
-        else (document.querySelector('header') || document.body).appendChild(btn);
+        // al lado de las otras pestañas (antes de Editor), no en la barra de
+        // herramientas: ahí no aplica el estilo .tab-button-std
+        var ref = document.getElementById('tabEditorBtn') || document.getElementById('tabSettingsBtn');
+        if (ref && ref.parentNode) ref.parentNode.insertBefore(btn, ref);
+        else {
+            var nav = document.querySelector('.workspace-header .tabs') ||
+                document.querySelector('.workspace-header nav') ||
+                document.getElementById('projectTabsNav');
+            if (nav) nav.appendChild(btn);
+        }
         btn.addEventListener('click', function () { abrirPanelCuenta(btn); });
     }
 
@@ -170,7 +177,7 @@
                 if (!d || !d.user) return;
                 guardarUsuario(d.user);
                 var btn = document.getElementById('jpiCuentaBtn');
-                if (btn) btn.textContent = '👤 ' + (d.user.displayName || d.user.username || 'CUENTA');
+                if (btn) btn.textContent = '👤 ' + (d.user.displayName || d.user.username || 'Cuenta');
             })
             .catch(function () { });
     }

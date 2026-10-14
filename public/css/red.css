@@ -166,10 +166,34 @@
 .red-nodo .nombre { font-weight: 700; font-size: .95em; display: flex; align-items: center; gap: 7px; }
 .red-nodo .linea { color: var(--text-muted); font-size: .78em; margin-top: 4px; }
 .red-nodo .estado { display: inline-flex; align-items: center; gap: 5px; font-size: .74em; font-weight: 600; margin-top: 8px; }
-.red-punto { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+.red-punto { width: 8px; height: 8px; border-radius: 50%; background: #8b8b9a; }
 .red-punto.ok { background: #00e08a; box-shadow: 0 0 7px #00e08a; }
 .red-punto.ocupado { background: #ffb020; box-shadow: 0 0 7px #ffb020; }
-.red-punto.off { background: #ff4d6d; }
+.red-punto.off { background: #8b8b9a; }        /* gris: apagado o sin transmitir */
+.red-punto.offline { background: #5b5b6b; }
+
+/* ojito para ver los que no transmiten / conexiones pasadas */
+.red-ojo {
+    margin-left: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border-radius: 7px;
+    padding: 3px 8px;
+    font-size: .78em;
+    font-weight: 700;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.red-ojo:hover { color: var(--foreground); }
+.red-ojo.activo { border-color: var(--accent); color: var(--accent); }
+
+.red-leyenda {
+    color: var(--text-muted);
+    font-size: .74em;
+    line-height: 1.5;
+    margin: 0 0 12px;
+}
 .red-badge {
     font-size: .66em;
     text-transform: uppercase;
