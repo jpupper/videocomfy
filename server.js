@@ -153,7 +153,17 @@ app.post('/api/config/comfy', bodyParser.json(), async (req, res) => {
 
     res.json({ success: true, address: comfyAddress, base: comfyBase(), ws: comfyWs(), esLocal: esComfyLocal() });
 });
-app.use(bodyParser.json());
+// El limite por defecto de body-parser es 100 KB: cualquier POST mas grande
+// (proyectos con timeline, batches, etc.) explotaba con PayloadTooLargeError.
+app.use(bodyParser.json({ limit: '32mb' }));
+app.use((err, req, res, next) => {
+    if (err && err.type === 'entity.too.large') {
+        console.warn('⚠️  Pedido demasiado grande:', req.method, req.originalUrl);
+        return res.status(413).json({ success: false, message: 'El pedido es demasiado grande (límite 32 MB).' });
+    }
+    if (err) console.warn('⚠️  Error en un pedido:', req.method, req.originalUrl, err.message);
+    next(err);
+});
 
 // Configurar multer para upload de imágenes
 const uploadDir = path.join(__dirname, 'public', 'uploads');
@@ -1225,7 +1235,7 @@ app.get('/api/red/estado', (req, res) => {
 });
 
 // --- prender / apagar compartir -------------------------------------------
-app.post('/api/red/compartir', express.json(), async (req, res) => {
+app.post('/api/red/compartir', async (req, res) => {
     const b = req.body || {};
     if (b.compartir !== undefined) RED.compartir = !!b.compartir;
     if (b.nombre) RED.nombre = String(b.nombre).slice(0, 40);
@@ -1238,7 +1248,7 @@ app.post('/api/red/compartir', express.json(), async (req, res) => {
 });
 
 // --- el agente nos pasa la lista de nodos ---------------------------------
-app.post('/api/red/nodos', express.json(), (req, res) => {
+app.post('/api/red/nodos', (req, res) => {
     const b = req.body || {};
     RED.nodos = Array.isArray(b.peers) ? b.peers : (Array.isArray(b) ? b : []);
     avisarRedATodos();
@@ -1246,7 +1256,7 @@ app.post('/api/red/nodos', express.json(), (req, res) => {
 });
 
 // --- lo que pasa en la red (lo empuja el agente) --------------------------
-app.post('/api/red/evento', express.json(), (req, res) => {
+app.post('/api/red/evento', (req, res) => {
     const d = req.body || {};
     wss.clients.forEach((c) => {
         if (c.readyState === WebSocket.OPEN) {
@@ -1290,7 +1300,7 @@ async function encolarTrabajoRed(b) {
     return { promptId, modelo: details.modelo, jobId: details.red.jobId };
 }
 
-app.post('/api/red/job', express.json(), async (req, res) => {
+app.post('/api/red/job', async (req, res) => {
     try {
         const d = await encolarTrabajoRed(req.body || {});
         res.json(Object.assign({ success: true }, d));
@@ -1302,7 +1312,7 @@ app.post('/api/red/job', express.json(), async (req, res) => {
 
 // --- PEDIR UN TRABAJO A LA RED (lo llama el front) ------------------------
 // Si el destino soy yo, se encola acá; si es otro nodo, se lo pedimos al hub.
-app.post('/api/red/generar', express.json(), async (req, res) => {
+app.post('/api/red/generar', async (req, res) => {
     const b = req.body || {};
     const destino = String(b.peerId || '');
     if (!destino || destino === RED.peerId) {
@@ -1360,7 +1370,12 @@ function asegurarIdentidadRed() {
         RED.peerId = process.env.RED_PEER_ID || ('nodo-' + uuidv4().slice(0, 8));
         console.log(`🌎 Nodo nuevo: ${RED.peerId}`);
     }
-    if (!RED.nombre) RED.nombre = process.env.RED_NODO_NOMBRE || (os.hostname() + ' · ComfyLatam');
+    if (!RED.nombre) {
+        let quien = '';
+        try { quien = require('os').userInfo().username || ''; } catch (e) { }
+        if (!quien) quien = os.hostname();
+        RED.nombre = process.env.RED_NODO_NOMBRE || (quien + ' · ComfyLatam');
+    }
     if (process.env.RED_COMPARTIR !== undefined) RED.compartir = String(process.env.RED_COMPARTIR).toLowerCase() === 'true';
     guardarConfigLocal();
 }

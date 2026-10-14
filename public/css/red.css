@@ -47,6 +47,17 @@
 .red-mio .datos { display: flex; flex-direction: column; gap: 3px; }
 .red-mio .titulo { font-weight: 700; font-size: .98em; }
 .red-mio .meta { color: var(--text-muted); font-size: .8em; }
+.red-nombre-fila { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.red-nombre-fila input {
+    background: var(--bg);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-family: inherit;
+    font-size: .82em;
+    min-width: 190px;
+}
 
 /* --- switch de compartir --- */
 .red-switch {

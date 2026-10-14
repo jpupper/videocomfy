@@ -311,11 +311,27 @@
                 '    <span class="meta">' + (conectadoRed
                     ? 'publicado en la red · id ' + esc(ESTADO.yo.peerId)
                     : 'sin publicar todavía — corré <b>conectar-comfylatam.bat</b> para entrar a la red') + '</span>',
+                '    <span class="red-nombre-fila">',
+                '      <input type="text" id="redNombre" maxlength="40" placeholder="nombre con el que te ve la red" value="' + esc(ESTADO.yo.nombre) + '">',
+                '      <button class="red-btn secundario chico" id="redGuardarNombre">Guardar nombre</button>',
+                '    </span>',
                 '  </div>',
                 '  <label class="red-switch"><input type="checkbox" id="redCompartir"' + (ESTADO.yo.compartir ? ' checked' : '') + '>',
                 '    <span class="pista"></span><span>Compartir mi Comfy en la red</span></label>',
                 '</div>'
             ].join('\n');
+            var gb = document.getElementById('redGuardarNombre');
+            if (gb) {
+                gb.addEventListener('click', function () {
+                    var nuevo = (document.getElementById('redNombre').value || '').trim();
+                    if (!nuevo) { log('⚠️ Poné un nombre'); return; }
+                    api('/api/red/compartir', { json: { nombre: nuevo } }).then(function (r) {
+                        if (r.ok) log('✏️ Listo, en la red te ven como "' + nuevo + '"');
+                        else log('⚠️ No pude guardar el nombre');
+                        refrescar(true);
+                    });
+                });
+            }
             var chk = document.getElementById('redCompartir');
             if (chk) {
                 chk.addEventListener('change', function () {
