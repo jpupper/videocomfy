@@ -1,0 +1,8 @@
+{
+  "comfyAddress": "127.0.0.1",
+  "red": {
+    "peerId": "nodo-temp",
+    "nombre": "Notebook de prueba",
+    "compartir": true
+  }
+}

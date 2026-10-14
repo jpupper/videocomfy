@@ -30,6 +30,7 @@
 
     var socket = null;
     var wsLocal = null;
+    var ultimaFirmaYo = '';
 
     // ---------- helpers ----------
     function api(ruta, opciones) {
@@ -333,9 +334,17 @@
 
         actualizarModelos();
 
-        // mi nodo (switch de compartir), solo en local
+        // mi nodo (switch de compartir + nombre), solo en local.
+        // OJO: si el usuario está escribiendo el nombre, NO se vuelve a pintar
+        // (antes el repintado cada 7 s le borraba lo que escribía).
         var cajaMio = document.getElementById('redMio');
-        if (esLocal && ESTADO.yo) {
+        var activo = document.activeElement;
+        var escribiendoNombre = !!(activo && activo.id === 'redNombre');
+        var firmaYo = (esLocal && ESTADO.yo)
+            ? [ESTADO.yo.peerId, ESTADO.yo.nombre, ESTADO.yo.compartir, ESTADO.yo.conectado].join('|')
+            : '';
+        if (esLocal && ESTADO.yo && !escribiendoNombre && firmaYo !== ultimaFirmaYo) {
+            ultimaFirmaYo = firmaYo;
             var conectadoRed = !!ESTADO.yo.conectado;
             cajaMio.innerHTML = [
                 '<div class="red-mio">',
@@ -394,7 +403,7 @@
                     });
                 });
             }
-        } else {
+        } else if (!esLocal || !ESTADO.yo) {
             cajaMio.innerHTML = '';
         }
     }
@@ -453,7 +462,9 @@
         }
         return [
             '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
-            '  <div class="nombre">' + (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ ')) + esc(p.nombre),
+            '  <div class="nombre">' + (p.avatar
+                ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">'
+                : (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ '))) + esc(p.nombre),
             mio ? '<span class="red-badge comparto">tu nodo</span>'
                 : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',

@@ -280,3 +280,54 @@
     margin-bottom: 16px;
     line-height: 1.5;
 }
+
+/* ============================================================
+   Paneles laterales estirables (manijas)
+   ============================================================ */
+.red-resizer {
+    position: fixed;
+    width: 9px;
+    z-index: 40;
+    cursor: col-resize;
+    background: transparent;
+    display: none;
+}
+.red-resizer::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 0; bottom: 0;
+    width: 1px;
+    background: var(--border);
+    transition: background .15s;
+}
+.red-resizer:hover::after { background: var(--accent); }
+.red-resizer.der::after { left: 4px; }
+body.red-arrastrando { user-select: none; cursor: col-resize; }
+body.red-arrastrando * { cursor: col-resize !important; }
+
+/* ============================================================
+   Pestaña PERFIL (como las otras, no un modal)
+   ============================================================ */
+.cuenta-panel { padding: 22px 24px; overflow-y: auto; height: 100%; }
+.cuenta-caja { max-width: 660px; }
+.cuenta-panel h2 { margin: 0 0 6px; font-size: 1.15em; letter-spacing: .5px; }
+.cuenta-sub { color: var(--text-muted); font-size: .86em; line-height: 1.6; margin: 0 0 18px; }
+.cuenta-nota { color: var(--text-muted); font-size: .76em; margin-top: 12px; }
+.cuenta-ficha {
+    display: flex; gap: 16px; align-items: center;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--bg-input); padding: 16px; margin-bottom: 16px;
+}
+.cuenta-avatar img, .cuenta-avatar-inicial {
+    width: 72px; height: 72px; border-radius: 50%; object-fit: cover; display: block;
+}
+.cuenta-avatar-inicial {
+    background: #a855f7; display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 800; color: #fff;
+}
+.cuenta-datos { display: flex; flex-direction: column; gap: 3px; }
+.cuenta-nombre { font-weight: 800; font-size: 1.05em; }
+.cuenta-linea { color: var(--text-muted); font-size: .82em; }
+.cuenta-linea.estado { margin-top: 4px; color: var(--accent); }
+.cuenta-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+.red-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-right: 4px; }

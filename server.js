@@ -59,7 +59,10 @@ function guardarConfigLocal() {
     try {
         fs.writeFileSync(RUTA_CONFIG, JSON.stringify({
             comfyAddress,
-            red: { peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir }
+            red: {
+                peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir,
+                nombreManual: RED.nombreManual, usuario: RED.usuario
+            }
         }, null, 2));
     } catch (e) {
         console.warn('⚠️  No pude guardar config-local.json:', e.message);
@@ -1182,6 +1185,8 @@ const RED = {
     compartir: false,
     nodos: [],
     pasados: [],
+    usuario: null,
+    nombreManual: false,
     enVuelo: 0,
     hub: RED_HUB + RED_BASE
 };
@@ -1201,6 +1206,7 @@ function estadoRed() {
         nombre: RED.nombre,
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
+        usuario: RED.usuario,
         hub: RED.hub,
         // "conectado" = MI nodo aparece publicado en la red (lo dice el hub)
         conectado: RED.nodos.some((p) => p && p.id === RED.peerId),
@@ -1241,7 +1247,7 @@ app.get('/api/red/estado', (req, res) => {
 app.post('/api/red/compartir', async (req, res) => {
     const b = req.body || {};
     if (b.compartir !== undefined) RED.compartir = !!b.compartir;
-    if (b.nombre) RED.nombre = String(b.nombre).slice(0, 40);
+    if (b.nombre) { RED.nombre = String(b.nombre).slice(0, 40); RED.nombreManual = true; }
     guardarConfigLocal();
     let hub = null;
     if (!b.desdeHub) hub = await avisarHubCompartir();
@@ -1374,6 +1380,25 @@ async function refrescarNodosDelHub() {
 }
 setInterval(refrescarNodosDelHub, 6000);
 setTimeout(refrescarNodosDelHub, 1500);
+
+// --- el front manda tu perfil (nombre + avatar) para publicarlo en la red ----
+app.post('/api/red/perfil', async (req, res) => {
+    const b = req.body || {};
+    RED.usuario = {
+        username: b.username || null,
+        displayName: b.displayName || null,
+        avatar: b.avatar || null,
+        id: b.id || null
+    };
+    // si el dueño nunca eligió un nombre a mano, se usa el del perfil
+    if (!RED.nombreManual && RED.usuario.displayName) {
+        RED.nombre = RED.usuario.displayName + ' · ComfyLatam';
+    }
+    guardarConfigLocal();
+    avisarRedATodos();
+    console.log(`👤 Perfil del nodo: ${RED.usuario.displayName || RED.usuario.username || '?'}`);
+    res.json({ success: true, red: estadoRed() });
+});
 
 // --- conectar la app a la red (lanza el agente/nodo) ----------------------
 // El agente vive en el repo jpiassets; acá lo arrancamos desprendido para que
