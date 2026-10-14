@@ -17,13 +17,20 @@
         ? (location.protocol + '//' + location.host)
         : 'https://vps-4455523-x.dattaweb.com';
 
+    // Token de la sesión FSC (lo guarda js/auth-jpi.js al entrar). En la app
+    // local no hay sesión: queda vacío y nada cambia.
+    var TOKEN = '';
+    try { TOKEN = localStorage.getItem('fsc_token_jpi') || ''; } catch (e) { }
+
     window.JPI = {
         BASE: BASE,
         ORIGIN: ORIGIN,
         // Para fetch: api, uploads, videos, audio, todo pasa por aca
         API_BASE: ORIGIN + BASE,
-        // WebSocket crudo del editor (el protocolo de videocomfy)
-        WS: ORIGIN.replace(/^http/, 'ws') + BASE + '/ws',
-        esServidor: esServidor
+        // WebSocket crudo del editor (el protocolo de videocomfy).
+        // En la web el token viaja como ?token= porque el backend lo pide.
+        WS: ORIGIN.replace(/^http/, 'ws') + BASE + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : ''),
+        esServidor: esServidor,
+        TOKEN: TOKEN
     };
 })();

@@ -83,3 +83,36 @@ To generate an image, send a WebSocket message with the following format:
 
 ## License
 This project is provided as-is for demonstration purposes.
+
+---
+
+## ¿De dónde levanta? (ComfyUI propio vs. la web de jpiassets)
+
+Esta app es el **editor + motor local**: habla directo con un **ComfyUI** que corre en la misma
+máquina. La dirección sale de `COMFYUI_ADDRESS` (por defecto **`127.0.0.1`**, puerto 8188):
+
+| Escenario | Contra qué Comfy genera |
+|---|---|
+| Clonás el repo y lo corrés en tu compu | **Tu ComfyUI** (`COMFYUI_ADDRESS`, por defecto tu `127.0.0.1:8188`) |
+| Julián lo corre en su PC | El ComfyUI de la PC de Julián |
+| Usás la **web** (`fullscreencode.com/jpiassets`) | El ComfyUI de la PC de Julián — la web **relayea** por el VPS: navegador → jpiassets (VPS) → agente local → videocomfy (:5634) → ComfyUI (:8188) |
+
+O sea: **corriendo local = tu Comfy**. Nada del repo apunta a la PC de otra persona: las direcciones
+están en `.env` (que no se versiona) y el valor por defecto es `localhost`.
+
+### Uso local (lo normal si clonás el repo)
+
+```bat
+copy .env.example .env        :: revisá COMFYUI_ADDRESS y PORT
+:: levantá ComfyUI (el tuyo) y después:
+node server.js                :: editor en http://127.0.0.1:5634
+```
+
+Requisitos: Node 18+, un ComfyUI corriendo en `127.0.0.1:8188` y los modelos que use el workflow que
+elijas. Si ComfyUI no está prendido, el editor abre igual pero no genera.
+
+### La web (jpiassets)
+
+La versión web **pide login de fullscreencode** (fscauth) y usa la PC de Julián a través del agente.
+Para eso hace falta el agente (`../jpiassets/agent`) con `AGENT_URL`/`AGENT_TOKEN`, que los administra
+quien corre el VPS. Sin agente, la web no genera.
