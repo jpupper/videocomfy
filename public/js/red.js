@@ -317,7 +317,7 @@
                 '    </span>',
                 '  </div>',
                 '  <label class="red-switch"><input type="checkbox" id="redCompartir"' + (ESTADO.yo.compartir ? ' checked' : '') + '>',
-                '    <span class="pista"></span><span>Compartir mi Comfy en la red</span></label>',
+                '    <span class="pista"></span><span>🌐 Transmitir mi Comfy a la red (que otros generen en esta PC)</span></label>',
                 '</div>'
             ].join('\n');
             var gb = document.getElementById('redGuardarNombre');
@@ -386,19 +386,25 @@
         var boton = elegido
             ? '<button class="red-btn chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>✅ ELEGIDO</button>'
             : '<button class="red-btn secundario chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>' +
-              (puede ? 'Usar este Comfy' : 'No disponible') + '</button>';
+              (puede ? 'Usar este Comfy' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
+        var estado;
+        if (mio) {
+            estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
+        } else {
+            estado = p.conectado
+                ? (p.comfy ? 'Comfy listo' : 'Comfy apagado') + (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre')
+                : 'sin conexión (se desconectó)';
+        }
         return [
             '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
             '  <div class="nombre">' + (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ ')) + esc(p.nombre),
             mio ? '<span class="red-badge comparto">tu nodo</span>'
-                : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'no comparte') + '</span>',
+                : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
             '  </div>',
             '  <div class="linea">' + esc(p.host) + (p.gpu ? ' · ' + esc(p.gpu) : '') + '</div>',
             '  <div class="linea">' + esc(modelos) + '</div>',
-            '  <div class="estado"><span class="red-punto ' + punto + '"></span>' +
-            (p.conectado ? (p.comfy ? 'Comfy listo' : 'Comfy apagado') : 'sin conexión') +
-            (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre') + '</div>',
+            '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
             '  <div class="red-accion">' + boton + '</div>',
             '</div>'
         ].join('\n');

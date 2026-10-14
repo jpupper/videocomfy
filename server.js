@@ -1201,7 +1201,8 @@ function estadoRed() {
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
         hub: RED.hub,
-        conectado: RED.nodos.length > 0,
+        // "conectado" = MI nodo aparece publicado en la red (lo dice el hub)
+        conectado: RED.nodos.some((p) => p && p.id === RED.peerId),
         enVuelo: RED.enVuelo,
         nodos: RED.nodos
     };
@@ -1347,6 +1348,28 @@ app.post('/api/red/generar', async (req, res) => {
         return res.status(502).json({ success: false, message: 'No pude hablar con el hub: ' + e.message });
     }
 });
+
+// --- los nodos los pedimos nosotros al hub (no dependemos del agente) -------
+// Así la pestaña RED funciona apenas abre la app, sin esperar a que el hub
+// avise por socket de un cambio.
+let ultimoJsonNodos = '';
+async function refrescarNodosDelHub() {
+    if (!RED_TOKEN) return;
+    try {
+        const r = await fetch(RED.hub + '/api/red/peers', {
+            headers: { 'x-agent-token': RED_TOKEN },
+            signal: AbortSignal.timeout(6000)
+        });
+        if (!r.ok) return;
+        const d = await r.json().catch(() => ({}));
+        const lista = Array.isArray(d.peers) ? d.peers : [];
+        const j = JSON.stringify(lista);
+        RED.nodos = lista;
+        if (j !== ultimoJsonNodos) { ultimoJsonNodos = j; avisarRedATodos(); }
+    } catch (e) { /* sin red: se reintenta */ }
+}
+setInterval(refrescarNodosDelHub, 6000);
+setTimeout(refrescarNodosDelHub, 1500);
 
 // --- identidad del nodo: se crea una vez y queda en config-local.json ------
 function leerIdentidadRedDeConfig() {

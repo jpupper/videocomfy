@@ -34,6 +34,7 @@
         // WebSocket crudo del editor (el protocolo de videocomfy).
         // En la web el token viaja como ?token= porque el backend lo pide.
         WS: ORIGIN.replace(/^http/, 'ws') + BASE + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : ''),
+        FSCAUTH_URL: 'https://fullscreencode.com/fscauth',   // login unificado del ecosistema
         esServidor: esServidor,
         TOKEN: TOKEN
     };
