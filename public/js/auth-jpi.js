@@ -68,7 +68,7 @@
         overlay.id = 'jpiLoginGate';
         overlay.innerHTML =
             '<div class="jpi-login-card">' +
-            '  <div class="jpi-login-logo">MegaComfy <span style="color:#00ffd5">JP</span></div>' +
+            '  <div class="jpi-login-logo">COMFY<span style="color:#00ffd5">LATAM</span></div>' +
             '  <div class="jpi-login-sub">ComfyUI Studio · fullscreencode.com</div>' +
             '  <div class="jpi-login-msg" id="jpiLoginMsg">' + (mensaje || 'Entrá con tu cuenta de fullscreencode para usar el editor.') + '</div>' +
             '  <label>Usuario o email</label>' +

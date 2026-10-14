@@ -1,5 +1,5 @@
 // ============================================================
-// JPiAssets - miniaturas de video en STUDIO ASSETS
+// COMFYLATAM - miniaturas de video en STUDIO ASSETS
 // ------------------------------------------------------------
 // Ejemplo del problema: con `preload="none"` (necesario para no disparar 460
 // pedidos al abrir) las tarjetas quedaban como cajas oscuras, sin frame.

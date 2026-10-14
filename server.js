@@ -38,7 +38,7 @@ const serverAddress = ipglobal.includes(':') ? ipglobal : `${ipglobal}:8188`;
 // Se guarda en config-local.json (no se versiona) y se puede cambiar en
 // caliente con POST /api/config/comfy: reconecta el websocket sin reiniciar.
 // ============================================================
-const RUTA_CONFIG = path.join(__dirname, 'config-local.json');
+const RUTA_CONFIG = path.join(__dirname, process.env.RED_CONFIG || 'config-local.json');
 let comfyAddress = ipglobal;
 
 (function cargarConfigLocal() {
@@ -57,7 +57,10 @@ let comfyAddress = ipglobal;
 
 function guardarConfigLocal() {
     try {
-        fs.writeFileSync(RUTA_CONFIG, JSON.stringify({ comfyAddress }, null, 2));
+        fs.writeFileSync(RUTA_CONFIG, JSON.stringify({
+            comfyAddress,
+            red: { peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir }
+        }, null, 2));
     } catch (e) {
         console.warn('⚠️  No pude guardar config-local.json:', e.message);
     }
@@ -102,6 +105,8 @@ app.get('/api/status', (req, res) => {
         comfy: comfyOk,
         comfyTexto: comfyOk ? 'connected' : 'disconnected',
         comfyAddress: comfyAddress,
+        red: { peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir, nodos: RED.nodos.length, enVuelo: RED.enVuelo },
+        encolados: RED.enVuelo,
         comfyBase: comfyBase(),
         comfyEsLocal: esComfyLocal(),
         entorno: 'local',                       // este server ES la app local
@@ -1137,7 +1142,7 @@ app.post('/api/send-to-telegram', async (req, res) => {
 // SERVIDOR Y WEBSOCKETS CLIENTES
 // ============================================
 
-const port = 5634;
+const port = Number(process.env.PORT) || 5634;
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -1148,6 +1153,218 @@ server.on('error', (e) => {
         process.exit(1);
     }
 });
+
+// ==========================================================================
+// RED COMFYLATAM (lado app local)
+// --------------------------------------------------------------------------
+// Cada app que corre en una PC es un NODO de la red: tiene un peerId estable,
+// un nombre y la opcion de COMPARTIR su Comfy (apagada por defecto). El agente
+// (conectar-comfylatam.bat) publica ese nodo en el hub y le manda los trabajos
+// que otros usuarios pidan; aca se encolan y se generan con el Comfy local.
+// ==========================================================================
+const RED_HUB = (process.env.RED_HUB || 'https://vps-4455523-x.dattaweb.com').replace(/\/+$/, '');
+const RED_BASE = process.env.RED_BASE || '/comfylatam';
+const RED_TOKEN = process.env.AGENT_TOKEN || '';
+
+const RED = {
+    peerId: '',
+    nombre: '',
+    compartir: false,
+    nodos: [],
+    enVuelo: 0,
+    hub: RED_HUB + RED_BASE
+};
+
+// Modelos que este nodo puede ofrecer a la red.
+function modelosDeLaRed() {
+    return Object.keys(MODELOS_IMAGEN).map((k) => ({
+        id: k,
+        nombre: MODELOS_IMAGEN[k].etiqueta,
+        tipo: MODELOS_IMAGEN[k].tipoSalida === 'storyboard' ? 'imagen' : 'video'
+    })).concat([{ id: 'ltx2', nombre: 'LTX-2 (video)', tipo: 'video' }]);
+}
+
+function estadoRed() {
+    return {
+        peerId: RED.peerId,
+        nombre: RED.nombre,
+        compartir: RED.compartir,
+        modelos: modelosDeLaRed(),
+        hub: RED.hub,
+        conectado: RED.nodos.length > 0,
+        enVuelo: RED.enVuelo,
+        nodos: RED.nodos
+    };
+}
+
+function avisarRedATodos(extra) {
+    const msg = JSON.stringify(Object.assign({ type: 'red_estado', red: estadoRed() }, extra || {}));
+    wss.clients.forEach((c) => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
+}
+
+// Le avisamos al hub que cambiamos "compartir" (si hay token configurado).
+async function avisarHubCompartir() {
+    if (!RED_TOKEN) return { ok: false, motivo: 'sin token (corré conectar-comfylatam.bat)' };
+    try {
+        const r = await fetch(RED.hub + '/api/red/compartir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
+            body: JSON.stringify({ peerId: RED.peerId, compartir: RED.compartir })
+        });
+        const d = await r.json().catch(() => ({}));
+        return { ok: r.ok, datos: d };
+    } catch (e) {
+        return { ok: false, motivo: e.message };
+    }
+}
+
+// --- estado de la red ------------------------------------------------------
+app.get('/api/red/estado', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(Object.assign({ success: true }, estadoRed()));
+});
+
+// --- prender / apagar compartir -------------------------------------------
+app.post('/api/red/compartir', express.json(), async (req, res) => {
+    const b = req.body || {};
+    if (b.compartir !== undefined) RED.compartir = !!b.compartir;
+    if (b.nombre) RED.nombre = String(b.nombre).slice(0, 40);
+    guardarConfigLocal();
+    let hub = null;
+    if (!b.desdeHub) hub = await avisarHubCompartir();
+    avisarRedATodos();
+    console.log(`🌎 Red: compartir=${RED.compartir}${hub ? ' (hub: ' + (hub.ok ? 'ok' : hub.motivo) + ')' : ''}`);
+    res.json({ success: true, red: estadoRed(), hub });
+});
+
+// --- el agente nos pasa la lista de nodos ---------------------------------
+app.post('/api/red/nodos', express.json(), (req, res) => {
+    const b = req.body || {};
+    RED.nodos = Array.isArray(b.peers) ? b.peers : (Array.isArray(b) ? b : []);
+    avisarRedATodos();
+    res.json({ success: true, nodos: RED.nodos.length });
+});
+
+// --- lo que pasa en la red (lo empuja el agente) --------------------------
+app.post('/api/red/evento', express.json(), (req, res) => {
+    const d = req.body || {};
+    wss.clients.forEach((c) => {
+        if (c.readyState === WebSocket.OPEN) {
+            c.send(JSON.stringify({ type: 'red_evento', evento: d }));
+        }
+    });
+    res.json({ success: true });
+});
+
+// --- ENCOLAR UN TRABAJO EN ESTE NODO --------------------------------------
+// Lo usan el agente (trabajos que llegan de la red) y el propio front cuando
+// el nodo elegido es este mismo.
+async function encolarTrabajoRed(b) {
+    const prompt = String((b && b.prompt) || '').trim();
+    if (!prompt) throw new Error('El trabajo no trae prompt.');
+
+    const params = Object.assign({
+        videoWidth: 1024, videoHeight: 1024, samplerSteps: 10, seed: -1
+    }, (b && b.params) || {});
+    const modelo = (b.modelo && MODELOS_IMAGEN[b.modelo]) ? b.modelo
+        : (String((b && b.tipo) || '').toLowerCase() === 'video' ? null : 'zimage');
+
+    await liberarVram().catch(() => { });
+    const promptId = modelo
+        ? await generarImagenModelo(modelo, prompt, params)
+        : await generarVideo(prompt, params, b && b.imagen);
+
+    const details = {
+        prompt,
+        params,
+        type: modelo ? MODELOS_IMAGEN[modelo].tipoSalida : 'video',
+        modelo: modelo || 'ltx2',
+        red: { jobId: (b && b.jobId) || null, de: (b && b.de) || 'la red', peerId: RED.peerId },
+        generationStartTime: Date.now()
+    };
+    promptDetails[promptId] = details;
+    lastPromptDetails = details;
+    RED.enVuelo++;
+    avisarRedATodos({ job: { jobId: details.red.jobId, promptId, modelo: details.modelo, de: details.red.de } });
+    console.log(`🌎 Trabajo de ${details.red.de} encolado (${details.modelo}) — ${prompt.slice(0, 60)}`);
+    return { promptId, modelo: details.modelo, jobId: details.red.jobId };
+}
+
+app.post('/api/red/job', express.json(), async (req, res) => {
+    try {
+        const d = await encolarTrabajoRed(req.body || {});
+        res.json(Object.assign({ success: true }, d));
+    } catch (e) {
+        console.error('❌ Error encolando un trabajo de la red:', e.message);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// --- PEDIR UN TRABAJO A LA RED (lo llama el front) ------------------------
+// Si el destino soy yo, se encola acá; si es otro nodo, se lo pedimos al hub.
+app.post('/api/red/generar', express.json(), async (req, res) => {
+    const b = req.body || {};
+    const destino = String(b.peerId || '');
+    if (!destino || destino === RED.peerId) {
+        try {
+            const d = await encolarTrabajoRed(Object.assign({ tipo: 'imagen' }, b, { de: b.de || 'vos (local)' }));
+            return res.json(Object.assign({ success: true, local: true }, d));
+        } catch (e) {
+            return res.status(500).json({ success: false, message: e.message });
+        }
+    }
+    if (!RED_TOKEN) {
+        return res.status(503).json({
+            success: false,
+            message: 'Para generar en otro nodo tenés que correr conectar-comfylatam.bat (falta el token de la red).'
+        });
+    }
+    try {
+        const r = await fetch(RED.hub + '/api/red/generar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
+            body: JSON.stringify({
+                peerId: destino,
+                tipo: b.tipo || 'imagen',
+                prompt: b.prompt || '',
+                modelo: b.modelo || null,
+                params: b.params || {}
+            })
+        });
+        const d = await r.json().catch(() => ({}));
+        return res.status(r.status).json(d);
+    } catch (e) {
+        return res.status(502).json({ success: false, message: 'No pude hablar con el hub: ' + e.message });
+    }
+});
+
+// --- identidad del nodo: se crea una vez y queda en config-local.json ------
+function leerIdentidadRedDeConfig() {
+    try {
+        if (!fs.existsSync(RUTA_CONFIG)) return;
+        const c = JSON.parse(fs.readFileSync(RUTA_CONFIG, 'utf8'));
+        if (c && c.red) {
+            RED.peerId = c.red.peerId || RED.peerId;
+            RED.nombre = c.red.nombre || RED.nombre;
+            RED.compartir = !!c.red.compartir;
+            console.log(`🌎 Nodo de la red: ${RED.peerId} (${RED.nombre}) compartir=${RED.compartir}`);
+        }
+    } catch (e) {
+        console.warn('⚠️  No pude leer la identidad de red:', e.message);
+    }
+}
+
+function asegurarIdentidadRed() {
+    leerIdentidadRedDeConfig();
+    if (!RED.peerId) {
+        RED.peerId = process.env.RED_PEER_ID || ('nodo-' + uuidv4().slice(0, 8));
+        console.log(`🌎 Nodo nuevo: ${RED.peerId}`);
+    }
+    if (!RED.nombre) RED.nombre = process.env.RED_NODO_NOMBRE || (os.hostname() + ' · ComfyLatam');
+    if (process.env.RED_COMPARTIR !== undefined) RED.compartir = String(process.env.RED_COMPARTIR).toLowerCase() === 'true';
+    guardarConfigLocal();
+}
+asegurarIdentidadRed();
 
 server.listen(port, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);

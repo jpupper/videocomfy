@@ -1,5 +1,5 @@
 // ============================================================
-// MegaComfy JP — entorno (WEB / LOCAL), panel izquierdo, SETTINGS y
+// COMFYLATAM — entorno (WEB / LOCAL), panel izquierdo, SETTINGS y
 // la barra de energía ciberpunk mientras genera.
 // ------------------------------------------------------------
 // 1. Píldora en el header que dice DÓNDE está corriendo: 🌐 WEB o 💻 LOCAL.
@@ -50,7 +50,7 @@
         var caja = document.createElement('div');
         caja.className = 'ck-panel-izq';
         caja.innerHTML =
-            '<div class="ck-pi-titulo">⚡ MegaComfy JP</div>' +
+            '<div class="ck-pi-titulo">⚡ COMFYLATAM</div>' +
             '<div class="ck-pi-fila"><span class="ck-pi-clave">Entorno</span><span class="ck-pi-valor" id="ckPiEntorno">—</span></div>' +
             '<div class="ck-pi-fila"><span class="ck-pi-clave">ComfyUI</span><span class="ck-pi-valor" id="ckPiComfy">—</span></div>' +
             '<div class="ck-pi-fila"><span class="ck-pi-clave">Estado</span><span class="ck-pi-valor" id="ckPiEstado">—</span></div>' +

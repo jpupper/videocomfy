@@ -1,5 +1,5 @@
 // ============================================================
-// JPiAssets - boton PAUSA de la cola
+// COMFYLATAM - boton PAUSA de la cola
 // ------------------------------------------------------------
 // Pedido: ademas de STOP (que corta), un boton PAUSA que:
 //   - deja TERMINAR el item que esta generando ahora,

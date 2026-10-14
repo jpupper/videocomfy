@@ -1,0 +1,192 @@
+/* ============================================================
+   COMFYLATAM — pestaña RED (nodos conectados con su Comfy)
+   ============================================================ */
+
+.red-panel {
+    display: none;
+    padding: 18px 22px 40px;
+    overflow-y: auto;
+    height: 100%;
+}
+/* el editor marca la pestaña visible con .active en .tab-content */
+.red-panel.abierto,
+.red-panel.active { display: block; }
+
+.red-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.red-head h2 {
+    margin: 0;
+    font-size: 1.15em;
+    letter-spacing: .5px;
+}
+.red-sub {
+    color: var(--text-muted);
+    font-size: .85em;
+    margin: 0 0 16px;
+    line-height: 1.5;
+}
+
+/* --- mi nodo --- */
+.red-mio {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: var(--bg-input);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.red-mio .datos { display: flex; flex-direction: column; gap: 3px; }
+.red-mio .titulo { font-weight: 700; font-size: .98em; }
+.red-mio .meta { color: var(--text-muted); font-size: .8em; }
+
+/* --- switch de compartir --- */
+.red-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: .85em;
+    font-weight: 600;
+}
+.red-switch input { display: none; }
+.red-switch .pista {
+    width: 46px; height: 24px;
+    border-radius: 999px;
+    background: #2a2a3a;
+    border: 1px solid var(--border);
+    position: relative;
+    transition: background .2s;
+}
+.red-switch .pista::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform .2s, background .2s;
+}
+.red-switch input:checked + .pista { background: rgba(0, 255, 213, .18); border-color: var(--accent); }
+.red-switch input:checked + .pista::after { transform: translateX(22px); background: var(--accent); }
+
+/* --- grilla de nodos --- */
+.red-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+    gap: 12px;
+    margin-bottom: 22px;
+}
+.red-nodo {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 14px;
+    background: var(--bg-input);
+    cursor: pointer;
+    transition: border-color .15s, transform .15s;
+    position: relative;
+}
+.red-nodo:hover { transform: translateY(-2px); }
+.red-nodo.elegido { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.red-nodo .nombre { font-weight: 700; font-size: .95em; display: flex; align-items: center; gap: 7px; }
+.red-nodo .linea { color: var(--text-muted); font-size: .78em; margin-top: 4px; }
+.red-nodo .estado { display: inline-flex; align-items: center; gap: 5px; font-size: .74em; font-weight: 600; margin-top: 8px; }
+.red-punto { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+.red-punto.ok { background: #00e08a; box-shadow: 0 0 7px #00e08a; }
+.red-punto.ocupado { background: #ffb020; box-shadow: 0 0 7px #ffb020; }
+.red-punto.off { background: #ff4d6d; }
+.red-badge {
+    font-size: .66em;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+.red-badge.principal { border-color: var(--accent); color: var(--accent); }
+.red-badge.comparte { border-color: #00e08a; color: #00e08a; }
+
+/* --- mini generador --- */
+.red-gen {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--bg-input);
+}
+.red-gen h3 { margin: 0 0 10px; font-size: .95em; letter-spacing: .4px; }
+.red-gen textarea {
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: .86em;
+}
+.red-fila {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 10px;
+}
+.red-fila select, .red-fila input[type=number] {
+    background: var(--bg);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: .84em;
+}
+.red-btn {
+    background: var(--accent);
+    color: #04121a;
+    border: 0;
+    border-radius: 9px;
+    padding: 10px 18px;
+    font-weight: 800;
+    font-size: .84em;
+    letter-spacing: .4px;
+    cursor: pointer;
+}
+.red-btn:disabled { opacity: .45; cursor: not-allowed; }
+.red-btn.secundario {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+.red-log {
+    margin-top: 14px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: .76em;
+    color: var(--text-muted);
+    max-height: 190px;
+    overflow-y: auto;
+    border-top: 1px dashed var(--border);
+    padding-top: 9px;
+    white-space: pre-wrap;
+}
+.red-aviso {
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    background: rgba(0, 255, 213, .06);
+    border-radius: 0 8px 8px 0;
+    font-size: .82em;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    line-height: 1.5;
+}

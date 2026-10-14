@@ -1,5 +1,5 @@
 // ============================================================
-// JPiAssets - estado de la cadena, a la vista
+// COMFYLATAM - estado de la cadena, a la vista
 // ------------------------------------------------------------
 // El navegador NO puede saber por si solo si la PC de Julian esta conectada,
 // si el videocomfy local esta levantado o si ComfyUI esta prendido. El agente

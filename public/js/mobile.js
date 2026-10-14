@@ -1,5 +1,5 @@
 // ============================================================
-// JPiAssets - comportamiento mobile
+// COMFYLATAM - comportamiento mobile
 // ------------------------------------------------------------
 // En el celular los dos paneles laterales (parametros y assets)
 // pasan a ser cajones: aca se crean los botones que los abren/cierran

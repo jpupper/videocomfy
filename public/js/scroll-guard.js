@@ -1,5 +1,5 @@
 // ============================================================
-// JPiAssets - guardián de scroll
+// COMFYLATAM - guardián de scroll
 // ------------------------------------------------------------
 // Bug reportado: en CREATE, escribiendo en el textarea y despues moviendo un
 // slider, la pagina "reseteaba" el scroll (saltaba de lugar). Con eventos
