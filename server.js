@@ -1456,7 +1456,11 @@ function leerIdentidadRedDeConfig() {
             RED.peerId = c.red.peerId || RED.peerId;
             RED.nombre = c.red.nombre || RED.nombre;
             RED.compartir = !!c.red.compartir;
-            console.log(`🌎 Nodo de la red: ${RED.peerId} (${RED.nombre}) compartir=${RED.compartir}`);
+            // OJO: el nombre elegido a mano y el perfil logueado tienen que
+            // sobrevivir a los reinicios, si no cada login te renombra el nodo.
+            RED.nombreManual = !!c.red.nombreManual;
+            RED.usuario = c.red.usuario || null;
+            console.log(`🌎 Nodo de la red: ${RED.peerId} (${RED.nombre}) compartir=${RED.compartir}${RED.nombreManual ? ' [nombre propio]' : ''}`);
         }
     } catch (e) {
         console.warn('⚠️  No pude leer la identidad de red:', e.message);

@@ -234,15 +234,24 @@ function arrancar(opciones) {
         });
 
         socket.on('red:evento', (d = {}) => {
-            // Los eventos pueden traer la imagen del resultado en base64 (megas):
-            // le sacamos lo pesado — el panel sólo necesita saber qué pasó.
-            let cuerpo = d || {};
-            try {
-                const texto = JSON.stringify(cuerpo);
-                if (texto.length > 400000) {
-                    cuerpo = JSON.parse(texto.replace(/"data:image\/[^"]{2000,}"/g, '"<imagen omitida>"'));
+            // Los eventos traen la imagen/video del resultado en base64 (megas):
+            // la app local los rechaza (413) y el panel se queda sin novedades.
+            // Recortamos cualquier string grande de forma RECURSIVA (una imagen
+            // puede venir como campo suelto, no sólo como data:URL).
+            const LIMITE = 20000;
+            function aligerar(v, prof) {
+                prof = prof || 0;
+                if (typeof v === 'string') return v.length > LIMITE ? '<recortado ' + v.length + ' chars>' : v;
+                if (Array.isArray(v)) return v.slice(0, 60).map((x) => aligerar(x, prof + 1));
+                if (v && typeof v === 'object') {
+                    if (prof > 6) return '<profundo>';
+                    const o = {};
+                    for (const k of Object.keys(v)) o[k] = aligerar(v[k], prof + 1);
+                    return o;
                 }
-            } catch (e) { cuerpo = { tipo: (d && d.tipo) || 'evento', grande: true }; }
+                return v;
+            }
+            const cuerpo = aligerar(d || {});
             fetch(APP + '/api/red/evento', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
             }).catch(() => { });
