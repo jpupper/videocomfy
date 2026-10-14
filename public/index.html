@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/style.css?v=2">
     <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/sidebar-collapse.css?v=1">
     <link rel="stylesheet" href="css/estado.css?v=1">
     <link rel="stylesheet" href="css/cola-pausa.css?v=1">
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
@@ -22,6 +23,8 @@
     <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
+            <button type="button" class="sidebar-collapse-btn" id="collapseLeftBtn" title="Comprimir / expandir panel" aria-label="Alternar Studio Generator"><span class="collapse-arrow">«</span></button>
+            <div class="sidebar-collapsed-label">Studio Generator</div>
             <h1>
                 MegaComfy<span class="ck-logo-jp">JP</span>
                 <span id="comfyStatusDot" class="status-dot disconnected" title="ComfyUI Status"></span>
@@ -721,6 +724,8 @@
 
         <!-- RIGHT SIDEBAR: ASSETS ONLY -->
         <aside class="sidebar-right">
+            <button type="button" class="sidebar-collapse-btn" id="collapseRightBtn" title="Comprimir / expandir panel" aria-label="Alternar Studio Assets"><span class="collapse-arrow">»</span></button>
+            <div class="sidebar-collapsed-label">Studio Assets</div>
             <h2>📦 Studio Assets</h2>
             
             <div class="asset-tabs-container">
@@ -844,6 +849,7 @@
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=1"></script>
     <script src="js/entorno-jpi.js?v=1"></script>
+    <script src="js/sidebar-collapse.js?v=1"></script>
 </body>
 
 </html>

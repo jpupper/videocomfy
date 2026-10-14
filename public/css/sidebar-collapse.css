@@ -1,0 +1,100 @@
+/* ============================================================
+   Colapsado de paneles laterales (escritorio)
+   ------------------------------------------------------------
+   Botones para comprimir/expandir Studio Generator (izq) y
+   Studio Assets (der) a una tira fina, dando mas espacio al Stage.
+   En mobile no aplica: los paneles ya son cajones (mobile.css).
+   ============================================================ */
+
+:root {
+    --sidebar-collapsed-w: 46px;
+}
+
+/* Transicion suave del ancho de las columnas del grid y del padding */
+.container {
+    transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar-left,
+.sidebar-right {
+    transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Boton de colapsar (manija) ---- */
+.sidebar-collapse-btn {
+    position: absolute;
+    top: 14px;
+    z-index: 30;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--text-muted);
+    font-size: 0.9em;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+.sidebar-collapse-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.sidebar-left .sidebar-collapse-btn { right: 9px; }
+.sidebar-right .sidebar-collapse-btn { right: 9px; }
+
+/* ---- Etiqueta vertical de la tira colapsada ---- */
+.sidebar-collapsed-label {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(180deg);
+    writing-mode: vertical-rl;
+    white-space: nowrap;
+    font-size: 0.62em;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+/* ---- Estado colapsado (solo escritorio) ---- */
+@media (min-width: 1025px) {
+    body.sidebar-left-collapsed .container {
+        grid-template-columns: var(--sidebar-collapsed-w) 1fr var(--sidebar-right-w);
+    }
+    body.sidebar-right-collapsed .container {
+        grid-template-columns: var(--sidebar-left-w) 1fr var(--sidebar-collapsed-w);
+    }
+    body.sidebar-left-collapsed.sidebar-right-collapsed .container {
+        grid-template-columns: var(--sidebar-collapsed-w) 1fr var(--sidebar-collapsed-w);
+    }
+
+    body.sidebar-left-collapsed .sidebar-left,
+    body.sidebar-right-collapsed .sidebar-right {
+        padding: 10px 5px;
+    }
+
+    body.sidebar-left-collapsed .sidebar-left > *:not(.sidebar-collapse-btn):not(.sidebar-collapsed-label),
+    body.sidebar-right-collapsed .sidebar-right > *:not(.sidebar-collapse-btn):not(.sidebar-collapsed-label) {
+        display: none !important;
+    }
+
+    body.sidebar-left-collapsed .sidebar-left .sidebar-collapsed-label,
+    body.sidebar-right-collapsed .sidebar-right .sidebar-collapsed-label {
+        display: block;
+    }
+}
+
+/* En mobile los paneles ya son cajones: ocultar las manijas */
+@media (max-width: 1024px) {
+    .sidebar-collapse-btn,
+    .sidebar-collapsed-label { display: none !important; }
+}
