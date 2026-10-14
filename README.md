@@ -116,3 +116,38 @@ elijas. Si ComfyUI no está prendido, el editor abre igual pero no genera.
 La versión web **pide login de fullscreencode** (fscauth) y usa la PC de Julián a través del agente.
 Para eso hace falta el agente (`../jpiassets/agent`) con `AGENT_URL`/`AGENT_TOKEN`, que los administra
 quien corre el VPS. Sin agente, la web no genera.
+
+
+## Red COMFYLATAM (usar el Comfy de la red / compartir el tuyo)
+
+La app es un **nodo** de la red: si corrés el agente (`conectar-comfylatam.bat`
+del repo `jpiassets`), tu app se publica con su nombre y modelos, y podés:
+
+- **Compartir tu Comfy**: pestaña **🌎 RED** → switch "Compartir mi Comfy en la red".
+  Apagado por defecto: nadie usa tu máquina hasta que lo prendas.
+- **Usar el Comfy de otros**: en la misma pestaña elegís el nodo, escribís el
+  prompt y le das *GENERAR EN LA RED*. El trabajo se hace en la PC de esa persona
+  y el resultado vuelve por el hub.
+
+### Config
+En `.env`:
+```
+AGENT_TOKEN=<el mismo token del hub (agent/.env del repo jpiassets)>
+RED_HUB=https://vps-4455523-x.dattaweb.com
+RED_BASE=/comfylatam
+```
+Sin `AGENT_TOKEN` la app anda igual (local, contra tu Comfy) pero no puede
+publicarse en la red. La identidad del nodo (peerId, nombre, compartir) se guarda
+en `config-local.json` (no se versiona).
+
+### Endpoints que expone la app local
+| Ruta | Para qué |
+|---|---|
+| `GET /api/red/estado` | identidad del nodo, si comparte, modelos y nodos vistos |
+| `POST /api/red/compartir` | `{compartir, nombre}` prende/apaga y avisa al hub |
+| `POST /api/red/job` | encola un trabajo que llegó de la red (lo llama el agente) |
+| `POST /api/red/generar` | `{peerId, prompt, modelo, params}`: acá o en otro nodo |
+| `POST /api/red/nodos` / `/api/red/evento` | el agente empuja la red a la app |
+
+`PORT` y `RED_PEER_ID` / `RED_NODO_NOMBRE` / `RED_COMPARTIR` / `RED_CONFIG` por
+entorno permiten correr varios nodos en la misma máquina (pruebas).
