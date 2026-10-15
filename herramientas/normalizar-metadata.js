@@ -20,6 +20,16 @@ const ARCHIVOS = [
     { ruta: path.join(__dirname, '..', 'public', 'videos', 'metadata.json'), tipo: 'video' }
 ];
 
+// Algunas entradas viejas guardaron la fecha en SEGUNDOS y otras en ms: eso
+// rompía el orden del registro (las viejas aparecían primeras).
+function normalizarFecha(v) {
+    const n = Number(v);
+    if (!n || !isFinite(n)) return null;
+    if (n < 1e11) return Math.round(n * 1000);          // venía en segundos
+    if (n > Date.now() + 1e11) return null;             // valor absurdo
+    return Math.round(n);
+}
+
 function normalizar(entrada, tipo) {
     const e = entrada || {};
     const pc = e.computadora || {};
@@ -49,7 +59,7 @@ function normalizar(entrada, tipo) {
         isForWan: e.isForWan !== undefined ? !!e.isForWan : undefined,
         wanRole: e.wanRole || undefined,
         prompt_id: e.prompt_id || null,
-        timestamp: e.timestamp || e.savedAt || e.generationStartTime || null
+        timestamp: normalizarFecha(e.timestamp || e.savedAt || e.generationStartTime)
     };
 }
 

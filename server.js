@@ -519,7 +519,17 @@ function connectToComfy() {
                                 lastPromptDetails || {}, details || {}
                             );
                             metaToSave.computadora = metaToSave.computadora || datosDeEstaPC();
-                            metaToSave.pedidoPor = metaToSave.pedidoPor || { usuario: 'desconocido', tipo: 'local' };
+                            if (!metaToSave.pedidoPor) {
+                                // Sin datos del pedido: se asume el usuario logueado acá
+                                const pc = datosDeEstaPC();
+                                const uu = RED.usuario || {};
+                                metaToSave.pedidoPor = {
+                                    usuario: pc.dueno || 'local',
+                                    displayName: (uu.displayName || pc.dueno) || 'local',
+                                    avatar: pc.avatar || '',
+                                    tipo: 'local'
+                                };
+                            }
                             metaToSave.origen = metaToSave.origen || 'local';
                             // Si el workflow produce varias salidas, se cuentan
                             if (metaToSave.salidas && metaToSave.salidas > 1) {
