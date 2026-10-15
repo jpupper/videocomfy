@@ -3610,7 +3610,7 @@ function loadVideoToPreviz(src) {
                             </div>
                             <div class="meta-item">
                                 <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Steps</div>
-                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.samplerSteps || '?'} steps</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${(tech.samplerSteps === 'fijo' || tech.samplerSteps === 'fixed') ? 'Fijo (distilled, 2 etapas)' : (tech.samplerSteps || '?') + ' steps'}</div>
                             </div>
                             <div class="meta-item">
                                 <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Length</div>
@@ -4828,12 +4828,15 @@ function generateI2V() {
     addToQueue(prompt, image, {
         params: {
             videoWidth: getSliderVal('i2vWidth') || 1280,
-            videoHeight: getSliderVal('i2vHeight') || 720,
+            videoHeight: getSliderVal('i2vHeight') || 704,
             videoLength: getSliderVal('i2vFrames') || 121,
-            samplerSteps: getSliderVal('i2vSteps') || 20,
-            cfgScale: getSliderVal('i2vCFG') || 4.0,
+            samplerSteps: 'fijo',
+            cfgScale: 1,
             refStrength: getSliderVal('i2vRef') || 1.0,
-            seed: getSeed('i2v')
+            seed: getSeed('i2v'),
+            ltx25Enhance: document.getElementById('ltx25Enhance')?.checked ?? true,
+            ltx25Upscale: document.getElementById('ltx25Upscale')?.checked ?? true,
+            ltx25Audio: document.getElementById('ltx25Audio')?.checked ?? true
         },
         model: 'ltx2'
     });

@@ -2143,7 +2143,9 @@ async function encolarTrabajoRed(b) {
     await liberarVram().catch(() => { });
     const promptId = modelo
         ? await generarImagenModelo(modelo, prompt, params)
-        : await generarVideo(prompt, params, b && b.imagen);
+        : (b && b.imagen
+            ? await generarVideoLTX25(prompt, params, b.imagen)
+            : await generarVideo(prompt, params, null));
 
     // Quién lo pidió: si viene de la red, el hub manda pedidoPor; si es local,
     // es el usuario logueado en esta PC (o "vos").
@@ -2487,7 +2489,9 @@ wss.on('connection', (ws) => {
                 try {
                     const promptId = modeloImagen
                         ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
-                        : await generarVideo(message.prompt, message.params, message.imageFilename);
+                        : (message.imageFilename
+                            ? await generarVideoLTX25(message.prompt, message.params, message.imageFilename)
+                            : await generarVideo(message.prompt, message.params, message.imageFilename));
                     console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
                     const details = { 
                         prompt: message.prompt,
@@ -2825,12 +2829,83 @@ async function liberarVram() {
 // Antes de encolar se libera la VRAM si el trabajo anterior NO fue imagen: si
 // queda cargado el modelo viejo, la suma de los dos puede tirar ComfyUI.
 // ============================================================
+// ============================================================
+// I2V LTX 2.5 (GGUF) — workflow del escritorio adaptado a la app
+// ------------------------------------------------------------
+// Usa video_ltx25_i2v_api.json: UnetLoaderGGUF (Q6_K) + gemma4-12b
+// + VAE 2.5 + 2 etapas de sampler (AV latent). Toggles del panel:
+//   params.ltx25Enhance (bool) — TextGenerateLTX2Prompt
+//   params.ltx25Upscale (bool) — LTXVLatentUpsampler x2
+//   params.ltx25Audio   (bool) — decodear/embeber el audio
+// Steps y CFG van FIJO (distilled usa ManualSigmas + video_cfg/audio_cfg=1).
+// ============================================================
+async function generarVideoLTX25(promptText, params = {}, imageFilename = null) {
+    const data = await fs.promises.readFile(path.join(__dirname, 'workflows/video_ltx25_i2v_api.json'), 'utf8');
+    const wf = JSON.parse(data);
+
+    const seedValue = (params.seed !== undefined && params.seed !== -1)
+        ? params.seed : Math.floor(Math.random() * 1000000000);
+
+    const enhance = params.ltx25Enhance !== false;   // default ON
+    const upscale = params.ltx25Upscale !== false;   // default ON
+    const audio   = params.ltx25Audio   !== false;   // default ON
+
+    // LTX 2.5 exige resolución en múltiplos de 32 (VAE espacial 32x)
+    const round32 = (v) => Math.max(32, Math.round(v / 32) * 32);
+    const W = round32(Number(params.videoWidth)  || 1280);
+    const H = round32(Number(params.videoHeight) || 704);
+    let frames = Number(params.videoLength) || 121;
+    const MAX_FRAMES = 169;   // limite seguro
+    if (frames > MAX_FRAMES) { console.warn(`⚠️  frames ${frames} -> ${MAX_FRAMES} (limite)`); frames = MAX_FRAMES; }
+
+    const refStrength = Number(params.refStrength) || 1.0;
+
+    // imagen de referencia
+    wf['98']['inputs']['image'] = imageFilename;
+
+    // prompt y negativo
+    wf['376']['inputs']['value'] = promptText;
+    if (params.negativePrompt) wf['373']['inputs']['text'] = params.negativePrompt;
+
+    // enhance
+    wf['383']['inputs']['value'] = enhance;
+    wf['408']['inputs']['text'] = enhance ? ['382', 0] : promptText;
+
+    // seed
+    wf['339']['inputs']['noise_seed'] = seedValue;
+
+    // resolucion base (con upscale se genera a la mitad y se reescala x2); base también múltiplo de 32
+    wf['356']['inputs']['width']  = upscale ? round32(W / 2) : W;
+    wf['356']['inputs']['height'] = upscale ? round32(H / 2) : H;
+    wf['356']['inputs']['length'] = frames;
+    wf['366']['inputs']['frames_number'] = frames;
+
+    // fuerza de la imagen de referencia (etapa 1)
+    wf['357']['inputs']['strength'] = refStrength;
+
+    // routing del upscaler
+    wf['349']['inputs']['latent'] = upscale ? ['348', 0] : ['367', 0];
+
+    // audio
+    if (!audio) delete wf['370']['inputs']['audio'];
+
+    if (ultimoTrabajo !== 'video') {
+        console.log('🧹 Liberando VRAM antes del video LTX 2.5...');
+        await liberarVram();
+    }
+    ultimoTrabajo = 'video';
+
+    const promptId = await queuePrompt(wf);
+    console.log(`🚀 Prompt LTX 2.5 enviado a ComfyUI. ID: ${promptId}`);
+    return promptId;
+}
+
 const MODELOS_IMAGEN = {
     zimage: {
         archivo: 'workflows/z_image_turbo_api.json',
         etiqueta: 'Z-Image Turbo',
         tipoSalida: 'storyboard',            // el editor lo guarda como IMAGEN
-        ayuda: 'Modelos: z_image_turbo_int8_convrot + qwen_3_4b + ae',
+        ayuda: 'Modelos: z_image_turbo_fp8_e4m3fn + qwen_3_4b + ae',
         aplicar(wf, prompt, params) {
             wf['6'].inputs.text = prompt;
             wf['7'].inputs.text = params.negativePrompt || '';

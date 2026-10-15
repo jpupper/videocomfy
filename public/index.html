@@ -227,8 +227,8 @@
                         </button>
                         <button class="wf-card" data-workflow="i2v">
                             <span class="wf-card-icon">📸</span>
-                            <span class="wf-card-name">I2V MANUAL</span>
-                            <span class="wf-card-desc">Upload Image + Prompt</span>
+                            <span class="wf-card-name">I2V LTX 2.5</span>
+                            <span class="wf-card-desc">Upload Image + Prompt (GGUF)</span>
                         </button>
                         <button class="wf-card" data-workflow="chainvideo">
                             <span class="wf-card-icon">🔗</span>
@@ -277,7 +277,7 @@
                                     <label class="wf-check-label"><input type="checkbox" id="zimgRandomSeed" checked> Random</label>
                                 </div>
                             </div>
-                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">⚡ Turbo: 10 steps y cfg 1. Modelos: <code>z_image_turbo_int8_convrot</code> + <code>qwen_3_4b</code> + <code>ae</code></div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">⚡ Turbo: 10 steps y cfg 1. Modelos: <code>z_image_turbo_fp8_e4m3fn</code> + <code>qwen_3_4b</code> + <code>ae</code></div>
                             <button class="wf-gen-btn generate-btn-main" data-workflow="zimage">🚀 GENERATE IMAGE</button>
                         </div>
                     </div>
@@ -527,23 +527,23 @@
                             <div class="wf-params-grid">
                                 <div class="wf-param">
                                     <label>Width <span class="wf-val">1280</span></label>
-                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="i2vWidth">
+                                    <input type="range" min="384" max="1920" step="32" value="1280" class="wf-param-slider" data-bind="i2vWidth">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Height <span class="wf-val">720</span></label>
-                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="i2vHeight">
+                                    <label>Height <span class="wf-val">704</span></label>
+                                    <input type="range" min="352" max="1088" step="32" value="704" class="wf-param-slider" data-bind="i2vHeight">
                                 </div>
                                 <div class="wf-param">
                                     <label>Frames <span class="wf-val">121</span></label>
                                     <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="i2vFrames">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Steps <span class="wf-val">20</span></label>
-                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="i2vSteps">
+                                    <label>Steps <span class="wf-val">fijo</span> 🔒</label>
+                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="i2vSteps" disabled style="opacity:0.45" title="Fijo en LTX 2.5 (usa sigmas manuales, no steps)">
                                 </div>
                                 <div class="wf-param">
-                                    <label>CFG <span class="wf-val">4.0</span></label>
-                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="i2vCFG">
+                                    <label>CFG <span class="wf-val">1.0</span> 🔒</label>
+                                    <input type="range" min="1" max="10" step="0.5" value="1" class="wf-param-slider" data-bind="i2vCFG" disabled style="opacity:0.45" title="Fijo en 1 para LTX 2.5">
                                 </div>
                                 <div class="wf-param">
                                     <label>Ref Strength <span class="wf-val">1.0</span></label>
@@ -555,7 +555,15 @@
                                     <label class="wf-check-label"><input type="checkbox" id="i2vRandomSeed" checked> Random</label>
                                 </div>
                             </div>
-                            <button class="wf-gen-btn generate-btn-main" data-workflow="i2v">🚀 GENERATE VIDEO FROM IMAGE</button>
+                                                        <div class="wf-section" style="margin-top: 14px;">
+                                <label class="wf-label">🎛️ LTX 2.5 Options</label>
+                                <div class="wf-options-row">
+                                    <label class="wf-check-label"><input type="checkbox" id="ltx25Enhance" checked> ✨ Prompt Enhance</label>
+                                    <label class="wf-check-label"><input type="checkbox" id="ltx25Upscale" checked> 🔍 Upscale x2</label>
+                                    <label class="wf-check-label"><input type="checkbox" id="ltx25Audio" checked> 🎵 Audio</label>
+                                </div>
+                            </div>
+<button class="wf-gen-btn generate-btn-main" data-workflow="i2v">🚀 GENERATE VIDEO FROM IMAGE</button>
                         </div>
                     </div>
 
