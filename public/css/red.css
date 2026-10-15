@@ -465,3 +465,49 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .ck-version-chip.error { color: #ff6b6b; border-color: #ff6b6b; }
 .ck-version-chip.solo-lectura { cursor: default; opacity: .8; }
 .ck-version-chip:disabled { cursor: progress; }
+
+/* --- IACOMFY: ranking de los fierros --- */
+.rank-encabezado { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 4px 14px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.rank-encabezado b { color: var(--accent); letter-spacing: .5px; font-size: .95em; }
+.rank-encabezado span { display: block; color: var(--text-muted); font-size: .76em; margin-top: 3px; }
+.rank-btn { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 8px; padding: 6px 12px; font-size: .74em; font-weight: 700; cursor: pointer; }
+.rank-btn:hover { color: var(--accent); border-color: var(--accent); }
+.rank-tabla { width: 100%; border-collapse: collapse; font-size: .78em; }
+.rank-tabla th { text-align: left; color: var(--text-muted); font-weight: 700; font-size: .78em;
+    text-transform: uppercase; letter-spacing: .4px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.rank-tabla td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.04); color: var(--foreground); }
+.rank-tabla tbody tr:hover { background: rgba(0,255,213,.04); }
+.rank-tabla tr.rank-yo { background: rgba(0,255,213,.07); }
+.rank-puesto { font-weight: 800; font-size: 1.05em; width: 46px; }
+.rank-user { display: flex; align-items: center; gap: 8px; }
+.rank-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.rank-avatar-inicial { display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent); color: #04121a; font-weight: 800; font-size: .8em; }
+.rank-chip { background: var(--accent); color: #04121a; border-radius: 6px; padding: 1px 6px; font-size: .72em; font-weight: 800; }
+.rank-chip.verde { background: rgba(0,255,213,.15); color: var(--accent); }
+.rank-vacio { color: var(--text-muted); font-size: .8em; padding: 18px 4px; }
+.rank-h4 { color: var(--text-muted); font-size: .78em; text-transform: uppercase; letter-spacing: .5px;
+    margin: 18px 0 10px; font-weight: 700; }
+.rank-perfil { display: flex; align-items: center; gap: 12px; padding: 6px 0 14px; }
+.rank-perfil .rank-avatar, .rank-perfil .rank-avatar-inicial { width: 46px; height: 46px; font-size: 1.3em; }
+.rank-perfil-nombre { font-weight: 800; font-size: 1.05em; }
+.rank-perfil-mail { color: var(--text-muted); font-size: .76em; }
+.rank-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.rank-metrica { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.rank-metrica b { display: block; font-size: 1.3em; color: var(--accent); }
+.rank-metrica span { color: var(--text-muted); font-size: .72em; }
+.rank-fierro { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px; }
+.rank-fierro-nombre { font-size: .88em; margin-bottom: 6px; }
+.rank-fierro-datos { display: flex; flex-wrap: wrap; gap: 14px; color: var(--text-muted); font-size: .76em; }
+.rank-fierro-datos b { color: var(--foreground); }
+.rank-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.rank-asset { position: relative; display: block; border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; aspect-ratio: 1; background: #000; }
+.rank-asset img, .rank-asset video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rank-asset:hover { border-color: var(--accent); }
+.rank-asset-tag { position: absolute; top: 5px; left: 5px; font-size: .9em; }
+.rank-asset-pie { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.72);
+    color: #fff; font-size: .68em; text-align: center; padding: 2px; }

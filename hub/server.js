@@ -26,6 +26,7 @@ const { Server } = require('socket.io');
 const { WebSocketServer } = require('ws');
 
 const relay = require('./lib/relay');
+const db = require('./modelos');           // base IACOMFY (estadísticas, uptime y ranking)
 const jwt = require('jsonwebtoken');
 
 // ============================================================
@@ -108,8 +109,18 @@ function esPublica(ruta) {
         || p === '/api/me'
         || p.indexOf('/uploads/') === 0
         || p.indexOf('/videos/') === 0
-        || p.indexOf('/audio/') === 0;
-}
+        || p.indexOf('/audio/') === 0
+        // IACOMFY: el ranking y las estadísticas son públicos (son el
+        // programa de incentivos: cualquiera puede ver el podio). El
+        // detalle de cada uno lo resuelve el propio endpoint.
+        || p.indexOf('/api/ranking/') === 0
+        || p.indexOf('/api/iacomfy/') === 0
+        || p.indexOf('/api/estadisticas/') === 0
+        // ojo: NO abrir todo /api/red/ (ahí está 'generar'): sólo los dos
+        // que llama el nodo y que ya validan el token de agente adentro.
+        || p === '/api/red/generacion'
+        || p === '/api/red/media-mapa';
+        }
 
 function exigirSesion(req, res, next) {
     if (AUTH_APAGADA) return next();
@@ -219,7 +230,6 @@ app.get(['/health', BASE_PATH + '/health'], (req, res) => {
 const multer = require('multer');
 const r2 = require('./lib/r2');
 const mediaMap = require('./lib/media-map');
-const db = require('./modelos');           // base IACOMFY (estadísticas y ranking)
 const subidaMedia = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
 
 function soloPuente(req, res, next) {

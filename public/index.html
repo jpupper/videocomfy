@@ -99,6 +99,7 @@
                     <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
+                      <button class="tab-button tab-button-std" id="tabRankingBtn" data-target="tabRanking">🏆 Ranking</button>
                     <button class="tab-button tab-button-std" id="tabSettingsBtn" data-target="tabSettings">⚙️ Settings</button>
                 </div>
             </header>
@@ -663,6 +664,33 @@
                         </div>
                     </div>
                 </div>
+                <!-- ============ IACOMFY: RANKING DE LOS FIERROS ============ -->
+                <!-- Programa de incentivos: quién puso el fierro que más tiempo
+                     estuvo prendido, quién proveyó más generaciones y quién sumó
+                     más computadoras. Los datos salen de la base IACOMFY (MongoDB). -->
+                <div class="tab-content" id="tabRanking">
+                    <div class="sub-tabs-container">
+                        <button class="sub-tab-btn-std active" data-sub="rankTiempo" data-orden="tiempo">⏱️ MÁS TIEMPO PRENDIDA</button>
+                        <button class="sub-tab-btn-std" data-sub="rankTiempo" data-orden="generaciones">⚡ MÁS GENERACIONES</button>
+                        <button class="sub-tab-btn-std" data-sub="rankTiempo" data-orden="fierros">🖥️ MÁS FIERROS</button>
+                        <button class="sub-tab-btn-std" data-sub="rankMiCuenta">💠 MI CUENTA</button>
+                    </div>
+                    <div id="rankTiempo" class="sub-tab-content active">
+                        <div class="rank-encabezado">
+                            <div><b>🏆 RANKING DE LOS FIERROS</b><span>los que hacen posible que COMFYLATAM genere para todos</span></div>
+                            <button id="rankRefrescar" class="rank-btn">⟳ Actualizar</button>
+                        </div>
+                        <div id="rankTabla"><div class="rank-vacio">cargando…</div></div>
+                    </div>
+                    <div id="rankMiCuenta" class="sub-tab-content">
+                        <div class="rank-encabezado">
+                            <div><b>💠 MI CUENTA EN LA RED</b><span>tus assets, tus computadoras y lo que aportaste</span></div>
+                            <button id="rankRefrescar2" class="rank-btn">⟳ Actualizar</button>
+                        </div>
+                        <div id="rankMia"><div class="rank-vacio">cargando…</div></div>
+                    </div>
+                </div>
+
                 <!-- ============ SETTINGS ============ -->
                 <div class="tab-content" id="tabSettings">
                     <div class="ck-set-wrap">
@@ -865,6 +893,7 @@
     <script src="js/cola-comfy.js?v=3"></script>
     <script src="js/registro.js?v=1"></script>
     <script src="js/version.js?v=1"></script>
+    <script src="js/ranking.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=6"></script>
     <script src="js/entorno-jpi.js?v=3"></script>
