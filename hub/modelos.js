@@ -199,7 +199,14 @@ async function anotarAsset(a) {
 async function latidoDeComputadora(peer) {
     if (!conectado || !peer || !peer.id) return null;
     try {
-        const d = datosDe(peer.usuario || {});
+        // Ojo: el peer de la red trae `usuario` como TEXTO (el nombre) y el email
+        // aparte. Si viene como objeto también se banca.
+        const u = peer.usuario;
+        const fuente = (u && typeof u === 'object')
+            ? u
+            : { username: (typeof u === 'string' ? u : ''), displayName: (typeof u === 'string' ? u : ''), email: peer.email || '', avatar: peer.avatar || '' };
+        if (!fuente.email && peer.email) fuente.email = peer.email;
+        const d = datosDe(fuente);
         const email = d.email || d.username;
         const set = {
             nombre: peer.nombre || '', email, username: d.username, avatar: d.avatar,
