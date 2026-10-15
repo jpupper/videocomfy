@@ -475,6 +475,46 @@ function avisarMapaAlHub() {
 }
 setInterval(avisarMapaAlHub, 15000);
 
+// Al arrancar, avisa TODO lo que ya está en R2 (lo que se subió antes de que
+// existiera este aviso, o mientras el hub estaba caído). Se manda en tandas.
+async function anunciarMapaCompleto() {
+    try {
+        const mapa = mediaMap.todoElMapa ? mediaMap.todoElMapa() : {};
+        const nombres = Object.keys(mapa);
+        if (!nombres.length) return;
+        // ¿qué ya tiene el hub? (para no mandar 500 de nuevo si no hace falta)
+        const destino = urlDelHub('/api/red/media-mapa');
+        if (!destino) return;
+        let enviados = 0;
+        for (let i = 0; i < nombres.length; i += 150) {
+            const items = nombres.slice(i, i + 150).map((n) => {
+                const v = mapa[n] || {};
+                const ext = String(path.extname(n)).toLowerCase();
+                const me = MIME_POR_EXT[ext] || '';
+                return {
+                    nombre: n, url: v.url, bytes: v.bytes || 0,
+                    tipo: me.split('/')[0] === 'video' ? 'video' : me.split('/')[0] === 'audio' ? 'audio' : 'image',
+                    mimetype: me
+                };
+            });
+            try {
+                const r = await fetch(destino, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
+                    body: JSON.stringify({
+                        items, email: (datosDeEstaPC().email || ''), username: datosDeEstaPC().dueno || '',
+                        displayName: datosDeEstaPC().duenoNombre || '', avatar: datosDeEstaPC().avatar || '',
+                        peerId: datosDeEstaPC().peerId || '', computadora: datosDeEstaPC().nombre || ''
+                    })
+                });
+                if (r.ok) enviados += items.length;
+            } catch (e) { }
+        }
+        console.log('☁️  [R2] anuncié ' + enviados + ' archivo(s) al hub (quedan asociados a tu cuenta)');
+    } catch (e) { }
+}
+setTimeout(() => anunciarMapaCompleto().catch(() => { }), 8000);
+
 app.get('/api/r2/estado', (req, res) => {
     res.json(Object.assign({ success: true }, r2Estado, {
         mapeados: mediaMap.cantidad(),
