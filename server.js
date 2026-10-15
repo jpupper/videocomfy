@@ -2901,3 +2901,4 @@ app.delete('/api/presets/:workflow/:name', (req, res) => {
 // Iniciar conexión con ComfyUI una vez que el servidor está listo
 connectToComfy();
 
+// cambia el backend 104713
