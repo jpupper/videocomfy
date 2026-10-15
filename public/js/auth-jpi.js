@@ -107,6 +107,7 @@
             body: JSON.stringify({
                 username: usuario.username || null,
                 displayName: usuario.displayName || usuario.username || null,
+                email: usuario.email || null,
                 avatar: usuario.avatar || null,
                 id: usuario.id || null
             })

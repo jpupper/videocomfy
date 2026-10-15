@@ -291,6 +291,24 @@ async function anotarGeneracion(g) {
 
 // ---------------------------- Consultas ------------------------------------
 
+// Segundos de las sesiones ABIERTAS ahora mismo, por email. Así el tiempo
+// aportado se ve al instante (no hay que esperar a que se apague la PC).
+async function segundosEnVivo() {
+    if (!conectado) return { porEmail: {}, porPeer: {} };
+    try {
+        const abiertas = await Sesion.find({ abierta: true }).lean();
+        const ahora = Date.now();
+        const porEmail = {}, porPeer = {};
+        for (const s of abiertas) {
+            const seg = Math.max(0, Math.round((ahora - new Date(s.inicio).getTime()) / 1000));
+            porPeer[s.peerId] = seg;
+            const k = String(s.email || '').toLowerCase();
+            if (k) porEmail[k] = (porEmail[k] || 0) + seg;
+        }
+        return { porEmail, porPeer };
+    } catch (e) { return { porEmail: {}, porPeer: {} }; }
+}
+
 // (a, b) Todo lo de un usuario: sus assets, sus computadoras con uptime y las
 // generaciones (las que pidió y las que se hicieron en sus fierros).
 async function estadisticasDe(emailOUsuario) {
@@ -315,7 +333,8 @@ async function estadisticasDe(emailOUsuario) {
         ]);
         const mapaFierro = Object.fromEntries(porFierro.map((x) => [x._id, x.total]));
 
-        const segundos = computadoras.reduce((a, c) => a + (c.segundosTotal || 0), 0);
+        const vivo = await segundosEnVivo();
+        const segundos = computadoras.reduce((a, c) => a + (c.segundosTotal || 0) + (vivo.porPeer[c.peerId] || 0), 0);
         const bytes = assets.reduce((a, x) => a + (x.bytes || 0), 0);
 
         return {
@@ -331,7 +350,9 @@ async function estadisticasDe(emailOUsuario) {
             },
             computadoras: computadoras.map((c) => ({
                 peerId: c.peerId, nombre: c.nombre, gpu: c.gpu, compartir: c.compartir,
-                segundosTotal: c.segundosTotal || 0, sesiones: c.sesiones || 0,
+                segundosTotal: (c.segundosTotal || 0) + (vivo.porPeer[c.peerId] || 0),
+                enVivo: !!vivo.porPeer[c.peerId],
+                sesiones: c.sesiones || 0,
                 ultimoVisto: c.ultimoVisto, primerVisto: c.primerVisto,
                 generaciones: mapaFierro[c.peerId] || 0
             }))
@@ -347,6 +368,7 @@ async function ranking(orden) {
     if (!conectado) return null;
     const cual = ['tiempo', 'generaciones', 'fierros'].includes(orden) ? orden : 'tiempo';
     try {
+        const vivo = await segundosEnVivo();
         if (cual === 'generaciones') {
             // generaciones que SALIERON de los fierros de cada dueño
             const filas = await Generacion.aggregate([
@@ -372,7 +394,8 @@ async function ranking(orden) {
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                     generacionesProvistas: f.generaciones, generacionesPedidas: mapaPedidas[f._id] || 0,
                     computadoras: f.computadoras.filter(Boolean).length,
-                    segundosComputadora: mapaSeg[f._id] || 0
+                    segundosComputadora: (mapaSeg[f._id] || 0) + (vivo.porEmail[f._id] || 0),
+                    enLinea: !!vivo.porEmail[f._id]
                 }))
             };
         }
@@ -394,7 +417,8 @@ async function ranking(orden) {
                 orden: cual,
                 filas: filas.map((f, i) => ({
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
-                    computadoras: f.computadoras, segundosComputadora: f.segundos,
+                    computadoras: f.computadoras, segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
+                    enLinea: !!vivo.porEmail[f._id],
                     generacionesProvistas: mapaGen[f._id] || 0, ultimoVisto: f.ultimo
                 }))
             };
@@ -446,7 +470,7 @@ async function resumen() {
 }
 
 module.exports = {
-    conectar, estadoDb, cerrarSesionesViejas,
+    conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
     anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion,
     estadisticasDe, ranking, resumen,
     modelos: { Usuario, Asset, Computadora, Sesion, Generacion }

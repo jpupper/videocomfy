@@ -101,7 +101,8 @@
             return '<tr class="' + yo.trim() + '">' +
                 '<td class="rank-puesto">' + medalla(f.puesto) + '</td>' +
                 '<td class="rank-user">' + avatar(f) + '<span><b>@' + esc(f.usuario || f.email) + '</b>' +
-                (esMio(f.email) ? ' <span class="rank-chip">vos</span>' : '') + '</span></td>' +
+                (esMio(f.email) ? ' <span class="rank-chip">vos</span>' : '') +
+                (f.enLinea ? ' <span class="rank-chip verde">en línea</span>' : '') + '</span></td>' +
                 celda(f) + '</tr>';
         }).join('');
         cont.innerHTML = '<table class="rank-tabla"><thead><tr>' + cabecera + '</tr></thead><tbody>' + filas + '</tbody></table>';
