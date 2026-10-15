@@ -596,3 +596,8 @@ body.red-arrastrando * { cursor: col-resize !important; }
 #tabPrompts > #crearAcciones { margin-bottom: 12px; }
 .crear-acciones { display: flex; gap: 8px; align-items: center; }
 .crear-acciones .new-project-btn-nav, .crear-acciones .save-project-btn-nav { position: static; }
+
+/* --- PAUSAR vive en STAGE --- */
+#tabOutput .btn-pausar-stage { align-self: flex-start; margin-bottom: 14px; }
+#tabOutput > .btn-pausar-stage { order: -1; }
+.project-tabs-nav { background: transparent; border: none; padding: 0; }

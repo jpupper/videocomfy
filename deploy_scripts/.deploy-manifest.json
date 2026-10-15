@@ -6,11 +6,11 @@
   "/comfylatam/css/energia.css": "21200adc19b02529a3dbf50b27b9bd583a7c5428",
   "/comfylatam/css/estado.css": "f041a985344939454fa8ffdc704fc87465606ff5",
   "/comfylatam/css/mobile.css": "22dec14ec9d4127468b06870a4d4c7f08391007e",
-  "/comfylatam/css/red.css": "75beb8b5a9eb5f0b0c2a869cc1f94da48d6f3b47",
+  "/comfylatam/css/red.css": "b0b9d398b81360d1cd1b36c7800ad7095668dea2",
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "0c58d0608c58b73a42cdece26713dc893f884254",
-  "/comfylatam/index.html": "47fa5a9be584c44c31c2877ac877764ba63e0916",
+  "/comfylatam/index.html": "ac6ca7465e2ad85a85bf30003d48ee6219b547a5",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "0bf348cd1fee3976288f3cd11d88da03d4f10b1b",
   "/comfylatam/js/cola-pausa.js": "07ce91efdda543c112eb01d5b868589f83c19953",
@@ -30,7 +30,7 @@
   "/comfylatam/js/arquitectura.js": "c1d5f14bd9e84bc2ffe84fcb605d433e488eb879",
   "/comfylatam/js/cola-comfy.js": "e17110171703d970421ec59371c6b856e58c3d32",
   "/comfylatam/arquitectura.html": "27a021c7a28a6b08c928b5391e911876e8e20c3c",
-  "/comfylatam/js/registro.js": "7731036e91f0ed54cde9f3e9054124beae30dc8a",
+  "/comfylatam/js/registro.js": "6a9bd5f2ec559d75392f9b94c14940f90e8ba2d7",
   "/comfylatam/js/version.js": "6c9d3a36d563625fc79c72fc4813d08be3e87f50",
   "/comfylatam/js/ranking.js": "f17ed4260d0d8b66e23ca311fc3264403273f33e",
   "/comfylatam/js/workflows-red.js": "103ba9fb60863b99b823a3965aef2295b9a067a9",
@@ -39,5 +39,6 @@
   "/comfylatam/examples/surreal-world-ahestetic.mp4": "5521bac4f29f44bb404863f0adb4685d29b93b42",
   "/comfylatam/css/panel-izquierdo.css": "22d544d9981bd6a80975e36201700c9e496e8e09",
   "/comfylatam/js/panel-izquierdo.js": "0a5a7c1324564e65abc9ebac2674963b7df8f8b7",
-  "/comfylatam/js/ui-ajustes.js": "b3a8ca6cb0ea6813b47f901a025ecb1ef951c0cb"
+  "/comfylatam/js/ui-ajustes.js": "b3a8ca6cb0ea6813b47f901a025ecb1ef951c0cb",
+  "/comfylatam/js/ui2.js": "6bd722627cc48449bfce3b03686ca7399a692651"
 }

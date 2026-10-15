@@ -60,23 +60,36 @@
     }
 
     // ---------- 2) botones a su lugar ----------
+    // Los botones (PAUSAR, usuario, RED, versión) los crean otros módulos y los
+    // cuelgan de #projectTabsNav. Acá se reubican: PAUSAR a STAGE, y el usuario,
+    // RED y la versión al menú de arriba. La fila queda sólo para las sesiones.
     function moverBotones() {
-        var fila = document.querySelector('.tabs-container');
-        var barra = document.getElementById('projectTabsNav');
-        // RED, usuario y versión -> menú de arriba (junto a las pestañas)
-        ['redBtn', 'jpiRedBtn', 'perfilBtn', 'jpiPerfilBtn', 'ckVersionChip'].forEach(function (id) {
-            var b = document.getElementById(id);
-            if (b && fila && b.parentElement !== fila) fila.appendChild(b);
+        var arriba = document.querySelector('.tabs-container');
+        var fila = document.getElementById('projectTabsNav');
+        var stage = document.getElementById('tabOutput');
+        if (!arriba) return;
+
+        var botones = [];
+        if (fila) botones = botones.concat(Array.prototype.slice.call(fila.querySelectorAll('button')));
+        // también puede haber quedado alguno suelto en la barra de arriba
+        document.querySelectorAll('#projectTabsNav button, .project-tabs-nav button').forEach(function (b) {
+            if (botones.indexOf(b) < 0) botones.push(b);
         });
-        // los botones de RED/perfil que no tengan id conocido: por su texto
-        if (barra) {
-            Array.prototype.slice.call(barra.querySelectorAll('button')).forEach(function (b) {
-                var t = texto(b).toLowerCase();
-                if (t.indexOf('red') >= 0 || t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0) {
-                    if (fila) fila.appendChild(b);
-                }
-            });
-        }
+
+        botones.forEach(function (b) {
+            var t = texto(b).toLowerCase();
+            var id = b.id || '';
+            if (id === 'newProjectBtn' || id === 'saveProjectBtn') return;   // ya van a CREATE
+            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0) {
+                if (stage && b.parentElement !== stage) stage.appendChild(b);
+                b.classList.add('btn-pausar-stage');
+                return;
+            }
+            if (id === 'ckVersionChip' || t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0 || t.indexOf('red') >= 0) {
+                if (b.parentElement !== arriba) arriba.appendChild(b);
+            }
+        });
+
         // NEW SESSION (+) y SAVE (💾) -> dentro de CREATE
         var crear = document.getElementById('tabPrompts');
         var nuevo = document.getElementById('newProjectBtn');
@@ -88,6 +101,16 @@
             caja.appendChild(nuevo);
             caja.appendChild(guardar);
             crear.insertBefore(caja, crear.firstChild);
+        }
+
+        // si la fila quedó sin nada (ni sesiones), se esconde
+        if (fila) {
+            var lista = document.getElementById('projectTabsList');
+            var tieneSesiones = !!(lista && lista.children.length);
+            var sueltos = Array.prototype.slice.call(fila.children).filter(function (c) {
+                return c !== lista && !c.classList.contains('project-tabs-list');
+            });
+            fila.style.display = (tieneSesiones || sueltos.length) ? '' : 'none';
         }
     }
 
