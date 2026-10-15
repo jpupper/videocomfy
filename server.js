@@ -227,9 +227,10 @@ app.get('/api/registro', (req, res) => {
                     pedidoDesde: pp.tipo === 'web' ? 'la web'
                         : (pp.tipo === 'app-local' ? 'otra app local' : 'esta app (local)'),
                     origen: m.origen || (m.red ? 'red' : 'local'),
-                    // Las generaciones viejas se anotaron con el usuario global de
-                    // la app (bug): si no tienen 'tipo', la atribución no es segura.
-                    certero: !!pp.tipo,
+                    // Desde este momento el pedido viaja CON cada trabajo. Todo lo
+                    // anterior se anotó con el usuario global de la app (bug), así
+                    // que su atribución no es confiable y se marca con ≈.
+                    certero: Number(m.timestamp || 0) >= ATRIBUCION_DESDE,
                     modelo: m.modelo || ''
                 };
             });
@@ -240,6 +241,10 @@ app.get('/api/registro', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ success: true, total: todo.length, registros: todo.slice(0, Number(req.query.limite) || 60) });
 });
+
+// Momento en que el "quién lo pidió" pasó a viajar con cada trabajo. Antes de
+// esta fecha el registro usaba el usuario logueado de turno (poco confiable).
+const ATRIBUCION_DESDE = 1792071280753;   // 2026-10-15 10:34
 
 // ---------------------------------------------------------------------------
 // ÍNDICE DE WORKFLOWS: todo lo que hay en la carpeta workflows/ se lista acá
