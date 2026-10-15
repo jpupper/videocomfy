@@ -279,6 +279,12 @@ function arrancar(opciones) {
         });
 
         socket.on('red:evento', (d = {}) => {
+            // Si el evento lo generó este mismo nodo, no re-inyectarlo
+            if (d && d.peerId && d.peerId === identidad.peerId) return;
+
+            // Si data ya viene corrupto / anidado por rebote previo, descartarlo
+            if (d && typeof d.data === 'string' && (d.data.includes('"red_evento"') || d.data.startsWith('<recortado'))) return;
+
             // Los eventos traen la imagen/video del resultado en base64 (megas):
             // la app local los rechaza (413) y el panel se queda sin novedades.
             // Recortamos cualquier string grande de forma RECURSIVA (una imagen
@@ -389,9 +395,14 @@ function arrancar(opciones) {
 
         ws.on('message', (raw) => {
             const texto = raw.toString();
+            let m = null;
+            try { m = JSON.parse(texto); } catch (e) { }
+
+            // NUNCA reenviar mensajes internos de la red al hub (evita loops de rebote)
+            if (m && typeof m.type === 'string' && m.type.startsWith('red_')) return;
+
             if (socket && socket.connected) socket.emit('tunnel:ws:broadcast', { data: texto });
             try {
-                const m = JSON.parse(texto);
                 if (m && m.type === 'comfy_status' && m.status) {
                     const nuevo = m.status === 'connected' ? 'connected' : 'disconnected';
                     if (nuevo !== estComfy) { estComfy = nuevo; enviarEstado(); }

@@ -517,6 +517,63 @@ async function anunciarMapaCompleto() {
 setTimeout(() => anunciarMapaCompleto().catch(() => { }), 8000);
 
 // Estado de memoria del proceso (para ver si algo se está inflando)
+
+// ===========================================================================
+// VIGILANTE DE MEMORIA
+// ---------------------------------------------------------------------------
+// La app se venía muriendo por heap lleno (4 GB). Acá:
+//   · cada 5 min registra el consumo + cuántas cosas tiene guardadas (diagnóstico)
+//   · todos los detalles de generación viejos se borran (se acumulaban sin tope)
+//   · si el heap pasa el 88%, la app se reinicia SOLA y limpia (mejor un corte
+//     de 2 segundos que un cuelgue con el heap muerto)
+// ===========================================================================
+const LIMITE_HEAP_MB = () => Math.round(require('v8').getHeapStatistics().heap_size_limit / 1048576);
+let ultimoDiagnostico = 0;
+
+function diagnosticoMemoria(etiqueta) {
+    const m = process.memoryUsage();
+    const mb = (x) => Math.round(x / 1048576);
+    const uso = Math.round((m.heapUsed / require('v8').getHeapStatistics().heap_size_limit) * 100);
+    console.log(`🧠 [memoria${etiqueta ? ' ' + etiqueta : ''}] heap ${mb(m.heapUsed)}MB de ${LIMITE_HEAP_MB()}MB (${uso}%) · rss ${mb(m.rss)}MB ` +
+        `· generaciones en memoria ${Object.keys(promptDetails || {}).length} · historial ${(completedJobs || []).length} ` +
+        `· media anunciada ${(colaMapa ? colaMapa.size : 0)} · nodo ${(typeof socket !== 'undefined' && socket) ? 'conectado' : 'sin socket'}`);
+    return uso;
+}
+
+// limpia lo que crece sin control
+function limpiarMemoria() {
+    try {
+        const ids = Object.keys(promptDetails || {});
+        if (ids.length > 300) {
+            // los más viejos primero (se ordena por la hora de arranque del trabajo)
+            ids.sort((a, b) => ((promptDetails[a] || {}).generationStartTime || 0) - ((promptDetails[b] || {}).generationStartTime || 0));
+            ids.slice(0, ids.length - 200).forEach((k) => { delete promptDetails[k]; });
+        }
+        if (Array.isArray(completedJobs) && completedJobs.length > 300) {
+            completedJobs.splice(0, completedJobs.length - 200);
+        }
+    } catch (e) { }
+}
+
+function reiniciarPorMemoria(uso) {
+    console.log(`🔁 [memoria] el heap está al ${uso}%: reinicio la app para limpiar (se reconecta sola al hub en unos segundos).`);
+    try {
+        const hijo = require('child_process').spawn(process.execPath,
+            ['--max-old-space-size=4096', path.join(__dirname, 'server.js')],
+            { cwd: __dirname, detached: true, stdio: 'ignore' });
+        hijo.unref();
+    } catch (e) { }
+    setTimeout(() => process.exit(0), 800);
+}
+
+setInterval(() => {
+    limpiarMemoria();
+    const uso = diagnosticoMemoria('');
+    if (uso >= 88) reiniciarPorMemoria(uso);
+}, 5 * 60 * 1000);
+
+setTimeout(() => { diagnosticoMemoria('arranque'); limpiarMemoria(); }, 45000);
+
 app.get('/api/salud-memoria', (req, res) => {
     const m = process.memoryUsage();
     res.json({
@@ -526,7 +583,11 @@ app.get('/api/salud-memoria', (req, res) => {
         heapTotalMB: Math.round(m.heapTotal / 1048576),
         limiteMB: Math.round((require('v8').getHeapStatistics().heap_size_limit) / 1048576),
         uptimeMin: Math.round(process.uptime() / 60),
-        clientesFront: (typeof wss !== 'undefined' && wss.clients) ? wss.clients.size : null
+        clientesFront: (typeof wss !== 'undefined' && wss.clients) ? wss.clients.size : null,
+        generacionesEnMemoria: Object.keys(promptDetails || {}).length,
+        historial: (completedJobs || []).length,
+        mediaEnCola: (colaMapa ? colaMapa.size : 0),
+        usoPorciento: Math.round((m.heapUsed / require('v8').getHeapStatistics().heap_size_limit) * 100)
     });
 });
 
@@ -1057,6 +1118,18 @@ const upload = multer({ dest: uploadDir });
 const promptDetails = {};  // Almacena detalles del prompt
 let lastPromptDetails = null; // Fallback por si acaso el ID falla
 
+function enviarAlFront(obj) {
+    const msg = typeof obj === 'string' ? obj : JSON.stringify(obj);
+    if (typeof wss !== 'undefined' && wss.clients) {
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                if (client.bufferedAmount > 65536) return;
+                client.send(msg);
+            }
+        });
+    }
+}
+
 // ============================================
 // COMFYUI WEBSOCKET CON RECONEXIÓN
 // ============================================
@@ -1082,7 +1155,7 @@ function connectToComfy() {
                 return;
             }
             const messageString = data.toString();
-            if (messageString.length > 200000) {
+            if (messageString.length > 40000) {   // los previews rondan 50-150 KB
                 // mensaje gigante (preview / frame en base64): no lo tocamos
                 return;
             }
@@ -2316,6 +2389,14 @@ app.post('/api/red/nodos', (req, res) => {
 // --- lo que pasa en la red (lo empuja el agente) --------------------------
 app.post('/api/red/evento', (req, res) => {
     const d = req.body || {};
+    // Si viene de este mismo nodo o no tiene datos válidos, descartar
+    if (!d || !d.data || (d.peerId && d.peerId === RED.peerId)) {
+        return res.json({ success: true });
+    }
+    // Si los datos ya vienen con recursión de red_evento, no reenviar
+    if (typeof d.data === 'string' && d.data.includes('"red_evento"')) {
+        return res.json({ success: true });
+    }
     wss.clients.forEach((c) => {
         if (c.readyState === WebSocket.OPEN) {
             c.send(JSON.stringify({ type: 'red_evento', evento: d }));

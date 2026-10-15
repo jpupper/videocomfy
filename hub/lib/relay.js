@@ -439,9 +439,10 @@ function enviarA(peerId, evento, payload) {
 function enviarAlAgente(evento, payload) { return enviarA(null, evento, payload); }
 
 // A TODOS los nodos conectados (lo usa el hub para bajar eventos de la red).
-function enviarATodos(evento, payload) {
+function enviarATodos(evento, payload, excluirPeerId) {
     let n = 0;
     for (const p of state.peers.values()) {
+        if (excluirPeerId && p.id === excluirPeerId) continue;
         if (p.socket && p.socket.connected) {
             try { p.socket.emit(evento, payload); n++; } catch (e) { }
         }

@@ -900,24 +900,30 @@ relay.alRecibirBroadcast((peerId, data) => {
             c.send(relay.reescribirTexto(String(data), base));
         }
     }
-    // Y a los navegadores por socket.io, etiquetado (lo usa la pestaña RED).
-    const evento = {
-        peerId: peerId || null,
-        principal: !!esPrincipal,
-        nombre: (nodo && nodo.nombre) || '',
-        data: String(data)
-    };
-    // Log del cierre: quién terminó qué (para ver la sincronización entre apps)
+
+    // Solo emitir red:evento cuando una generación termina (storyboard o video).
+    // Antes se emitía en CUALQUIER broadcast (progreso, frames, status) y a TODOS
+    // los nodos (incluido el emisor), provocando que los nodos se re-enviaran el evento
+    // a sí mismos en un bucle infinito que anidaba JSONs con miles de barras invertidas (\).
     try {
         const m = JSON.parse(String(data));
-        if (m && (m.type === 'storyboard_generated' || m.type === 'video_generated')) {
+        if (!m || (typeof m.type === 'string' && m.type.startsWith('red_'))) return;
+
+        if (m.type === 'storyboard_generated' || m.type === 'video_generated') {
             const quien = (m.pedidoPor && (m.pedidoPor.displayName || m.pedidoPor.usuario)) || '?';
             console.log(`📢 ${(nodo && nodo.nombre) || 'nodo'} terminó ${m.filename} — pedido por @${quien} (${m.origen || 'local'}) -> avisado a ${clientesWs.size} navegador(es) y ${relay.listarPeers().length} app(s)`);
+
+            const evento = {
+                peerId: peerId || null,
+                principal: !!esPrincipal,
+                nombre: (nodo && nodo.nombre) || '',
+                data: String(data)
+            };
+            try { io.emit('red:evento', evento); } catch (e) { }
+            // Y a los demás nodos (excluyendo al que lo generó para evitar echo/loop)
+            relay.enviarATodos('red:evento', evento, peerId);
         }
     } catch (e) { }
-    try { io.emit('red:evento', evento); } catch (e) { }
-    // Y a los nodos (para que su pestaña RED vea lo que pasa en la red).
-    relay.enviarATodos('red:evento', evento);
 });
 
 servidorHttp.on('upgrade', (req, socket, head) => {
