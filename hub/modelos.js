@@ -150,14 +150,35 @@ async function guardarLimiteMB(mb) {
     return v;
 }
 
+// ¿Qué rol tiene esta cuenta en el ecosistema? Se mira en fullscreen_global.users
+// (la base compartida de jpconnect/fscauth), que es donde está el rol de verdad.
+let dbGlobal = null;
+async function rolEnElEcosistema(clave) {
+    const k = String(clave || '').trim().toLowerCase();
+    if (!k) return null;
+    try {
+        if (!dbGlobal) dbGlobal = mongoose.connection.useDb('fullscreen_global');
+        const u = await dbGlobal.collection('users').findOne(
+            { $or: [{ email: k }, { username: k }] },
+            { projection: { role: 1, username: 1, email: 1, avatar: 1, displayName: 1, bio: 1 } }
+        );
+        return u || null;
+    } catch (e) { return null; }
+}
+
+async function esAdminDelEcosistema(clave) {
+    const u = await rolEnElEcosistema(clave);
+    const rol = String((u && u.role) || '').toUpperCase();
+    return rol === 'ADMIN' || rol === 'SYSTEM';
+}
+
 // ¿Puede esta cuenta seguir subiendo a la nube? (ADMIN = sin tope)
 async function puedeSubir(emailOUsuario) {
     if (!conectado) return { permitido: true, limiteMB: null, usadoMB: 0, admin: false, motivo: 'sin base' };
     const limite = await leerLimiteMB();
     const clave = String(emailOUsuario || '').trim().toLowerCase();
     if (!clave) return { permitido: true, limiteMB: limite, usadoMB: 0, admin: false, motivo: 'sin cuenta' };
-    const u = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
-    const admin = !!(u && u.role === 'ADMIN') || /jpupper|carloskernel/i.test(clave);
+    const admin = await esAdminDelEcosistema(clave);
     const bytes = await Asset.aggregate([{ $match: { email: clave } }, { $group: { _id: null, t: { $sum: '$bytes' } } }]);
     const usadoMB = ((bytes[0] && bytes[0].t) || 0) / 1048576;
     return { permitido: admin || usadoMB < limite, limiteMB: limite, usadoMB: Math.round(usadoMB * 10) / 10, admin, motivo: admin ? 'admin' : (usadoMB < limite ? 'ok' : 'cupo lleno') };
@@ -410,7 +431,14 @@ async function estadisticasDe(emailOUsuario) {
     const clave = String(emailOUsuario || '').trim().toLowerCase();
     if (!clave) return null;
     try {
-        const usuario = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
+        let usuario = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
+        if (!usuario) {
+            const ec = await rolEnElEcosistema(clave);
+            if (ec) usuario = { email: ec.email, username: ec.username, displayName: ec.displayName || ec.username, avatar: ec.avatar || '', descripcion: ec.bio || '' };
+        } else {
+            const ec = await rolEnElEcosistema(usuario.email || usuario.username);
+            if (ec) { usuario.avatar = usuario.avatar || ec.avatar || ''; usuario.descripcion = ec.bio || ''; usuario.role = ec.role || ''; }
+        }
         let yo = usuario ? usuario.email : clave;
         if (!usuario) {
             // puede venir por usuario (app local sin login): busco el email real
@@ -592,6 +620,7 @@ module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
     anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe,
     leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
+    rolEnElEcosistema, esAdminDelEcosistema,
     estadisticasDe, ranking, resumen,
     modelos: { Usuario, Asset, Computadora, Sesion, Generacion }
 };

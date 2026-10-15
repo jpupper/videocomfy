@@ -6,11 +6,11 @@
   "/comfylatam/css/energia.css": "21200adc19b02529a3dbf50b27b9bd583a7c5428",
   "/comfylatam/css/estado.css": "f041a985344939454fa8ffdc704fc87465606ff5",
   "/comfylatam/css/mobile.css": "22dec14ec9d4127468b06870a4d4c7f08391007e",
-  "/comfylatam/css/red.css": "3dd7eddc32bd88b4b7223aeb02a08d2b793da05e",
+  "/comfylatam/css/red.css": "f436180365364e47e49aceb554ebfe72404b8331",
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "d678167fb973f3749c42c16a1da540904877ee05",
-  "/comfylatam/index.html": "9c166db8fa8dca3ece00f4bfc30845e29e2cbe70",
+  "/comfylatam/index.html": "02a56be0d71918d4447209c2bcf68dbf26311147",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "89a8648c679c68d9f132dc3bbc5288d3f0855e6b",
   "/comfylatam/js/cola-pausa.js": "cb79adda2b931b99dafd43644f7591736c582117",
@@ -19,7 +19,7 @@
   "/comfylatam/js/mobile.js": "6c46df5ad40aa9dac4aa790a03e4a84b6cc8306b",
   "/comfylatam/js/motor-imagen.js": "000eba7db0d70cd4c043643bb52f750eca7be781",
   "/comfylatam/js/red.js": "da239e7fbb34c4e479bcbba6998e912186508fa2",
-  "/comfylatam/js/script.js": "9290891ac66085d178fd5194da46b018a2228b02",
+  "/comfylatam/js/script.js": "539f1f233733eaa1308d4e31bf9b11775e639837",
   "/comfylatam/js/scroll-guard.js": "c9e04f6b949050947090dd701980aef678111e2c",
   "/comfylatam/js/sidebar-collapse.js": "7523ce0b2d2f1c4e0f3c7c10a97cfa569f9c3479",
   "/comfylatam/uploads/.gitkeep": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -41,6 +41,7 @@
   "/comfylatam/js/panel-izquierdo.js": "0a5a7c1324564e65abc9ebac2674963b7df8f8b7",
   "/comfylatam/js/ui-ajustes.js": "b3a8ca6cb0ea6813b47f901a025ecb1ef951c0cb",
   "/comfylatam/js/ui2.js": "4c63c3ef3ddd0328a730f4eb4fc56959310f4255",
-  "/comfylatam/js/perfil-ck.js": "d067f4a03ceda32e49c6a3321167fe41d539208c",
-  "/comfylatam/js/red.js.bak-antes-de-quitar-gen": "417e9a587c86161effa7ecd339a1869dbfabf885"
+  "/comfylatam/js/perfil-ck.js": "3bb9a41039e3d9307fccefb821b07864eb36095c",
+  "/comfylatam/js/red.js.bak-antes-de-quitar-gen": "417e9a587c86161effa7ecd339a1869dbfabf885",
+  "/comfylatam/js/admin-panel.js": "4bf3f38031c25bd8c3b723bb7c339662c9f7b860"
 }

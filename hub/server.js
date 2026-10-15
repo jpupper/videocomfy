@@ -648,16 +648,18 @@ app.get(rutasRed('/api/limite'), async (req, res) => {
 });
 
 // El panel de administración (sólo ADMIN) puede cambiar el cupo.
-function esAdmin(req) {
+async function esAdmin(req) {
     const r = String((req.usuario && req.usuario.role) || '').toUpperCase();
-    return r === 'ADMIN' || r === 'SYSTEM' || /jpupper/i.test(String((req.usuario && req.usuario.username) || ''));
+    if (r === 'ADMIN' || r === 'SYSTEM') return true;
+    const clave = (req.usuario && (req.usuario.email || req.usuario.username)) || '';
+    return db.esAdminDelEcosistema(clave);
 }
 app.get(rutasRed('/api/admin/limite'), async (req, res) => {
-    if (!esAdmin(req)) return res.status(403).json({ success: false, message: 'sólo administradores' });
+    if (!(await esAdmin(req))) return res.status(403).json({ success: false, message: 'sólo administradores' });
     res.json({ success: true, limiteMB: await db.leerLimiteMB(), defectoMB: db.LIMITE_DEFECTO_MB });
 });
 app.post(rutasRed('/api/admin/limite'), express.json(), async (req, res) => {
-    if (!esAdmin(req)) return res.status(403).json({ success: false, message: 'sólo administradores' });
+    if (!(await esAdmin(req))) return res.status(403).json({ success: false, message: 'sólo administradores' });
     const v = await db.guardarLimiteMB((req.body || {}).limiteMB);
     console.log('⚙️  cupo de la nube por cuenta = ' + v + ' MB');
     res.json({ success: true, limiteMB: v });
