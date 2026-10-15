@@ -126,6 +126,88 @@ app.get('/api/status', (req, res) => {
 // ============================================================
 // CONFIG DE COMFYUI (lo usa la pestaña SETTINGS del editor)
 // ============================================================
+// ============================================================================
+// COLA REAL DE COMFYUI
+// ----------------------------------------------------------------------------
+// La lista de la app (globalGenerationQueue en el front) es "lo que pedí".
+// ComfyUI tiene SU propia cola, que puede tener trabajo que la app ya no
+// recuerda (prompts de corridas anteriores, batches que quedaron a medias).
+// Por eso el "terminó todo" se calcula mirando LAS DOS: mientras ComfyUI tenga
+// algo en cola o ejecutando, no terminó nada.
+// ============================================================================
+const comfyCola = { pendientes: 0, ejecutando: 0, actualizado: 0 };
+
+function broadcastComfyCola() {
+    const msg = JSON.stringify({
+        type: 'comfy_cola',
+        pendientes: comfyCola.pendientes,
+        ejecutando: comfyCola.ejecutando,
+        total: comfyCola.pendientes + comfyCola.ejecutando,
+        actualizado: comfyCola.actualizado
+    });
+    try {
+        wss.clients.forEach((c) => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
+    } catch (e) { }
+}
+
+// Preguntarle a ComfyUI qué tiene en la cola (fuente de verdad).
+async function leerColaComfy() {
+    try {
+        const r = await fetch(comfyBase() + '/queue', { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) return null;
+        const d = await r.json();
+        const corriendo = Array.isArray(d.queue_running) ? d.queue_running.length : 0;
+        const esperando = Array.isArray(d.queue_pending) ? d.queue_pending.length : 0;
+        const cambio = comfyCola.pendientes !== esperando || comfyCola.ejecutando !== corriendo;
+        comfyCola.pendientes = esperando;
+        comfyCola.ejecutando = corriendo;
+        comfyCola.actualizado = Date.now();
+        if (cambio) broadcastComfyCola();
+        return { corriendo, esperando, total: corriendo + esperando };
+    } catch (e) {
+        return null;
+    }
+}
+
+app.get('/api/comfy/cola', async (req, res) => {
+    const real = await leerColaComfy();
+    res.json({
+        success: true,
+        pendientes: comfyCola.pendientes,
+        ejecutando: comfyCola.ejecutando,
+        total: comfyCola.pendientes + comfyCola.ejecutando,
+        comfy: real,
+        actualizado: comfyCola.actualizado
+    });
+});
+
+// Vaciar la cola de ComfyUI (para las sobras de corridas viejas) o cortar lo
+// que está ejecutando ahora.
+app.post('/api/comfy/cola/limpiar', async (req, res) => {
+    const que = String((req.body && req.body.que) || 'pendientes');
+    try {
+        if (que === 'todo' || que === 'ejecutando') {
+            await fetch(comfyBase() + '/interrupt', { method: 'POST', signal: AbortSignal.timeout(6000) });
+        }
+        if (que === 'todo' || que === 'pendientes') {
+            await fetch(comfyBase() + '/queue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clear: true }),
+                signal: AbortSignal.timeout(8000)
+            });
+        }
+        await leerColaComfy();
+        console.log(`🧹 Cola de ComfyUI limpiada (${que}) — quedan ${comfyCola.pendientes}`);
+        res.json({ success: true, pendientes: comfyCola.pendientes, ejecutando: comfyCola.ejecutando });
+    } catch (e) {
+        res.status(502).json({ success: false, message: e.message });
+    }
+});
+
+// refresco periódico (aunque ComfyUI no mande nada por ws)
+setInterval(() => { leerColaComfy().catch(() => { }); }, 5000);
+
 app.get('/api/config/comfy', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -224,8 +306,21 @@ function connectToComfy() {
                 });
             }
 
+            // ---- COLA REAL DE COMFYUI -------------------------------------
+            // ComfyUI manda el estado de su cola acá. El front necesita esto
+            // para NO decir "terminó todo" mientras ComfyUI sigue trabajando
+            // (pasaba con batches: la lista de la app quedaba vacía y ComfyUI
+            // seguía con prompts encolados de antes).
+            if (message.type === 'status' && message.data && message.data.status && message.data.status.exec_info) {
+                comfyCola.pendientes = Number(message.data.status.exec_info.queue_remaining || 0);
+                comfyCola.actualizado = Date.now();
+                broadcastComfyCola();
+            }
+
             // Enviar mensajes de ejecución de nodos (Mini-Consola)
             if (message.type === 'executing') {
+                comfyCola.ejecutando = message.data.node === null ? 0 : 1;
+                broadcastComfyCola();
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(JSON.stringify({

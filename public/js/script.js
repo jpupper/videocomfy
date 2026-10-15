@@ -143,6 +143,12 @@ function handleWsMessage(event) {
 
         appendConsoleLine(`[${message.type.toUpperCase()}] ${JSON.stringify(message)}`, 'debug');
 
+        // Cualquier señal del motor cuenta como "está vivo" (lo usa js/cola-comfy.js
+        // para distinguir un trabajo colgado de uno que avanza).
+        if (message.type === 'progress' || message.type === 'executing') {
+            window.JPI_COMFY_ACTIVIDAD = Date.now();
+        }
+
         if (message.type === 'progress') {
             const percentage = Math.round((message.value / message.max) * 100);
             if (progressFill) {
@@ -402,6 +408,17 @@ function handleWsMessage(event) {
             // Avisamos a js/estado.js para que el badge del encabezado se
             // actualice al instante, sin esperar el sondeo cada 8s.
             document.dispatchEvent(new CustomEvent('jpi-comfy-status', { detail: { conectado: conectado } }));
+        }
+
+        // COLA REAL DE COMFYUI (el server la lee de ComfyUI cada 5 s)
+        if (message.type === 'comfy_cola') {
+            window.JPI_COMFY_COLA = {
+                pendientes: Number(message.pendientes || 0),
+                ejecutando: Number(message.ejecutando || 0),
+                total: Number(message.total || 0)
+            };
+            if (typeof window.jpiPintarColaComfy === 'function') { try { window.jpiPintarColaComfy(); } catch (e) { } }
+            updateGlobalQueueUI();
         }
 
         // QUEUE STATE SYNC (from server, after reconnection)
@@ -1288,9 +1305,19 @@ function updateGlobalQueueUI() {
         return a.id - b.id;
     });
     const completedItems = globalGenerationQueue.filter(i => i.status === 'completed');
-    
-    if (activeItems.length > 0 || isGeneratingGlobal) {
+
+    // ComfyUI puede tener trabajo que esta lista ya no recuerda (batches que
+    // quedaron a medias, prompts de corridas anteriores). Mientras SU cola no
+    // este vacia, no se puede decir "terminó todo".
+    const colaComfy = (window.JPI_COMFY_COLA && window.JPI_COMFY_COLA.total) || 0;
+
+    if (activeItems.length > 0 || isGeneratingGlobal || colaComfy > 0) {
         queueContainer.classList.remove('hidden');
+        if (activeItems.length === 0 && !isGeneratingGlobal && colaComfy > 0 && progressText) {
+            progressText.textContent = `⏳ ComfyUI todavía tiene ${colaComfy} en cola (quedaron de una corrida anterior)`;
+            if (progressFill) progressFill.style.width = '100%';
+            if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '—';
+        }
     } else {
         queueContainer.classList.add('hidden');
         if (progressText) {

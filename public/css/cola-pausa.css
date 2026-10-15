@@ -59,3 +59,35 @@ body.jpi-cola-pausada #queueList .queue-item:not(.generating) {
     .jpi-pausa { font-size: 10px; padding: 5px 9px; margin-left: 6px; }
     .jpi-pausa-chip { font-size: 0.72em; }
 }
+
+/* ============================================================
+   🎛️ COLA DE COMFYUI (tarjeta separada de la cola de la app)
+   ============================================================ */
+.cola-comfy-card {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    background: var(--bg-input);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+.cola-comfy-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.cola-comfy-titulo { font-weight: 800; font-size: .82em; letter-spacing: .5px; }
+.cola-comfy-sub { color: var(--text-muted); font-size: .72em; }
+.cola-comfy-btn {
+    margin-left: auto;
+    border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+    border-radius: 8px; padding: 5px 10px; font-size: .72em; font-weight: 700; cursor: pointer;
+}
+.cola-comfy-btn:hover { color: var(--foreground); border-color: var(--accent); }
+.cola-comfy-btn:disabled { opacity: .5; cursor: progress; }
+.cola-comfy-cuerpo { display: flex; gap: 22px; flex-wrap: wrap; }
+.cola-comfy-dato { display: flex; flex-direction: column; }
+.cola-comfy-dato span { color: var(--text-muted); font-size: .7em; }
+.cola-comfy-dato b { font-size: 1.05em; font-weight: 800; }
+.cola-comfy-aviso { font-size: .74em; margin-top: 9px; line-height: 1.4; }
+.cola-comfy-aviso.ojo { color: #f59e0b; }
+.cola-comfy-aviso.ok { color: var(--accent); }

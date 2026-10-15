@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COMFYLATAM — Arquitectura</title>
+<link rel="stylesheet" href="css/arquitectura.css?v=1">
+</head>
+<body>
+<header class="arq-header">
+    <a class="arq-volver" href="./">← Volver al editor</a>
+    <h1>📐 <span>COMFY</span>LATAM <em>· Arquitectura</em></h1>
+    <div class="arq-entorno" id="arqEntorno">detectando entorno…</div>
+</header>
+
+<main class="arq-main">
+    <p class="arq-intro">
+        COMFYLATAM no genera nada en el servidor: <b>cada PC aporta su propio ComfyUI</b>. Esta página muestra
+        cómo está armado el sistema — el front, el VPS, la app local y las conexiones por sockets — y por dónde
+        viaja un trabajo cuando pedís una imagen o un video.
+    </p>
+
+    <!-- ===================== DIAGRAMA ===================== -->
+    <section class="arq-bloque">
+        <h2>🗺️ Diagrama general</h2>
+        <div class="arq-lienzo">
+            <svg viewBox="0 0 1180 700" class="arq-svg" role="img" aria-label="Diagrama de arquitectura de COMFYLATAM">
+                <defs>
+                    <marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+                    </marker>
+                    <marker id="flechaVerde" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"></path>
+                    </marker>
+                </defs>
+
+                <!-- ---------- ZONA 1: los navegadores ---------- -->
+                <rect class="arq-zona" x="20" y="40" width="250" height="290" rx="16"></rect>
+                <text class="arq-zona-titulo" x="40" y="68">👤 DONDE MIRÁS VOS</text>
+
+                <g class="arq-caja">
+                    <rect x="45" y="90" width="200" height="98" rx="12"></rect>
+                    <text class="arq-t" x="60" y="118">🌐 Navegador — WEB</text>
+                    <text class="arq-s" x="60" y="138">fullscreencode.com/comfylatam</text>
+                    <text class="arq-s" x="60" y="156">pide login (fscauth)</text>
+                    <text class="arq-s" x="60" y="174">genera en el Comfy de OTRO</text>
+                </g>
+
+                <g class="arq-caja">
+                    <rect x="45" y="205" width="200" height="98" rx="12"></rect>
+                    <text class="arq-t" x="60" y="233">💻 Navegador — LOCAL</text>
+                    <text class="arq-s" x="60" y="253">127.0.0.1:5634</text>
+                    <text class="arq-s" x="60" y="271">sin login (opcional)</text>
+                    <text class="arq-s" x="60" y="289">genera en TU Comfy</text>
+                </g>
+
+                <!-- ---------- ZONA 2: FTP ---------- -->
+                <rect class="arq-zona" x="330" y="40" width="230" height="150" rx="16"></rect>
+                <text class="arq-zona-titulo" x="350" y="68">📦 HOSTING FTP (Ferozo)</text>
+                <g class="arq-caja">
+                    <rect x="352" y="86" width="188" height="86" rx="12"></rect>
+                    <text class="arq-t" x="366" y="112">Apache + .htaccess</text>
+                    <text class="arq-s" x="366" y="132">sirve el FRONT estático</text>
+                    <text class="arq-s" x="366" y="150">(html · css · js)</text>
+                </g>
+
+                <!-- ---------- ZONA 3: VPS ---------- -->
+                <rect class="arq-zona arq-zona-vps" x="330" y="215" width="470" height="330" rx="16"></rect>
+                <text class="arq-zona-titulo" x="350" y="243">🖥️ VPS 149.50.139.152 · SSH 5752</text>
+
+                <g class="arq-caja arq-caja-vps">
+                    <rect x="352" y="260" width="200" height="70" rx="12"></rect>
+                    <text class="arq-t" x="366" y="286">nginx (443/80)</text>
+                    <text class="arq-s" x="366" y="306">enruta /comfylatam/ y /fscauth/</text>
+                </g>
+
+                <g class="arq-caja arq-caja-hub">
+                    <rect x="352" y="348" width="426" height="118" rx="12"></rect>
+                    <text class="arq-t" x="368" y="376">🔀 HUB COMFYLATAM — PM2 «comfylatam» :8086</text>
+                    <text class="arq-s" x="368" y="398">· API  /api/red/*  (nodos, generar, compartir)</text>
+                    <text class="arq-s" x="368" y="416">· socket.io  /comfylatam/socket.io  → namespace /agent</text>
+                    <text class="arq-s" x="368" y="434">· WebSocket del editor  /comfylatam/ws</text>
+                    <text class="arq-s" x="368" y="452">· media de cada nodo  /comfylatam/p/&lt;peerId&gt;/…</text>
+                </g>
+
+                <g class="arq-caja">
+                    <rect x="600" y="260" width="178" height="70" rx="12"></rect>
+                    <text class="arq-t" x="614" y="286">🔐 fscauth :3027</text>
+                    <text class="arq-s" x="614" y="306">login unificado (JWT)</text>
+                </g>
+
+                <!-- ---------- ZONA 4: tu PC ---------- -->
+                <rect class="arq-zona" x="850" y="40" width="310" height="505" rx="16"></rect>
+                <text class="arq-zona-titulo" x="870" y="68">🏠 TU PC (o la de cualquiera)</text>
+
+                <g class="arq-caja">
+                    <rect x="872" y="86" width="266" height="112" rx="12"></rect>
+                    <text class="arq-t" x="886" y="112">⚡ App COMFYLATAM :5634</text>
+                    <text class="arq-s" x="886" y="132">editor + nodo embebido (nodo.js)</text>
+                    <text class="arq-s" x="886" y="150">lee /api/red/estado y publica</text>
+                    <text class="arq-s" x="886" y="168">tu nombre, avatar y modelos</text>
+                    <text class="arq-s" x="886" y="186">switch: ¿comparto mi Comfy?</text>
+                </g>
+
+                <g class="arq-caja">
+                    <rect x="872" y="216" width="266" height="104" rx="12"></rect>
+                    <text class="arq-t" x="886" y="242">🎛️ ComfyUI :8188</text>
+                    <text class="arq-s" x="886" y="262">el motor real (GPU)</text>
+                    <text class="arq-s" x="886" y="280">/prompt · /queue · /upload/image</text>
+                    <text class="arq-s" x="886" y="298">guarda en output/ y lee de input/</text>
+                </g>
+
+                <g class="arq-caja">
+                    <rect x="872" y="338" width="266" height="88" rx="12"></rect>
+                    <text class="arq-t" x="886" y="364">🖼️ Media de esta PC</text>
+                    <text class="arq-s" x="886" y="384">uploads/ · videos/ · audio/</text>
+                    <text class="arq-s" x="886" y="402">se sirven a través del hub</text>
+                </g>
+
+                <g class="arq-caja">
+                    <rect x="872" y="444" width="266" height="80" rx="12"></rect>
+                    <text class="arq-t" x="886" y="470">☁️ Cloudflare R2</text>
+                    <text class="arq-s" x="886" y="490">avatares (URL pública)</text>
+                    <text class="arq-s" x="886" y="508">la media NO se sube acá</text>
+                </g>
+
+                <!-- ---------- FLECHAS ---------- -->
+                <g class="arq-flow">
+                    <!-- web -> ftp front -->
+                    <path class="arq-linea" d="M 245 130 L 330 130" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="252" y="122">HTTPS</text>
+
+                    <!-- ftp front -> navegador: descarga -->
+                    <path class="arq-linea arq-punteada" d="M 330 158 L 245 158" marker-end="url(#flecha)"></path>
+
+                    <!-- navegador -> hub (api + sockets) -->
+                    <path class="arq-linea arq-verde" d="M 245 250 C 285 250 290 380 352 396" marker-end="url(#flechaVerde)"></path>
+                    <text class="arq-etq arq-etq-verde" x="252" y="352">API + socket.io /agent</text>
+
+                    <!-- front(web) -> hub: llamadas /api del hub -->
+                    <path class="arq-linea" d="M 445 172 L 445 348" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="452" y="300">/api/* del hub</text>
+
+                    <!-- hub -> fscauth -->
+                    <path class="arq-linea" d="M 600 330 L 600 395" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="607" y="360">valida JWT</text>
+
+                    <!-- hub <-> app local: tunel -->
+                    <path class="arq-linea arq-verde arq-animada" d="M 778 386 L 872 142" marker-end="url(#flechaVerde)"></path>
+                    <text class="arq-etq arq-etq-verde" x="790" y="230">túnel HTTP + WS</text>
+                    <text class="arq-etq arq-etq-verde" x="790" y="248">(la PC sale a buscar)</text>
+
+                    <!-- app -> comfy -->
+                    <path class="arq-linea" d="M 1005 198 L 1005 216" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="1013" y="212">HTTP + WS</text>
+
+                    <!-- comfy -> media -->
+                    <path class="arq-linea" d="M 1005 320 L 1005 338" marker-end="url(#flecha)"></path>
+
+                    <!-- media -> hub (para que la vea la web) -->
+                    <path class="arq-linea" d="M 872 380 C 830 380 830 420 778 424" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="800" y="408">/p/&lt;nodo&gt;/…</text>
+
+                    <!-- hub -> r2 -->
+                    <path class="arq-linea arq-punteada" d="M 778 440 C 820 460 840 480 872 486" marker-end="url(#flecha)"></path>
+                    <text class="arq-etq" x="790" y="478">fotos</text>
+                </g>
+            </svg>
+        </div>
+        <div class="arq-leyenda">
+            <span><i class="l-verde"></i> socket.io / tiempo real</span>
+            <span><i class="l-gris"></i> HTTP / descarga</span>
+            <span><i class="l-punteada"></i> informativo</span>
+        </div>
+        <p class="arq-nota">
+            Todo lo verde son <b>conexiones por socket.io</b> (tiempo real). La PC <b>nunca</b> abre puertos hacia
+            afuera: es la app local la que sale a buscar trabajo al hub.
+        </p>
+    </section>
+
+    <!-- ===================== PASO A PASO ===================== -->
+    <section class="arq-bloque">
+        <h2>⚙️ Qué pasa cuando pedís una imagen en la web</h2>
+        <ol class="arq-pasos">
+            <li><b>El front</b> (FTP) se carga en tu navegador con el login de fscauth.</li>
+            <li>El navegador pide la lista de nodos al hub: <code>GET /comfylatam/api/red/peers</code>.</li>
+            <li>Elegís un nodo y mandás el trabajo: <code>POST /api/red/generar</code>.</li>
+            <li>El hub se lo pasa por <b>socket.io</b> (<code>namespace /agent</code>) al nodo: <code>red:job</code>.</li>
+            <li>El nodo lo encola en su propia app (<code>:5634</code>), que arma el workflow y se lo manda a <b>ComfyUI</b> (<code>:8188/prompt</code>).</li>
+            <li>ComfyUI ejecuta en la GPU y avisa por su WebSocket (<code>progress</code>, <code>executing</code>, <code>executed</code>).</li>
+            <li>La app baja el resultado, lo guarda en <code>uploads/</code> y lo <b>re-sube a <code>input/</code></b> (para el I2V siguiente).</li>
+            <li>El hub sirve esa imagen al navegador en <code>/comfylatam/p/&lt;nodo&gt;/uploads/…</code>.</li>
+        </ol>
+    </section>
+
+    <!-- ===================== PUERTOS ===================== -->
+    <section class="arq-bloque">
+        <h2>🔌 Puertos y servicios reales</h2>
+        <table class="arq-tabla">
+            <thead><tr><th>Dónde</th><th>Qué</th><th>Puerto</th><th>Para qué</th></tr></thead>
+            <tbody>
+                <tr><td>Tu PC</td><td>App COMFYLATAM (editor + nodo)</td><td><code>5634</code></td><td>la app entera, local</td></tr>
+                <tr><td>Tu PC</td><td>ComfyUI</td><td><code>8188</code></td><td>el motor de generación</td></tr>
+                <tr><td>VPS</td><td>Hub COMFYLATAM (PM2 <code>comfylatam</code>)</td><td><code>8086</code></td><td>relay, API de la red, media</td></tr>
+                <tr><td>VPS</td><td>fscauth (login del ecosistema)</td><td><code>3027</code></td><td>sesiones y perfiles (JWT)</td></tr>
+                <tr><td>VPS</td><td>zona comfylatam</td><td><code>8085</code></td><td>ComfyWeb (otra app del ecosistema)</td></tr>
+                <tr><td>VPS</td><td>jpnet</td><td><code>8954</code></td><td>mapa de sistemas y puertos</td></tr>
+                <tr><td>VPS</td><td>nginx</td><td><code>80/443</code></td><td>enruta los dominios a cada app</td></tr>
+                <tr><td>VPS</td><td>SSH</td><td><code>5752</code></td><td>administración</td></tr>
+            </tbody>
+        </table>
+        <p class="arq-nota">Los puertos del VPS salen del PM2 real; el mapa completo lo publica
+            <code>jpnet</code> en <code>/jpnet/api/sistemas</code>.</p>
+    </section>
+
+    <!-- ===================== SOCKETS ===================== -->
+    <section class="arq-bloque">
+        <h2>🔗 Las conexiones por sockets</h2>
+        <div class="arq-tarjetas">
+            <article>
+                <h3>⚡ socket.io <code>/agent</code></h3>
+                <p>Es el canal entre cada PC y el hub (<code>/comfylatam/socket.io</code>). Por acá el nodo
+                    <b>se anuncia</b> (<code>agent:hello</code>), manda su estado (<code>tunnel:estado</code>) y
+                    recibe trabajo (<code>red:job</code>), eventos de la red (<code>red:evento</code>) y la lista de
+                    nodos (<code>red:peers</code>).</p>
+            </article>
+            <article>
+                <h3>🖥️ WebSocket del editor</h3>
+                <p>El navegador se conecta a <code>/comfylatam/ws</code>. El hub lo puentea al nodo elegido, así que
+                    ves el progreso, la consola y los resultados <b>aunque la generación esté pasando en otra PC</b>.</p>
+            </article>
+            <article>
+                <h3>📡 ComfyUI WebSocket</h3>
+                <p>La app mantiene un socket contra <code>:8188/ws</code>: <code>progress</code>, <code>executing</code>,
+                    <code>executed</code> y <code>status</code> (este último trae la <b>cola real</b>, con la que la app
+                    distingue su lista de lo que el motor tiene pendiente).</p>
+            </article>
+            <article>
+                <h3>🎛️ Cola de ComfyUI vs cola de la app</h3>
+                <p>Son dos cosas distintas: la <b>cola de la app</b> es lo que pediste vos; la <b>cola de ComfyUI</b>
+                    es lo que el motor tiene de verdad (<code>GET /queue</code>). Puede tener trabajo viejo que la app
+                    ya no recuerda: por eso se muestran separadas.</p>
+            </article>
+        </div>
+    </section>
+
+    <footer class="arq-pie">
+        COMFYLATAM · Arquitectura · <span id="arqPieDato">—</span>
+    </footer>
+</main>
+
+<script src="js/arquitectura.js?v=1"></script>
+</body>
+</html>

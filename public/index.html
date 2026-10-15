@@ -110,6 +110,8 @@
                 </div>
                 <button id="newProjectBtn" class="new-project-btn-nav" title="New Session">+</button>
                 <button id="saveProjectBtn" class="save-project-btn-nav" title="Save Project">💾</button>
+                <a id="arqLink" class="cuenta-tab-btn" href="arquitectura.html" target="_blank" rel="noopener"
+                   title="Cómo está armado el sistema: front, VPS, app local, puertos y sockets">📐 ARQUITECTURA</a>
             </div>
 
             <div class="workspace-content">
@@ -153,10 +155,34 @@
                         </div>
                     </div>
                     
+                    <!-- COLA DE COMFYUI: lo que el motor tiene de verdad (puede
+                         incluir trabajo de corridas anteriores que la app ya no
+                         recuerda). Va SEPARADA de la cola de la app. -->
+                    <div id="queueColaComfy" class="cola-comfy-card hidden">
+                        <div class="cola-comfy-head">
+                            <span class="cola-comfy-titulo">🎛️ COLA DE COMFYUI</span>
+                            <span class="cola-comfy-sub">lo que el motor está procesando</span>
+                            <button id="colaComfyLimpiar" class="cola-comfy-btn" type="button">🧹 Vaciar cola</button>
+                        </div>
+                        <div class="cola-comfy-cuerpo">
+                            <div class="cola-comfy-dato">
+                                <span>⚙️ Ejecutando ahora</span><b id="colaComfyEjecutando">0</b>
+                            </div>
+                            <div class="cola-comfy-dato">
+                                <span>⏳ En espera</span><b id="colaComfyPendientes">0</b>
+                            </div>
+                            <div class="cola-comfy-dato">
+                                <span>Σ Total</span><b id="colaComfyTotal">0</b>
+                            </div>
+                        </div>
+                        <div id="colaComfyAviso" class="cola-comfy-aviso"></div>
+                    </div>
+
                     <div id="globalQueueContainer" class="inline-queue-card hidden">
                         <div class="inline-queue-header">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <span class="inline-queue-title">Generation Queue</span>
+                                <span class="inline-queue-title">📋 COLA DE LA APP</span>
+                                <span class="inline-queue-badge">lo que pediste</span>
                                 <span id="queueCount" class="inline-queue-badge">0</span>
                             </div>
                             <button id="stopQueueBtn" class="danger-btn-outline" style="padding: 6px 16px; font-size: 0.8em; font-weight: 700;">⏹ STOP ALL</button>
@@ -832,6 +858,7 @@
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
     <script src="js/cola-pausa.js?v=2"></script>
+    <script src="js/cola-comfy.js?v=2"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=6"></script>
     <script src="js/entorno-jpi.js?v=3"></script>
