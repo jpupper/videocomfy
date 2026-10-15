@@ -139,7 +139,10 @@ function handleWsOpen() {
 function handleWsMessage(event) {
     try {
         const message = JSON.parse(event.data);
-        console.log('Mensaje del servidor:', message.type, message);
+        // No se registran los mensajes que llegan todo el tiempo (estado de la red,
+// clientes, progreso): antes llenaban la consola con bloques enormes.
+      var TIPOS_MUDOS = ['red_estado', 'red_clientes', 'clientes', 'estado', 'progress', 'comfy_cola', 'latido', 'red_vuelo'];
+      if (TIPOS_MUDOS.indexOf(message.type) < 0) console.log('Mensaje del servidor:', message.type, message);
 
         appendConsoleLine(`[${message.type.toUpperCase()}] ${JSON.stringify(message)}`, 'debug');
 

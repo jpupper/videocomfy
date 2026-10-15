@@ -135,6 +135,7 @@
         var metricas = '<div class="rank-metricas">' +
             '<div class="rank-metrica"><b>' + (t.assets || 0) + '</b><span>assets creados</span></div>' +
             '<div class="rank-metrica"><b>' + mb(t.bytes) + '</b><span>en la nube</span></div>' +
+            '<div class="rank-metrica"><b>' + (t.assets || 0) + '</b><span>totales (nube + tu PC)</span></div>' +
             '<div class="rank-metrica"><b>' + (t.generacionesProvistas || 0) + '</b><span>generaciones provistas</span></div>' +
             '<div class="rank-metrica"><b>' + (t.generacionesPedidas || 0) + '</b><span>generaciones pedidas</span></div>' +
             '</div>';
@@ -151,10 +152,17 @@
 
         var assets = (datos && datos.assets || []).slice(0, 40).map(function (a) {
             var esVideo = a.tipo === 'video';
+            var enNube = (a.ubicacion || (a.url ? 'nube' : 'local')) === 'nube' && a.url;
+            if (!enNube) {
+                // vive en la PC de quien lo creó: se muestra igual, con su etiqueta
+                return '<span class="rank-asset rank-asset-local" title="' + esc(a.prompt || a.publicId) + '">' +
+                    (esVideo ? '<span class="rank-asset-icono">🎬</span>' : '<span class="rank-asset-icono">🖼️</span>') +
+                    '<span class="rank-asset-pie">📍 en tu PC · ' + esc(mb(a.bytes)) + '</span></span>';
+            }
             return '<a class="rank-asset" href="' + esc(a.url) + '" target="_blank" rel="noopener" title="' + esc(a.prompt || a.publicId) + '">' +
                 (esVideo ? '<video src="' + esc(a.url) + '" muted preload="metadata"></video><span class="rank-asset-tag">🎬</span>'
                     : '<img src="' + esc(a.url) + '" loading="lazy" alt="">') +
-                '<span class="rank-asset-pie">' + esc(mb(a.bytes)) + '</span></a>';
+                '<span class="rank-asset-pie">☁️ ' + esc(mb(a.bytes)) + '</span></a>';
         }).join('') || '<div class="rank-vacio">' + (token() ? 'todavía no creaste assets' : 'iniciá sesión para ver tus assets') + '</div>';
 
         p.innerHTML = cab + metricas +

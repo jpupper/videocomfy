@@ -297,11 +297,48 @@ async function registrarAsset(nombre, url, bytes) {
 }
 
 // Sube un archivo puntual (si ya está en R2 no hace nada).
+// ¿Esta media salió de un pedido de la web/red? Sólo eso va a la nube.
+// Lo generado en local se queda en el disco de esta computadora.
+function origenDeLaMedia(nombre) {
+    try {
+        const metas = [IMAGE_META_PATH, VIDEO_META_PATH];
+        for (const mp of metas) {
+            if (!fs.existsSync(mp)) continue;
+            const m = JSON.parse(fs.readFileSync(mp, 'utf8'))[nombre];
+            if (m && m.origen) return String(m.origen).toLowerCase();
+        }
+    } catch (e) { }
+    return 'local';
+}
+
+// ¿Queda cupo en la nube para esta cuenta? (se le pregunta al hub; ADMIN no tiene tope)
+async function hayCupoEnLaNube() {
+    try {
+        const yo = datosDeEstaPC();
+        const clave = yo.email || yo.dueno || '';
+        const destino = urlDelHub('/api/limite?usuario=' + encodeURIComponent(clave));
+        if (!destino) return { permitido: true };
+        const r = await fetch(destino, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) return { permitido: true };   // si el hub no contesta, no bloqueo
+        const d = await r.json();
+        if (!d.permitido) {
+            console.log(`⚠️  [nube] cupo lleno para ${clave}: usó ${d.usadoMB} de ${d.limiteMB} MB — la media nueva queda en esta PC`);
+        }
+        return d;
+    } catch (e) { return { permitido: true }; }
+}
+
 async function subirArchivoAR2(carpeta, nombre) {
     const ruta = path.join(__dirname, 'public', carpeta, nombre);   // la media vive en public/
     try {
         if (!fs.existsSync(ruta)) return false;
         if (mediaMap.urlDeArchivo(nombre)) return false;   // ya está en la nube
+        // REGLA: lo generado en local se queda en la PC. A la nube va sólo lo que
+        // se pidió desde la web o desde otra computadora de la red.
+        const origen = origenDeLaMedia(nombre);
+        if (origen !== 'web' && origen !== 'red') return false;
+        const cupo = await hayCupoEnLaNube();
+        if (!cupo.permitido) return false;
         const st = fs.statSync(ruta);
         if (!st.isFile() || st.size === 0) return false;
         const r = await r2lib.subirArchivo(ruta, {
@@ -466,7 +503,8 @@ function avisarMapaAlHub() {
         body: JSON.stringify({
             items,
             email: yo.email || '', username: yo.dueno || '', displayName: yo.duenoNombre || '',
-            avatar: yo.avatar || '', peerId: yo.peerId || '', computadora: yo.nombre || ''
+            avatar: yo.avatar || '', peerId: yo.peerId || '', computadora: yo.nombre || '',
+            ubicacion: 'nube'
         })
     }).then((r) => {
         if (!r.ok) console.log('⚠️  [R2] el hub no aceptó el mapa de media: HTTP ' + r.status);
@@ -493,7 +531,7 @@ async function anunciarMapaCompleto() {
                 const ext = String(path.extname(n)).toLowerCase();
                 const me = MIME_POR_EXT[ext] || '';
                 return {
-                    nombre: n, url: v.url, bytes: v.bytes || 0,
+                    nombre: n, url: v.url, ubicacion: 'nube', bytes: v.bytes || 0,
                     tipo: me.split('/')[0] === 'video' ? 'video' : me.split('/')[0] === 'audio' ? 'audio' : 'image',
                     mimetype: me
                 };

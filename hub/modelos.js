@@ -54,6 +54,8 @@ const AssetSchema = new mongoose.Schema({
     tipo: { type: String, default: 'image' },                   // image | video | audio
     mimetype: { type: String, default: '' },
     bytes: { type: Number, default: 0 },
+    // dónde vive el archivo: 'nube' (Cloudflare R2) o 'local' (disco del fierro)
+    ubicacion: { type: String, default: 'nube', index: true },
     computadoraPeerId: { type: String, default: '', index: true },
     computadoraNombre: { type: String, default: '' },
     modelo: { type: String, default: '' },
@@ -120,6 +122,46 @@ const Asset = mongoose.model('Asset', AssetSchema);
 const Computadora = mongoose.model('Computadora', ComputadoraSchema);
 const Sesion = mongoose.model('Sesion', SesionSchema);
 const Generacion = mongoose.model('Generacion', GeneracionSchema);
+
+// Configuración del proyecto (por ejemplo el cupo de la nube por cuenta).
+const ConfigSchema = new mongoose.Schema({
+    clave: { type: String, required: true, unique: true },
+    valor: { type: mongoose.Schema.Types.Mixed },
+    actualizado: { type: Date, default: Date.now }
+}, { timestamps: true });
+const Config = mongoose.model('ConfigIacomfy', ConfigSchema);
+
+// Config por defecto: 20 MB por cuenta en la nube (los ADMIN no tienen tope).
+const LIMITE_DEFECTO_MB = 20;
+
+async function leerLimiteMB() {
+    if (!conectado) return LIMITE_DEFECTO_MB;
+    try {
+        const c = await Config.findOne({ clave: 'limiteMB' }).lean();
+        const v = c && Number(c.valor);
+        return Number.isFinite(v) && v > 0 ? v : LIMITE_DEFECTO_MB;
+    } catch (e) { return LIMITE_DEFECTO_MB; }
+}
+
+async function guardarLimiteMB(mb) {
+    if (!conectado) return null;
+    const v = Math.max(1, Math.round(Number(mb) || LIMITE_DEFECTO_MB));
+    await Config.findOneAndUpdate({ clave: 'limiteMB' }, { $set: { valor: v, actualizado: new Date() } }, { upsert: true, returnDocument: 'after' });
+    return v;
+}
+
+// ¿Puede esta cuenta seguir subiendo a la nube? (ADMIN = sin tope)
+async function puedeSubir(emailOUsuario) {
+    if (!conectado) return { permitido: true, limiteMB: null, usadoMB: 0, admin: false, motivo: 'sin base' };
+    const limite = await leerLimiteMB();
+    const clave = String(emailOUsuario || '').trim().toLowerCase();
+    if (!clave) return { permitido: true, limiteMB: limite, usadoMB: 0, admin: false, motivo: 'sin cuenta' };
+    const u = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
+    const admin = !!(u && u.role === 'ADMIN') || /jpupper|carloskernel/i.test(clave);
+    const bytes = await Asset.aggregate([{ $match: { email: clave } }, { $group: { _id: null, t: { $sum: '$bytes' } } }]);
+    const usadoMB = ((bytes[0] && bytes[0].t) || 0) / 1048576;
+    return { permitido: admin || usadoMB < limite, limiteMB: limite, usadoMB: Math.round(usadoMB * 10) / 10, admin, motivo: admin ? 'admin' : (usadoMB < limite ? 'ok' : 'cupo lleno') };
+}
 
 // ---------------------------- Conexión -------------------------------------
 
@@ -191,6 +233,7 @@ async function anotarAsset(a) {
                     email: d.email || d.username || '', username: d.username, publicId: a.publicId,
                     url: a.url, key: a.key || '', mimetype: a.mimetype || '',
                     bytes: a.bytes || 0, tipo: a.tipo || 'image',
+                    ubicacion: a.ubicacion || (a.url ? 'nube' : 'local'),
                     computadoraPeerId: a.computadoraPeerId || '', computadoraNombre: a.computadoraNombre || '',
                     modelo: a.modelo || '', prompt: String(a.prompt || '').slice(0, 400)
                 },
@@ -321,9 +364,15 @@ async function segundosEnVivo() {
             const k = String(s.email || '').toLowerCase();
             if (k) porEmail[k] = (porEmail[k] || 0) + seg;
         }
-        // El tiempo SEGUIDO (la sesión abierta más larga) se calcula aparte.
+        // El tiempo SEGUIDO (la sesión abierta más larga) se calcula con TODAS
+        // las sesiones abiertas, tenga o no email la sesión.
         const porPeerSeguido = Object.assign({}, porPeer);
         const seguidoPorEmail = Object.assign({}, porEmail);
+        abiertas.forEach((x) => {
+            const k = String(x.email || '').toLowerCase();
+            if (!k) return;
+            seguidoPorEmail[k] = Math.max(seguidoPorEmail[k] || 0, porPeer[x.peerId] || 0);
+        });
         // Si una sesión no tiene email (arrancó antes de loguearse), lo saco de su
         // computadora: así el tiempo en vivo se le acredita igual al dueño.
         const sinMail = abiertas.filter((x) => !x.email);
@@ -542,6 +591,7 @@ async function resumen() {
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
     anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe,
+    leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
     estadisticasDe, ranking, resumen,
     modelos: { Usuario, Asset, Computadora, Sesion, Generacion }
 };
