@@ -203,7 +203,12 @@ async function latidoDeComputadora(peer) {
         const email = d.email || d.username;
         const set = {
             nombre: peer.nombre || '', email, username: d.username, avatar: d.avatar,
-            gpu: peer.gpu || '', modelos: peer.modelos || [], compartir: !!peer.compartir,
+            gpu: peer.gpu || '',
+            // los modelos pueden llegar como lista de objetos: se guardan como nombres
+            modelos: (Array.isArray(peer.modelos) ? peer.modelos : [])
+                .map((m) => (typeof m === 'string' ? m : (m && (m.nombre || m.etiqueta || m.id)) || ''))
+                .filter(Boolean).slice(0, 40),
+            compartir: !!peer.compartir,
             ultimoVisto: new Date()
         };
         if (peer.hostname) set.hostname = peer.hostname;
