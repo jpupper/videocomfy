@@ -483,7 +483,9 @@ async function ranking(orden) {
             orden: cual,
             filas: filas.map((f, i) => ({
                 puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
-                segundosComputadora: f.segundos, computadoras: f.computadoras, sesiones: f.sesiones,
+                segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
+                computadoras: f.computadoras, sesiones: f.sesiones,
+                enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
                 generacionesProvistas: mapaGen[f._id] || 0, generacionesPedidas: mapaPed[f._id] || 0,
                 ultimoVisto: f.ultimoVisto
             }))
