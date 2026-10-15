@@ -143,6 +143,8 @@ function broadcastComfyCola() {
         pendientes: comfyCola.pendientes,
         ejecutando: comfyCola.ejecutando,
         total: comfyCola.pendientes + comfyCola.ejecutando,
+        enEjecucion: comfyCola.enEjecucion || [],
+        enEspera: comfyCola.enEspera || [],
         actualizado: comfyCola.actualizado
     });
     try {
@@ -151,17 +153,42 @@ function broadcastComfyCola() {
 }
 
 // Preguntarle a ComfyUI qué tiene en la cola (fuente de verdad).
+// Qué sabe la app de un prompt_id que está en la cola del motor: si es suyo
+// (y de quién / con qué prompt) o si es un trabajo que quedó de antes.
+function quienEsEstePrompt(promptId) {
+    const d = promptDetails[promptId] || (lastPromptDetails && lastPromptDetails.promptId === promptId ? lastPromptDetails : null);
+    if (!d) return { conocido: false, detalle: 'no es de esta app (quedó de otra corrida o de otro programa)' };
+    return {
+        conocido: true,
+        prompt: String(d.prompt || '').slice(0, 90),
+        de: (d.pedidoPor && (d.pedidoPor.displayName || d.pedidoPor.usuario)) || d.red && d.red.de || 'vos',
+        origen: d.origen || (d.red ? 'red' : 'local'),
+        modelo: d.modelo || ''
+    };
+}
+
 async function leerColaComfy() {
     try {
         const r = await fetch(comfyBase() + '/queue', { signal: AbortSignal.timeout(6000) });
         if (!r.ok) return null;
         const d = await r.json();
-        const corriendo = Array.isArray(d.queue_running) ? d.queue_running.length : 0;
-        const esperando = Array.isArray(d.queue_pending) ? d.queue_pending.length : 0;
+        const running = Array.isArray(d.queue_running) ? d.queue_running : [];
+        const pending = Array.isArray(d.queue_pending) ? d.queue_pending : [];
+        const corriendo = running.length;
+        const esperando = pending.length;
         const cambio = comfyCola.pendientes !== esperando || comfyCola.ejecutando !== corriendo;
         comfyCola.pendientes = esperando;
         comfyCola.ejecutando = corriendo;
         comfyCola.actualizado = Date.now();
+        // El prompt_id viene en el índice 1 de cada item de /queue
+        comfyCola.enEjecucion = running.map((it) => {
+            const id = Array.isArray(it) ? it[1] : (it && it.prompt_id);
+            return Object.assign({ promptId: id }, quienEsEstePrompt(id));
+        });
+        comfyCola.enEspera = pending.slice(0, 10).map((it) => {
+            const id = Array.isArray(it) ? it[1] : (it && it.prompt_id);
+            return Object.assign({ promptId: id }, quienEsEstePrompt(id));
+        });
         if (cambio) broadcastComfyCola();
         return { corriendo, esperando, total: corriendo + esperando };
     } catch (e) {
@@ -187,7 +214,7 @@ app.get('/api/registro', (req, res) => {
                     prompt: String(m.prompt || '').slice(0, 160),
                     computadora: pc.nombre || RED.nombre,
                     peerId: pc.peerId || RED.peerId,
-                    host: pc.host || '',
+                    host: '',
                     dueno: pc.dueno || (RED.usuario && (RED.usuario.username || RED.usuario.displayName)) || 'local',
                     pedidoPor: pp.displayName || pp.usuario || 'desconocido',
                     pedidoPorUsuario: pp.usuario || '',
@@ -211,6 +238,8 @@ app.get('/api/comfy/cola', async (req, res) => {
         pendientes: comfyCola.pendientes,
         ejecutando: comfyCola.ejecutando,
         total: comfyCola.pendientes + comfyCola.ejecutando,
+        enEjecucion: comfyCola.enEjecucion || [],
+        enEspera: comfyCola.enEspera || [],
         comfy: real,
         actualizado: comfyCola.actualizado
     });
@@ -351,6 +380,12 @@ function connectToComfy() {
                 comfyCola.actualizado = Date.now();
                 broadcastComfyCola();
             }
+            if (message.type === 'executing' && message.data && message.data.prompt_id) {
+                // queda registrado qué prompt está ejecutando ahora mismo
+                comfyCola.enEjecucion = [Object.assign({ promptId: message.data.prompt_id },
+                    quienEsEstePrompt(message.data.prompt_id))];
+                broadcastComfyCola();
+            }
 
             // Enviar mensajes de ejecución de nodos (Mini-Consola)
             if (message.type === 'executing') {
@@ -486,6 +521,14 @@ function connectToComfy() {
                             metaToSave.computadora = metaToSave.computadora || datosDeEstaPC();
                             metaToSave.pedidoPor = metaToSave.pedidoPor || { usuario: 'desconocido', tipo: 'local' };
                             metaToSave.origen = metaToSave.origen || 'local';
+                            // Si el workflow produce varias salidas, se cuentan
+                            if (metaToSave.salidas && metaToSave.salidas > 1) {
+                                const d2 = promptDetails[promptId];
+                                if (d2) {
+                                    d2.salidasHechas = (d2.salidasHechas || 0) + 1;
+                                    console.log(`🎛️  Salida ${d2.salidasHechas}/${d2.salidas} de este trabajo`);
+                                }
+                            }
                             console.log(`🏷️  Registro: ${filenameOnly} | computadora ${metaToSave.computadora.nombre} (dueño ${metaToSave.computadora.dueno}) | pedido por ${metaToSave.pedidoPor.displayName || metaToSave.pedidoPor.usuario} (${metaToSave.pedidoPor.tipo}) | origen ${metaToSave.origen}`);
 
                             // Si era un pedido de la red, ya terminó: sale del detalle
@@ -1408,16 +1451,28 @@ app.get('/api/red/estado', (req, res) => {
     res.json(Object.assign({ success: true }, estadoRed()));
 });
 
-// --- prender / apagar compartir -------------------------------------------
+// --- prender / apagar compartir + cambiar el nombre ------------------------
 app.post('/api/red/compartir', async (req, res) => {
     const b = req.body || {};
+    const nombreAntes = RED.nombre;
     if (b.compartir !== undefined) RED.compartir = !!b.compartir;
     if (b.nombre) { RED.nombre = String(b.nombre).slice(0, 40); RED.nombreManual = true; }
     guardarConfigLocal();
     let hub = null;
     if (!b.desdeHub) hub = await avisarHubCompartir();
+    // Si cambió el nombre hay que REINDEXAR YA en la red (si no, en
+    // fullscreencode/comfylatam se sigue viendo el nombre viejo hasta que
+    // el nodo se reconecte solo, ~15 s después).
+    if (RED.nombre !== nombreAntes) {
+        console.log(`✏️  Nombre de la computadora: "${nombreAntes}" -> "${RED.nombre}" — reindexando en la red`);
+        try {
+            if (global.__comfylatamNodo && typeof global.__comfylatamNodo.reconectar === 'function') {
+                setTimeout(() => { try { global.__comfylatamNodo.reconectar(); } catch (e) { } }, 300);
+            }
+        } catch (e) { }
+    }
     avisarRedATodos();
-    console.log(`🌎 Red: compartir=${RED.compartir}${hub ? ' (hub: ' + (hub.ok ? 'ok' : hub.motivo) + ')' : ''}`);
+    console.log(`🌎 Red: compartir=${RED.compartir} | nombre=${RED.nombre}${hub ? ' (hub: ' + (hub.ok ? 'ok' : hub.motivo) + ')' : ''}`);
     res.json({ success: true, red: estadoRed(), hub });
 });
 
@@ -1468,7 +1523,7 @@ function datosDeEstaPC() {
     return {
         peerId: RED.peerId,
         nombre: RED.nombre,
-        host: os.hostname(),
+        // el hostname NO se publica: la red muestra el nombre de la computadora
         dueno: u.username || u.displayName || 'local',
         avatar: u.avatar || ''
     };
@@ -2153,6 +2208,22 @@ const MODELOS_IMAGEN = {
     }
 };
 
+// Cuántas salidas va a producir un workflow: mira los batch_size de los nodos
+// de latentes/ruido y cuántos nodos guardan imagen. Los workflows cambian, así
+// que en vez de hardcodear nodos se recorre el grafo.
+function cuantasSalidas(workflow) {
+    let lote = 1;
+    const guardan = [];
+    for (const [id, nodo] of Object.entries(workflow || {})) {
+        const cls = String((nodo && nodo.class_type) || '');
+        const ins = (nodo && nodo.inputs) || {};
+        if (ins.batch_size !== undefined) lote = Math.max(lote, Number(ins.batch_size) || 1);
+        if (/SaveImage|SaveAnimatedWEBP|SaveVideo|VHS_VideoCombine/i.test(cls)) guardan.push(id);
+    }
+    const salidas = Math.max(1, lote) * Math.max(1, guardan.length);
+    return { salidas, lote, guardan: guardan.length };
+}
+
 async function generarImagenModelo(modelo, promptText, params = {}) {
     const m = MODELOS_IMAGEN[modelo];
     if (!m) throw new Error(`Modelo de imagen desconocido: ${modelo}`);
@@ -2169,8 +2240,19 @@ async function generarImagenModelo(modelo, promptText, params = {}) {
     }
     ultimoTrabajo = 'imagen';
 
+    const salidas = cuantasSalidas(promptWorkflow);
+    if (salidas.salidas > 1) {
+        console.log(`🎛️  Este workflow genera ${salidas.salidas} salidas (batch ${salidas.lote} x ${salidas.guardan} nodo(s) de guardado)`);
+    }
     const promptId = await queuePrompt(promptWorkflow);
-    console.log(`🚀 ${m.etiqueta} enviado a ComfyUI. ID: ${promptId} (${info.width}x${info.height}, ${info.steps} steps)`);
+    console.log(`🚀 ${m.etiqueta} enviado a ComfyUI. ID: ${promptId} (${info.width}x${info.height}, ${info.steps} steps${salidas.salidas > 1 ? ', ' + salidas.salidas + ' salidas' : ''})`);
+    // Se anota en el trabajo para que la cola pueda decir "1 de N"
+    if (promptDetails[promptId]) {
+        promptDetails[promptId].salidas = salidas.salidas;
+        promptDetails[promptId].salidasHechas = 0;
+    } else {
+        lastPromptDetails = Object.assign({}, lastPromptDetails || {}, { salidas: salidas.salidas, salidasHechas: 0 });
+    }
     return promptId;
 }
 

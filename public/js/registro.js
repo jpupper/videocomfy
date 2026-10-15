@@ -98,7 +98,7 @@
                     (r.origen === 'red' ? 'pedido de la red' : 'tu batch local') + '</span></div>' +
                     '  <div class="reg-datos">' +
                     '    <span>💬 <b>' + esc(String(r.prompt || '').slice(0, 140)) + '</b></span>' +
-                    '    <span>🖥️ generada en <b>' + esc(r.computadora) + '</b>' + (r.host ? ' (' + esc(r.host) + ')' : '') + '</span>' +
+                    '    <span>🖥️ generada en <b>' + esc(r.computadora) + '</b></span>' +
                     '    <span>🔑 esa computadora está registrada a <b>@' + esc(r.dueno) + '</b></span>' +
                     '    <span>📄 ' + esc(r.archivo) + ' · ' + hora(r.fecha) + '</span>' +
                     '  </div>' +
@@ -125,17 +125,30 @@
     }
 
     function traer() {
-        var ruta;
         if (esLocal) {
-            ruta = 'api/registro';
-        } else {
-            var elegido = '';
-            try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
-            if (!elegido) return;   // en la web sin nodo elegido no hay de dónde leer
-            ruta = BASE + '/p/' + encodeURIComponent(elegido) + '/api/registro';
+            fetch('api/registro').then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
+                .catch(function () { });
+            return;
         }
-        fetch(ruta).then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
+        // En la web el registro vive en la PC que generó: se pide por el relay.
+        // Si no hay nodo elegido, se usa el principal (así el STAGE se ve igual
+        // que en local y no queda vacío).
+        var elegido = '';
+        try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
+        var pedir = function (id) {
+            fetch(BASE + '/p/' + encodeURIComponent(id) + '/api/registro')
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
+                .catch(function () { });
+        };
+        if (elegido) { pedir(elegido); return; }
+        fetch(BASE + '/api/red/peers').then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                var peers = (d && d.peers) || [];
+                var principal = peers.filter(function (p) { return p.principal; })[0] || peers[0];
+                if (principal) pedir(principal.id);
+            })
             .catch(function () { });
     }
 

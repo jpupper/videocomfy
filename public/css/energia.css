@@ -105,3 +105,32 @@ body.ck-generando #progressPct {
 body.ck-generando #progressText {
     color: #e2e8f0;
 }
+
+
+/* ============================================================
+   Barra de progreso MINIMALISTA
+   (se sacó la chispa/glow intermitente que aparecía en posiciones
+   raras y el barrido de luz: quedaba fuera de lugar)
+   ============================================================ */
+.ck-chispa { display: none !important; }
+
+/* el relleno: un degradé limpio, sin sombras ni luz */
+.progress-bar-fill {
+    box-shadow: none !important;
+}
+.progress-bar-fill::after { display: none !important; }
+
+/* sin pulso ni barrido */
+body.ck-generando .progress-bar-bg,
+body.ck-generando .progress-bar-fill::after,
+body.ck-generando .ck-chispa {
+    animation: none !important;
+}
+body.ck-generando .progress-bar-bg {
+    border-color: rgba(0, 255, 213, .35);
+    box-shadow: none;
+}
+body.ck-generando #progressPct {
+    color: var(--foreground);
+    text-shadow: none;
+}

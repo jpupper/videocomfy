@@ -319,7 +319,7 @@
             var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
             caja.innerHTML = '🎯 Vas a generar en: <b>' + esc(nombreDe(elegido)) + '</b>' +
                 (esMio ? ' <span class="red-badge comparto">tu Comfy</span>'
-                    : (p2 ? ' <span class="red-badge">' + esc(p2.host) + (p2.encolados ? ' · ' + p2.encolados + ' en cola' : ' · libre') + '</span>' : ''));
+                    : (p2 ? ' <span class="red-badge">' + (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') + '</span>' : ''));
         } else {
             caja.innerHTML = '🎯 No hay ningún nodo para generar. Prendé compartir en tu app (o esperá que alguien entre a la red).';
         }
@@ -331,7 +331,7 @@
             tarjetas.push(tarjeta({
                 id: yoId,
                 nombre: ESTADO.yo.nombre,
-                host: (ESTADO.yo.host || 'esta PC'),
+                host: 'esta PC',
                 gpu: '',
                 modelos: ESTADO.yo.modelos || [],
                 compartir: !!ESTADO.yo.compartir,
@@ -508,7 +508,7 @@
                 : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
             '  </div>',
-            '  <div class="linea">' + esc(p.host) + (p.gpu ? ' · ' + esc(p.gpu) : '') + '</div>',
+            '  <div class="linea">' + (p.gpu ? esc(p.gpu) : 'sin GPU') + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</div>',
             '  <div class="linea">' + esc(modelos) + '</div>',
             '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
             '  <div class="red-accion">' + boton + '</div>',

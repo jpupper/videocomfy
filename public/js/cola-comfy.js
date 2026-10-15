@@ -23,7 +23,8 @@
         return {
             pendientes: Number(c.pendientes || 0),
             ejecutando: Number(c.ejecutando || 0),
-            total: Number(c.total || 0)
+            total: Number(c.total || 0),
+            enEjecucion: c.enEjecucion || []
         };
     }
 
@@ -42,8 +43,22 @@
         var c = cola();
 
         document.getElementById('colaComfyEjecutando').textContent = c.ejecutando;
+        // guardamos el detalle para el aviso de "colgado"
+        c.enEjecucion = (window.JPI_COMFY_COLA && window.JPI_COMFY_COLA.enEjecucion) || [];
         document.getElementById('colaComfyPendientes').textContent = c.pendientes;
         document.getElementById('colaComfyTotal').textContent = c.total;
+
+        // Armar el detalle de lo que el motor tiene en ejecución (para poder decir
+        // CUÁL es el trabajo colgado, no sólo que hay uno).
+        var enEjec = c.enEjecucion || [];
+        var detalle = '';
+        if (enEjec.length) {
+            var j = enEj[0];
+            detalle = j.conocido
+                ? '🎯 es tu trabajo: “' + String(j.prompt || '').slice(0, 60) + '” · pedido por @' + (j.de || 'vos') +
+                  (j.origen === 'red' ? ' (de la red)' : ' (local)')
+                : '🤔 no es de esta app (' + String(j.promptId || '').slice(0, 8) + '…) — quedó de otra corrida o lo mandó otro programa';
+        }
 
         // ¿Hay algo "ejecutando" pero el motor no da señales de vida? Un trabajo
         // colgado en queue_running traba TODA la cola (los demás nunca arrancan).
@@ -67,8 +82,11 @@
             if (aviso) {
                 if (colgado) {
                     aviso.className = 'cola-comfy-aviso ojo';
-                    aviso.textContent = '⚠️ Hay un trabajo COLGADO en el motor (hace ' + Math.round(hace / 1000) +
-                        's que no da señales). Traba el resto de la cola: vaciala y, si sigue, reiniciá el motor con start_network.bat.';
+                    aviso.textContent = '⚠️ Trabajo COLGADO en el motor (hace ' + Math.round(hace / 1000) + 's que no da señales).\n' +
+                        detalle + '\nTraba el resto de la cola: vaciala y, si sigue, reiniciá el motor con start_network.bat.';
+                } else if (detalle && appPendientes() === 0) {
+                    aviso.className = 'cola-comfy-aviso ojo';
+                    aviso.textContent = 'El motor tiene trabajo que no está en tu lista.\n' + detalle;
                 } else if (appPendientes() === 0) {
                     // la app no tiene nada: esto es trabajo viejo del motor
                     aviso.className = 'cola-comfy-aviso ojo';

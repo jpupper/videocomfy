@@ -151,9 +151,11 @@
         var bg = document.querySelector('.progress-bar-bg');
         if (!bg) return;
 
+        // La chispa/glow de la barra se sacó a pedido (aparecía en posiciones
+        // raras). Se deja un elemento oculto por compatibilidad con el CSS.
         var chispa = document.createElement('div');
         chispa.className = 'ck-chispa';
-        bg.parentNode.insertBefore(chispa, bg.nextSibling);
+        chispa.style.display = 'none';
 
         function tick() {
             var generando = false;

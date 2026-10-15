@@ -417,7 +417,8 @@ function handleWsMessage(event) {
             window.JPI_COMFY_COLA = {
                 pendientes: Number(message.pendientes || 0),
                 ejecutando: Number(message.ejecutando || 0),
-                total: Number(message.total || 0)
+                total: Number(message.total || 0),
+                enEjecucion: message.enEjecucion || []
             };
             window.JPI_COMFY_ACTIVIDAD = Date.now();   // la cola se movió: el motor está vivo
             if (typeof window.jpiPintarColaComfy === 'function') { try { window.jpiPintarColaComfy(); } catch (e) { } }
@@ -1317,8 +1318,9 @@ function updateGlobalQueueUI() {
     if (activeItems.length > 0 || isGeneratingGlobal || colaComfy > 0) {
         queueContainer.classList.remove('hidden');
         if (activeItems.length === 0 && !isGeneratingGlobal && colaComfy > 0 && progressText) {
-            progressText.textContent = `⏳ ComfyUI todavía tiene ${colaComfy} en cola (quedaron de una corrida anterior)`;
-            if (progressFill) progressFill.style.width = '100%';
+            // OJO: acá NO se pone la barra al 100% (decía "listo" mientras el
+            // motor seguía trabajando). La barra refleja la cola de la app.
+            progressText.textContent = `⏳ El motor todavía tiene ${colaComfy} en cola (no es de esta lista)`;
             if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '—';
         }
     } else {
@@ -1371,21 +1373,27 @@ function updateGlobalQueueUI() {
         if (totalImg > 0) {
             const imgCounter = document.createElement('div');
             imgCounter.style.cssText = 'color: #818cf8;';
-            imgCounter.innerHTML = `🖼️ IMG remaining: <span style="color: #f59e0b;">${imgItems.length}/${totalImg}</span>`;
+            imgCounter.innerHTML = imgItems.length
+                ? `🖼️ IMG pendientes: <span style="color: #f59e0b;">${imgItems.length}/${totalImg}</span>`
+                : `🖼️ IMG: <span style="color: #34d399;">${totalImg} listas</span>`;
             countersDiv.appendChild(imgCounter);
         }
         
         if (totalWan > 0) {
             const wanCounter = document.createElement('div');
             wanCounter.style.cssText = 'color: #a855f7;';
-            wanCounter.innerHTML = `🎬 WAN2.2 remaining: <span style="color: #f59e0b;">${wanItems.length}/${totalWan}</span>`;
+            wanCounter.innerHTML = wanItems.length
+                ? `🎬 WAN2.2 pendientes: <span style="color: #f59e0b;">${wanItems.length}/${totalWan}</span>`
+                : `🎬 WAN2.2: <span style="color: #34d399;">${totalWan} listos</span>`;
             countersDiv.appendChild(wanCounter);
         }
         
         if (totalVideo > 0) {
             const videoCounter = document.createElement('div');
             videoCounter.style.cssText = 'color: #34d399;';
-            videoCounter.innerHTML = `🎬 Video remaining: <span style="color: #f59e0b;">${videoItems.length}/${totalVideo}</span>`;
+            videoCounter.innerHTML = videoItems.length
+                ? `🎬 Video pendientes: <span style="color: #f59e0b;">${videoItems.length}/${totalVideo}</span>`
+                : `🎬 Video: <span style="color: #34d399;">${totalVideo} listos</span>`;
             countersDiv.appendChild(videoCounter);
         }
     } else {

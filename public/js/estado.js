@@ -50,7 +50,7 @@
             btn.textContent = '🟢 Nodo listo · Comfy OK';
         }
         btn.title = (d.mensaje || '') +
-            (d.host ? ' — nodo: ' + d.host : '') +
+
             (d.reporteHaceSegundos != null ? ' (reporte hace ' + d.reporteHaceSegundos + 's)' : '');
     }
 
