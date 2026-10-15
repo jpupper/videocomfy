@@ -47,7 +47,15 @@
 
         // ¿Hay algo "ejecutando" pero el motor no da señales de vida? Un trabajo
         // colgado en queue_running traba TODA la cola (los demás nunca arrancan).
-        var hace = Date.now() - (window.JPI_COMFY_ACTIVIDAD || 0);
+        // OJO: si todavía no hubo ninguna señal, el reloj arranca ahora (si no,
+        // Date.now() - 0 daba un número absurdo y avisaba de un cuelgue falso).
+        if (!window.JPI_COMFY_ACTIVIDAD) window.JPI_COMFY_ACTIVIDAD = Date.now();
+        var hace = Date.now() - window.JPI_COMFY_ACTIVIDAD;
+        // Si la propia cola cambió, el motor está vivo.
+        if (ultimo.pendientes !== c.pendientes || ultimo.ejecutando !== c.ejecutando) {
+            window.JPI_COMFY_ACTIVIDAD = Date.now();
+            hace = 0;
+        }
         var colgado = c.ejecutando > 0 && hace > 60000;
 
         var aviso = document.getElementById('colaComfyAviso');

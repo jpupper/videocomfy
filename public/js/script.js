@@ -417,6 +417,7 @@ function handleWsMessage(event) {
                 ejecutando: Number(message.ejecutando || 0),
                 total: Number(message.total || 0)
             };
+            window.JPI_COMFY_ACTIVIDAD = Date.now();   // la cola se movió: el motor está vivo
             if (typeof window.jpiPintarColaComfy === 'function') { try { window.jpiPintarColaComfy(); } catch (e) { } }
             updateGlobalQueueUI();
         }
