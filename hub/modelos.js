@@ -149,9 +149,14 @@ function estadoDb() {
 // ---------------------------- Anotadores -----------------------------------
 
 function datosDe(input) {
-    const email = String((input && input.email) || '').trim().toLowerCase();
-    const username = String((input && input.username) || '').trim();
-    return { email, username, displayName: (input && input.displayName) || username, avatar: (input && input.avatar) || '' };
+    // Ojo con los nombres: la app manda {usuario, displayName, email} y otras
+    // partes usan {username}. Se aceptan los dos (antes el "quién lo pidió"
+    // quedaba vacío por esto).
+    const i = input || {};
+    const email = String(i.email || '').trim().toLowerCase();
+    const username = String(i.username || i.usuario || '').trim();
+    const displayName = String(i.displayName || i.nombre || username || '').trim();
+    return { email, username, displayName, avatar: i.avatar || '' };
 }
 
 // a) Usuario

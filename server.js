@@ -2091,6 +2091,7 @@ function datosDelPedido(fuente) {
             usuario: pp.usuario || pp.displayName,
             displayName: pp.displayName || pp.usuario,
             avatar: pp.avatar || '',
+            email: pp.email || '',
             tipo: pp.tipo || 'local',
             sesion: pp.sesion || null
         };
@@ -2101,6 +2102,7 @@ function datosDelPedido(fuente) {
             usuario: u.username || u.displayName,
             displayName: u.displayName || u.username,
             avatar: u.avatar || '',
+            email: u.email || (RED.propietario && RED.propietario.email) || '',
             tipo: 'local',
             sesion: null
         };
