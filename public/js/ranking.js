@@ -100,9 +100,12 @@
             var yo = esMio(f.email) ? ' rank-yo' : '';
             return '<tr class="' + yo.trim() + '">' +
                 '<td class="rank-puesto">' + medalla(f.puesto) + '</td>' +
-                '<td class="rank-user">' + avatar(f) + '<span><b>@' + esc(f.usuario || f.email) + '</b>' +
+                '<td class="rank-user">' + avatar(f) + '<span>' +
+                '<span class="rank-punto' + (f.enLinea ? ' on' : '') + '" title="' + (f.enLinea ? 'conectada ahora' : 'no está conectada') + '"></span>' +
+                '<b>@' + esc(f.usuario || f.email) + '</b>' +
                 (esMio(f.email) ? ' <span class="rank-chip">vos</span>' : '') +
-                (f.enLinea ? ' <span class="rank-chip verde">en línea</span>' : '') + '</span></td>' +
+                (f.enLinea ? ' <span class="rank-estado on">🟢 conectada</span>' : ' <span class="rank-estado off">⚪ desconectada</span>') +
+                '</span></td>' +
                 celda(f) + '</tr>';
         }).join('');
         cont.innerHTML = '<table class="rank-tabla"><thead><tr>' + cabecera + '</tr></thead><tbody>' + filas + '</tbody></table>';
@@ -162,9 +165,14 @@
         }
         var u = d.usuario || {}, t = d.totales || {};
         var fierros = (d.computadoras || []).map(function (c) {
+            var on = !!c.conectada;
             return '<div class="rank-fierro">' +
-                '<div class="rank-fierro-nombre">🖥️ <b>' + esc(c.nombre || c.peerId) + '</b>' +
-                (c.compartir ? ' <span class="rank-chip verde">comparte</span>' : '') + '</div>' +
+                '<div class="rank-fierro-nombre">' +
+                '<span class="rank-punto' + (on ? ' on' : '') + '"></span>' +
+                '<b>' + esc(c.nombre || c.peerId) + '</b> ' +
+                '<span class="rank-estado ' + (on ? 'on' : 'off') + '">' +
+                (on ? '🟢 conectada ahora' : '⚪ desconectada · última vez ' + fecha(c.ultimoVisto)) + '</span>' +
+                (c.compartir ? ' <span class="rank-chip verde">comparte</span>' : ' <span class="rank-chip">no comparte</span>') + '</div>' +
                 '<div class="rank-fierro-datos">' +
                 '<span>⏱️ <b>' + tiempo(c.segundosTotal) + '</b> prendida</span>' +
                 '<span>⚡ <b>' + (c.generaciones || 0) + '</b> generaciones</span>' +

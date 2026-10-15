@@ -321,6 +321,17 @@ async function segundosEnVivo() {
     } catch (e) { return { porEmail: {}, porPeer: {} }; }
 }
 
+// ¿Está conectada ahora? Sí si tiene una sesión abierta o si latió hace menos
+// de 2 minutos (el hub actualiza ultimoVisto cada 30 s).
+function enLineaDe(email, ultimoVisto, vivo) {
+    if (vivo && vivo.porEmail && vivo.porEmail[String(email || '').toLowerCase()]) return true;
+    if (ultimoVisto) {
+        const t = new Date(ultimoVisto).getTime();
+        if (!isNaN(t) && (Date.now() - t) < 2 * 60 * 1000) return true;
+    }
+    return false;
+}
+
 // (a, b) Todo lo de un usuario: sus assets, sus computadoras con uptime y las
 // generaciones (las que pidió y las que se hicieron en sus fierros).
 async function estadisticasDe(emailOUsuario) {
@@ -364,6 +375,7 @@ async function estadisticasDe(emailOUsuario) {
                 peerId: c.peerId, nombre: c.nombre, gpu: c.gpu, compartir: c.compartir,
                 segundosTotal: (c.segundosTotal || 0) + (vivo.porPeer[c.peerId] || 0),
                 enVivo: !!vivo.porPeer[c.peerId],
+                conectada: !!vivo.porPeer[c.peerId] || ((Date.now() - new Date(c.ultimoVisto || 0).getTime()) < 2 * 60 * 1000),
                 sesiones: c.sesiones || 0,
                 ultimoVisto: c.ultimoVisto, primerVisto: c.primerVisto,
                 generaciones: mapaFierro[c.peerId] || 0
@@ -405,9 +417,10 @@ async function ranking(orden) {
                 filas: filas.map((f, i) => ({
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                     generacionesProvistas: f.generaciones, generacionesPedidas: mapaPedidas[f._id] || 0,
+                    enLinea: enLineaDe(f._id, null, vivo),
                     computadoras: f.computadoras.filter(Boolean).length,
                     segundosComputadora: (mapaSeg[f._id] || 0) + (vivo.porEmail[f._id] || 0),
-                    enLinea: !!vivo.porEmail[f._id]
+                    enLinea: enLineaDe(f._id, f.ultimoVisto, vivo)
                 }))
             };
         }
@@ -430,7 +443,7 @@ async function ranking(orden) {
                 filas: filas.map((f, i) => ({
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                     computadoras: f.computadoras, segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
-                    enLinea: !!vivo.porEmail[f._id],
+                    enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
                     generacionesProvistas: mapaGen[f._id] || 0, ultimoVisto: f.ultimo
                 }))
             };
@@ -483,7 +496,7 @@ async function resumen() {
 
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
-    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion,
+    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe,
     estadisticasDe, ranking, resumen,
     modelos: { Usuario, Asset, Computadora, Sesion, Generacion }
 };

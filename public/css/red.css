@@ -537,3 +537,22 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .wf-arch-tag { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
     border-radius: 6px; padding: 1px 7px; font-size: .72em; text-transform: uppercase; letter-spacing: .4px; }
 .wf-arch-nota { color: var(--text-muted); font-size: .82em; margin-left: auto; }
+
+/* --- ranking: sub-pestañas y estado de conexión --- */
+#tabRanking .sub-tabs-container { display: flex; gap: 4px; background: rgba(15,23,42,.6); padding: 4px;
+    border-radius: 12px; margin-bottom: 18px; width: fit-content; max-width: 100%; flex-wrap: wrap;
+    border: 1px solid var(--border); overflow: hidden; }
+#tabRanking .sub-tab-btn { background: transparent; color: var(--text-muted); font-size: .62em;
+    font-weight: 800; padding: 10px 14px; border-radius: 9px; text-transform: uppercase;
+    letter-spacing: .5px; transition: all .3s ease; text-align: center; white-space: nowrap; cursor: pointer;
+    border: none; }
+#tabRanking .sub-tab-btn:hover { color: var(--foreground); background: rgba(255,255,255,.04); }
+#tabRanking .sub-tab-btn.active { background: var(--accent); color: #04121a;
+    box-shadow: 0 5px 15px rgba(0,255,213,.28); }
+.rank-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+    background: #64748b; vertical-align: middle; }
+.rank-punto.on { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.22); animation: rank-latido 2s infinite; }
+@keyframes rank-latido { 0%,100% { box-shadow: 0 0 0 3px rgba(34,197,94,.22); } 50% { box-shadow: 0 0 0 6px rgba(34,197,94,.08); } }
+.rank-estado { font-size: .76em; }
+.rank-estado.on { color: #22c55e; }
+.rank-estado.off { color: var(--text-muted); }
