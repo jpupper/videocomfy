@@ -525,3 +525,15 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .red-wf-ok { color: var(--accent); margin-left: auto; font-size: .9em; }
 .red-wf-falta { color: #f59e0b; margin-left: auto; font-size: .9em; }
 .red-wf-duda { color: var(--text-muted); margin-left: auto; font-size: .9em; }
+
+/* --- CREATE: qué workflow se usa --- */
+.wf-card-archivo { display: block; margin-top: 6px; font-size: .62em; font-family: monospace;
+    color: var(--accent); opacity: .85; word-break: break-all; }
+.wf-card { flex-direction: column; align-items: flex-start; }
+.wf-archivo-actual { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin: 10px 0 4px; padding: 9px 12px; border: 1px solid rgba(0,255,213,.25);
+    border-radius: 10px; background: rgba(0,255,213,.05); font-size: .78em; }
+.wf-archivo-actual b { color: var(--accent); font-family: monospace; }
+.wf-arch-tag { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 6px; padding: 1px 7px; font-size: .72em; text-transform: uppercase; letter-spacing: .4px; }
+.wf-arch-nota { color: var(--text-muted); font-size: .82em; margin-left: auto; }

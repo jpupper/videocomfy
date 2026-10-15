@@ -563,14 +563,12 @@ const MODELO_A_WORKFLOW = {
 const NOMBRE_WORKFLOW = {
     'z_image_turbo_api.json': 'Z-Image Turbo (imagen)',
     'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
-    'qwen_image_21_api2.json': 'Qwen-Image 2.1 v2 (imagen)',
     'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
     'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
     'video_ltx2_t2v_api.json': 'LTX-2 texto→video',
     'video_ltx2_i2v_api.json': 'LTX-2 imagen→video',
     'video_ltx25_i2v_api.json': 'LTX-2.5 imagen→video',
-    'video_wan2_2_14B_flf2v_api.json': 'WAN 2.2 (video)',
-    'video_wan2_2_14B_i2v_api.json': 'WAN 2.2 i2v (video)'
+    'video_wan2_2_14B_flf2v_api.json': 'WAN 2.2 (video)'
 };
 
 let OBJECT_INFO = null, OBJECT_INFO_TS = 0, WORKFLOWS_ESTADO = null, WORKFLOWS_TS = 0;
@@ -930,10 +928,10 @@ function indiceDeWorkflows() {
                     nodos,
                     valido: ok,
                     modificado: st.mtimeMs,
+                    // 'enUso' = la app realmente lo usa (tiene botones/sliders en CREATE)
                     enUso: Object.values(MODELOS_IMAGEN).some((m) => m.archivo === 'workflows/' + f)
-                        || ['video_ltx2_t2v_api.json', 'video_ltx2_i2v_api.json', 'flux_dev_fp8_api.json',
-                            'flux_dev_full_text_to_image_api.json', 'video_wan2_2_14B_flf2v_api.json']
-                           .some((x) => x === f)
+                        || Object.values(MODELO_A_WORKFLOW).includes(f)
+                        || f === 'flux_dev_full_text_to_image_api.json'
                 };
             })
             .sort((a, b) => (b.enUso - a.enUso) || a.archivo.localeCompare(b.archivo));
