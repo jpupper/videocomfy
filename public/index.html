@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
-    <link rel="stylesheet" href="css/red.css?v=14">
+    <link rel="stylesheet" href="css/red.css?v=15">
+    <link rel="stylesheet" href="css/panel-izquierdo.css?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -24,14 +25,126 @@
     <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
         <aside class="sidebar-left">
-            <button type="button" class="sidebar-collapse-btn" id="collapseLeftBtn" title="Comprimir / expandir panel" aria-label="Alternar Studio Generator"><span class="collapse-arrow">«</span></button>
-            <div class="sidebar-collapsed-label">Studio Generator</div>
+            <button type="button" class="sidebar-collapse-btn" id="collapseLeftBtn" title="Comprimir / expandir panel" aria-label="Alternar Panel de Control"><span class="collapse-arrow">«</span></button>
+            <div class="sidebar-collapsed-label">Panel de Control</div>
             <h1>
                 COMFY<span class="ck-logo-jp">LATAM</span>
                 <span id="comfyStatusDot" class="status-dot disconnected" title="ComfyUI Status"></span>
             </h1>
-            
-            <h2>⚡ Generative Flow</h2>
+
+            <!-- CONTENIDO REORGANIZADO DEL PANEL IZQUIERDO -->
+            <div class="sidebar-left-scroll">
+                <!-- 1) INFORMACIÓN DE ENTORNO: LOCAL Y WEB -->
+                <div class="pi-card" id="piCardEntorno">
+                    <div class="pi-card-header">
+                        <span class="pi-card-title"><span class="icon">🌐</span> Entorno</span>
+                    </div>
+                    <div class="pi-entorno-box local" id="piEntornoBox">
+                        <div class="pi-entorno-icon">💻</div>
+                        <div class="pi-entorno-info">
+                            <span class="pi-entorno-mode" id="piEntornoMode">💻 MODO LOCAL</span>
+                            <span class="pi-entorno-desc" id="piEntornoDesc">Ejecutando en tu PC (127.0.0.1)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2) SERVIDORES: SERVIDOR VPS VS SERVIDOR COMFYUI -->
+                <div class="pi-card" id="piCardServidores">
+                    <div class="pi-card-header">
+                        <span class="pi-card-title"><span class="icon">⚡</span> Servidores</span>
+                    </div>
+                    <div class="pi-servers-list">
+                        <!-- Servidor VPS / Web -->
+                        <div class="pi-server-row" id="piRowVps">
+                            <div class="pi-server-header">
+                                <span class="pi-server-label">
+                                    <span class="pi-dot online" id="piVpsDot"></span>
+                                    <span>Servidor VPS / Web</span>
+                                </span>
+                                <span class="pi-server-status online" id="piVpsStatus">🟢 Online</span>
+                            </div>
+                            <div class="pi-server-detail" id="piVpsDetail">
+                                <span>localhost:5634</span>
+                            </div>
+                        </div>
+                        <div class="pi-server-alert" id="piVpsAlert" style="display:none"></div>
+
+                        <!-- Servidor ComfyUI -->
+                        <div class="pi-server-row" id="piRowComfy">
+                            <div class="pi-server-header">
+                                <span class="pi-server-label">
+                                    <span class="pi-dot offline" id="piComfyDot"></span>
+                                    <span>Motor ComfyUI</span>
+                                </span>
+                                <span class="pi-server-status offline" id="piComfyStatus">⏳ Verificando…</span>
+                            </div>
+                            <div class="pi-server-detail" id="piComfyDetail">
+                                <span><code>127.0.0.1:8188</code></span>
+                                <button type="button" class="pi-server-action-btn" id="piComfyConfigBtn">⚙️ Ajustes</button>
+                            </div>
+                        </div>
+                        <div class="pi-server-alert" id="piComfyAlert" style="display:none"></div>
+                    </div>
+                </div>
+
+                <!-- 3) MINIPANEL: TU COMPUTADORA (PRENDIDA O APAGADA) -->
+                <div class="pi-card" id="piCardEquipo">
+                    <div class="pi-card-header">
+                        <span class="pi-card-title"><span class="icon">🖥️</span> Tu Computadora</span>
+                        <span class="pi-badge online" id="piEquipoBadge">🟢 Prendida</span>
+                    </div>
+                    <div class="pi-equipo-box online" id="piEquipoBox">
+                        <div class="pi-equipo-main">
+                            <div class="pi-equipo-identity">
+                                <div class="pi-equipo-avatar">💻</div>
+                                <div class="pi-equipo-names">
+                                    <span class="pi-equipo-host" id="piEquipoHost">Esta máquina</span>
+                                    <span class="pi-equipo-sub" id="piEquipoSub">Host local</span>
+                                </div>
+                            </div>
+                            <span class="pi-dot online" id="piEquipoDot"></span>
+                        </div>
+                        <div class="pi-equipo-telemetry" id="piEquipoTele">
+                            <span>⚡ Nodo GPU Local</span>
+                            <span style="color:#34d399">Activa</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4) MENÚ Y CONTADOR DE COLA -->
+                <div class="pi-card pi-cola-card" id="piCardCola">
+                    <div class="pi-card-header">
+                        <span class="pi-card-title"><span class="icon">🎛️</span> Cola de Trabajo</span>
+                        <span class="pi-cola-pill" id="piColaPill">0 en cola</span>
+                    </div>
+                    <div style="font-size:0.68rem; font-weight:700; color:var(--text-muted);" id="piColaSub">⚪ Lista para generar</div>
+                    <div class="pi-cola-metrics">
+                        <div class="pi-cola-stat" id="piStatEjecutando">
+                            <span class="pi-cola-stat-val" id="piColaEjecutando">0</span>
+                            <span class="pi-cola-stat-lbl">En curso</span>
+                        </div>
+                        <div class="pi-cola-stat" id="piStatPendientes">
+                            <span class="pi-cola-stat-val" id="piColaPendientes">0</span>
+                            <span class="pi-cola-stat-lbl">En espera</span>
+                        </div>
+                        <div class="pi-cola-stat" id="piStatCompletados">
+                            <span class="pi-cola-stat-val" id="piColaCompletados">0</span>
+                            <span class="pi-cola-stat-lbl">Hechas</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                        <span style="font-size:0.65rem; color:var(--text-muted); font-weight:700;">DETALLE DE COLA</span>
+                        <button type="button" class="pi-server-action-btn" id="piColaToggleBtn">👁️ Ver items</button>
+                    </div>
+                    <div class="pi-cola-list-container" id="piColaList" style="display:none">
+                        <div class="pi-cola-empty">No hay generaciones pendientes</div>
+                    </div>
+                    <div class="pi-cola-actions">
+                        <button type="button" class="pi-cola-btn pause" id="piBtnPausar">⏸ Pausar</button>
+                        <button type="button" class="pi-cola-btn stage" id="piBtnStage">🎯 Ver en Stage</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Panel de parámetros viejo: OCULTO a proposito.
                  Todos los parametros viven en la pestaña CREATE (cada workflow
@@ -84,10 +197,8 @@
             <header class="workspace-header">
                 <div class="header-title-container">
                     <div class="header-title-row">
-                        <h1>COMFY<span class="ck-logo-comfy">LATAM</span></h1>
-                        <div class="mode-indicator t2v" id="modeIndicator">
-                            <span id="modeText">T2V ACTIVE</span>
-                        </div>
+                        
+                        
                         <!-- Estado real de la cadena: PC + videocomfy + ComfyUI -->
                         <button type="button" class="jpi-estado" id="jpiEstado" title="Estado de la conexión">⏳ Verificando…</button>
                     </div>
@@ -98,7 +209,7 @@
                     <button class="tab-button tab-button-std" id="tabPromptsBtn" data-target="tabPrompts">CREATE</button>
                     <button class="tab-button tab-button-std" id="tabStoryboardBtn" data-target="tabStoryboard">Storyboard</button>
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
-                    <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">Engine Logs</button>
+                    <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">CONSOLE</button>
                       <button class="tab-button tab-button-std" id="tabRankingBtn" data-target="tabRanking">🏆 Ranking</button>
                     <button class="tab-button tab-button-std" id="tabSettingsBtn" data-target="tabSettings">⚙️ Settings</button>
                 </div>
@@ -894,7 +1005,7 @@
     </div>
 
     <script src="config-jpi.js?v=1"></script>
-    <script src="js/script.js?v=4"></script>
+    <script src="js/script.js?v=99"></script>
     <script src="js/mobile.js?v=1"></script>
     <script src="js/estado.js?v=3"></script>
     <script src="js/scroll-guard.js?v=1"></script>
@@ -906,6 +1017,7 @@
     <script src="js/ranking.js?v=2"></script>
     <script src="js/workflows-red.js?v=1"></script>
     <script src="js/create-workflows.js?v=1"></script>
+    <script src="js/ui-ajustes.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=6"></script>
     <script src="js/entorno-jpi.js?v=3"></script>
@@ -913,6 +1025,7 @@
     <script src="js/red.js?v=13"></script>
     <script src="js/paneles.js?v=1"></script>
     <script src="js/sidebar-collapse.js?v=1"></script>
+    <script src="js/panel-izquierdo.js?v=1"></script>
 </body>
 
 </html>

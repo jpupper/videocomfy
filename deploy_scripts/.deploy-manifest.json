@@ -10,7 +10,7 @@
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "0c58d0608c58b73a42cdece26713dc893f884254",
-  "/comfylatam/index.html": "e21163c827f0a45cce88f7e81bbf73f58b5f5852",
+  "/comfylatam/index.html": "bbbca371ed9e3118ff2dca246ced72dc1804655b",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "0bf348cd1fee3976288f3cd11d88da03d4f10b1b",
   "/comfylatam/js/cola-pausa.js": "f83c0505b09c7c86da895af97e4be5943681b654",
@@ -19,7 +19,7 @@
   "/comfylatam/js/mobile.js": "6c46df5ad40aa9dac4aa790a03e4a84b6cc8306b",
   "/comfylatam/js/motor-imagen.js": "000eba7db0d70cd4c043643bb52f750eca7be781",
   "/comfylatam/js/red.js": "417e9a587c86161effa7ecd339a1869dbfabf885",
-  "/comfylatam/js/script.js": "a12af74578376300999309c5018cd67361b7cf6b",
+  "/comfylatam/js/script.js": "5a3a6c6a4752d7d811b6f83586e669daa8f86a91",
   "/comfylatam/js/scroll-guard.js": "c9e04f6b949050947090dd701980aef678111e2c",
   "/comfylatam/js/sidebar-collapse.js": "7523ce0b2d2f1c4e0f3c7c10a97cfa569f9c3479",
   "/comfylatam/uploads/.gitkeep": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -34,5 +34,7 @@
   "/comfylatam/js/version.js": "6c9d3a36d563625fc79c72fc4813d08be3e87f50",
   "/comfylatam/js/ranking.js": "f17ed4260d0d8b66e23ca311fc3264403273f33e",
   "/comfylatam/js/workflows-red.js": "103ba9fb60863b99b823a3965aef2295b9a067a9",
-  "/comfylatam/js/create-workflows.js": "4ca4376bd8a4bb633819a7aa83118d5a2df55702"
+  "/comfylatam/js/create-workflows.js": "4ca4376bd8a4bb633819a7aa83118d5a2df55702",
+  "/comfylatam/examples/metadata.json": "2e5b3b60fbb66f468f149569b3f4f6f7d182dcd5",
+  "/comfylatam/examples/surreal-world-ahestetic.mp4": "5521bac4f29f44bb404863f0adb4685d29b93b42"
 }

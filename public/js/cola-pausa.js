@@ -78,6 +78,7 @@
         window.JPI_COLA_PAUSADA = !window.JPI_COLA_PAUSADA;
         window.JPI_PAUSA_AVISADA = false;
         pintar();
+        try { window.dispatchEvent(new CustomEvent('jpi-cola-actualizada')); } catch (e) { }
         if (!window.JPI_COLA_PAUSADA) {
             try {
                 if (typeof appendConsoleLine === 'function') {

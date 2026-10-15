@@ -556,3 +556,25 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .rank-estado { font-size: .76em; }
 .rank-estado.on { color: #22c55e; }
 .rank-estado.off { color: var(--text-muted); }
+
+/* --- CONSOLA: cada entrada como una consola de verdad --- */
+.logs-display { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; padding: 10px 12px; }
+.log-linea { display: grid; grid-template-columns: 66px 34px 1fr; gap: 8px; align-items: start;
+    padding: 3px 6px; border-radius: 6px; font-size: .78em; line-height: 1.45; }
+.log-linea:hover { background: rgba(255,255,255,.03); }
+.log-hora { color: #475569; font-variant-numeric: tabular-nums; }
+.log-nivel { font-weight: 800; font-size: .85em; letter-spacing: .3px; color: #64748b; }
+.log-msg { color: #cbd5e1; white-space: pre-wrap; word-break: break-word; }
+.log-error .log-nivel { color: #ef4444; } .log-error .log-msg { color: #fca5a5; }
+.log-warn  .log-nivel { color: #f59e0b; } .log-warn  .log-msg { color: #fcd34d; }
+.log-ok    .log-nivel { color: #22c55e; } .log-ok    .log-msg { color: #86efac; }
+.log-system .log-nivel { color: #818cf8; } .log-system .log-msg { color: #a5b4fc; }
+.log-debug .log-nivel { color: #64748b; } .log-debug .log-msg { color: #94a3b8; }
+.log-json { margin: 4px 0 2px 8px; padding: 6px 8px; border-left: 2px solid rgba(0,255,213,.25);
+    background: rgba(0,0,0,.28); border-radius: 6px; color: #7dd3fc; font-size: .95em;
+    white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; }
+.log-system-msg { color: #818cf8; font-size: .78em; padding: 4px 6px; }
+
+/* --- sub-pestañas dentro de CREATE --- */
+#tabPrompts .sub-tabs-container { margin-bottom: 16px; }
+#crearWorkflows, #crearEditor, #crearStoryboard { width: 100%; }

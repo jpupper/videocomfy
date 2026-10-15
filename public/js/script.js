@@ -1210,18 +1210,59 @@ setTimeout(() => {
 // CORE UI LOGIC (TABS & CONSOLE)
 // ============================================
 
-function appendConsoleLine(text, type = 'info') {
+// Consola: cada línea es una ENTRADA con hora, nivel y color propio. Si el
+// texto trae varias líneas o un JSON, se separa y se indenta (antes entraba
+// todo como un string larguísimo y se veía ilegible).
+function nivelDe(texto, type) {
+    if (type) return type;
+    const t = String(texto);
+    if (/❌|error|Error|ERROR|traceback|Traceback|failed|falló|fallo/i.test(t)) return 'error';
+    if (/⚠️|warn|advert/i.test(t)) return 'warn';
+    if (/✅|listo|ok\b|success|terminó|guardado/i.test(t)) return 'ok';
+    if (/📩|📦|ComfyUI:/i.test(t)) return 'debug';
+    return 'info';
+}
+
+function formatearEntrada(bruto) {
+    const texto = String(bruto == null ? '' : bruto).replace(/\r/g, '');
+    // ¿es un JSON (posiblemente recortado)? se muestra indentado y colapsable
+    const m = texto.match(/^(.*?)([\{\[])([\s\S]*)$/);
+    if (m && m[3].length > 60) {
+        return { cabecera: m[1].trim(), cuerpo: m[2] + m[3] };
+    }
+    return { cabecera: texto, cuerpo: null };
+}
+
+function appendConsoleLine(text, type = null) {
     const extendedLogs = document.getElementById('extendedLogs');
     if (!extendedLogs) return;
-    const line = document.createElement('div');
-    const timestamp = new Date().toLocaleTimeString();
-    let color = '#34d399';
-    if (type === 'debug') color = '#64748b';
-    if (type === 'error') color = '#ef4444';
-    if (type === 'system') color = '#818cf8';
-    line.innerHTML = `<span style="color: #475569">[${timestamp}]</span> <span style="color: ${color}">${text}</span>`;
-    extendedLogs.appendChild(line);
-    extendedLogs.parentElement.scrollTop = extendedLogs.parentElement.scrollHeight;
+    const hora = new Date().toLocaleTimeString('es-AR', { hour12: false });
+    const lineas = String(text == null ? '' : text).split('\n');
+    lineas.forEach((linea, i) => {
+        const { cabecera, cuerpo } = formatearEntrada(linea);
+        const nivel = nivelDe(cabecera, i === 0 ? type : null);
+        const fila = document.createElement('div');
+        fila.className = 'log-linea log-' + nivel;
+        fila.innerHTML =
+            '<span class="log-hora">' + hora + '</span>' +
+            '<span class="log-nivel">' + ({ error: 'ERR', warn: 'WRN', ok: 'OK ', system: 'SYS', debug: 'DBG', info: 'INF' }[nivel] || 'INF') + '</span>' +
+            '<span class="log-msg">' + escaparHtml(cabecera) + '</span>';
+        if (cuerpo) {
+            const det = document.createElement('div');
+            det.className = 'log-json';
+            det.textContent = cuerpo.length > 4000 ? cuerpo.slice(0, 4000) + '\n… (recortado)' : cuerpo;
+            fila.querySelector('.log-msg').appendChild(det);
+        }
+        extendedLogs.appendChild(fila);
+    });
+    // no dejar crecer infinito
+    while (extendedLogs.children.length > 800) extendedLogs.removeChild(extendedLogs.firstChild);
+    const cont = extendedLogs.parentElement;
+    if (cont) cont.scrollTop = cont.scrollHeight;
+}
+
+function escaparHtml(t) {
+    return String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -1499,6 +1540,7 @@ function updateGlobalQueueUI() {
     
     // Persist queue state to localStorage after every UI update
     saveQueueState();
+    try { window.dispatchEvent(new CustomEvent('jpi-cola-actualizada')); } catch (e) { }
 }
 
 function checkGlobalQueue() {

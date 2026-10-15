@@ -1,0 +1,610 @@
+/* ============================================================
+   COMFYLATAM — Panel Izquierdo Moderno & Reorganizado
+   Entorno, Servidores (VPS vs ComfyUI), Tu Computadora y Cola
+   ============================================================ */
+
+.sidebar-left {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 20px 16px;
+    background: radial-gradient(circle at top left, rgba(30, 41, 59, 0.6), transparent 70%), var(--bg-card);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+}
+
+.sidebar-left h1 {
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    letter-spacing: -0.5px;
+    flex-shrink: 0;
+}
+
+.sidebar-left h1 .ck-logo-jp {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+}
+
+/* Contenedor scrolleable elegante */
+.sidebar-left-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+    margin-top: 4px;
+}
+
+.sidebar-left-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+.sidebar-left-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+.sidebar-left-scroll::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+}
+.sidebar-left-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.6);
+}
+
+/* Tarjeta estándar con Glassmorphism */
+.pi-card {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.8));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pi-card:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* Cabecera de tarjeta */
+.pi-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pi-card-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pi-card-title svg,
+.pi-card-title span.icon {
+    font-size: 0.95rem;
+}
+
+/* Dots y Pills de estado */
+.pi-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.pi-dot.online {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+    animation: pi-pulse-dot 2s infinite ease-in-out;
+}
+
+.pi-dot.offline {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+}
+
+.pi-dot.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+}
+
+.pi-dot.idle {
+    background: #64748b;
+    box-shadow: none;
+}
+
+@keyframes pi-pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.25); opacity: 0.75; }
+}
+
+/* Badge/Pill genérico */
+.pi-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.pi-badge.online {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.pi-badge.offline {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.pi-badge.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+/* ================= 1. ENTORNO (LOCAL vs WEB) ================= */
+.pi-entorno-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pi-entorno-icon {
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.pi-entorno-box.local .pi-entorno-icon {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+    border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.pi-entorno-box.web .pi-entorno-icon {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(99, 102, 241, 0.2));
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.pi-entorno-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.pi-entorno-mode {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pi-entorno-desc {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ================= 2. ESTADO DE SERVIDORES ================= */
+.pi-servers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pi-server-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+
+.pi-server-row:hover {
+    background: rgba(15, 23, 42, 0.85);
+}
+
+.pi-server-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.pi-server-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pi-server-status {
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.pi-server-status.online { color: #34d399; }
+.pi-server-status.offline { color: #f87171; }
+.pi-server-status.warning { color: #fbbf24; }
+
+.pi-server-detail {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 14px;
+}
+
+.pi-server-detail code {
+    font-family: monospace;
+    color: #93c5fd;
+    font-size: 0.64rem;
+}
+
+.pi-server-action-btn {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.pi-server-action-btn:hover {
+    background: rgba(99, 102, 241, 0.3);
+    color: #fff;
+}
+
+/* Aviso de advertencia específico si un servidor falla */
+.pi-server-alert {
+    padding: 7px 9px;
+    border-radius: 6px;
+    font-size: 0.67rem;
+    line-height: 1.35;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    animation: pi-fade-in 0.3s ease;
+}
+
+.pi-server-alert.warning {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fcd34d;
+}
+
+/* ================= 3. TU COMPUTADORA ================= */
+.pi-equipo-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 9px;
+    position: relative;
+    overflow: hidden;
+}
+
+.pi-equipo-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: #64748b;
+    transition: background 0.3s;
+}
+
+.pi-equipo-box.online::before { background: #10b981; }
+.pi-equipo-box.offline::before { background: #ef4444; }
+
+.pi-equipo-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pi-equipo-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pi-equipo-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.pi-equipo-names {
+    display: flex;
+    flex-direction: column;
+}
+
+.pi-equipo-host {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #fff;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pi-equipo-sub {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.pi-equipo-telemetry {
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* ================= 4. MENÚ DE COLA ================= */
+.pi-cola-card {
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.pi-cola-pill {
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+}
+
+.pi-cola-pill.active {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.5);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+    animation: pi-pulse-glow 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes pi-pulse-glow {
+    from { box-shadow: 0 0 4px rgba(245, 158, 11, 0.2); }
+    to { box-shadow: 0 0 12px rgba(245, 158, 11, 0.6); }
+}
+
+/* Grid de métricas de la cola */
+.pi-cola-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.pi-cola-stat {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 7px;
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.pi-cola-stat-val {
+    font-size: 1rem;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.1;
+}
+
+.pi-cola-stat.active .pi-cola-stat-val {
+    color: #fbbf24;
+}
+
+.pi-cola-stat-lbl {
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* Detalle desplegable de la cola */
+.pi-cola-list-container {
+    max-height: 150px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-right: 2px;
+}
+
+.pi-cola-list-container::-webkit-scrollbar {
+    width: 3px;
+}
+.pi-cola-list-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.pi-cola-item {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.68rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    transition: background 0.15s;
+}
+
+.pi-cola-item.running {
+    border-left: 3px solid #fbbf24;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.pi-cola-item-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.pi-cola-item-type {
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pi-cola-item-type.video { color: #818cf8; }
+.pi-cola-item-type.image { color: #f472b6; }
+
+.pi-cola-item-prompt {
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.65rem;
+}
+
+.pi-cola-empty {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+/* Barra de acciones de la cola */
+.pi-cola-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.pi-cola-btn {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.pi-cola-btn.pause {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+.pi-cola-btn.pause:hover {
+    background: rgba(245, 158, 11, 0.25);
+}
+
+.pi-cola-btn.resume {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+.pi-cola-btn.resume:hover {
+    background: rgba(16, 185, 129, 0.25);
+}
+
+.pi-cola-btn.stage {
+    grid-column: span 2;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+}
+.pi-cola-btn.stage:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.35));
+    color: #fff;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+@keyframes pi-fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
