@@ -1287,6 +1287,23 @@ if (resetParamsBtn) {
 // GENERATION ENGINE & QUEUE
 // ============================================
 
+// Devuelve el usuario logueado en ESTE navegador (o null si no hay sesión).
+function quienPide() {
+    try {
+        var u = JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null');
+        if (u && (u.username || u.displayName)) {
+            return {
+                usuario: u.username || u.displayName,
+                displayName: u.displayName || u.username,
+                avatar: u.avatar || '',
+                tipo: 'local'
+            };
+        }
+    } catch (e) { }
+    return { usuario: 'sin sesión', displayName: 'sin sesión (anónimo)', avatar: '', tipo: 'local' };
+}
+window.quienPide = quienPide;
+
 function updateGlobalQueueUI() {
     const queueContainer = document.getElementById('globalQueueContainer');
     const queueList = document.getElementById('queueList');
@@ -1627,6 +1644,9 @@ function checkGlobalQueue() {
         appendConsoleLine(`>> Launching WAN2.2 video: ${nextItem.prompt.substring(0, 30)}...`, 'system');
     } else {
         const message = {
+            // Quién pide ESTE trabajo: la sesión de este navegador (no un usuario
+            // global de la app, que se confundía si en la misma PC se logueaba otro).
+            pedidoPor: quienPide(),
             type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
             prompt: nextItem.prompt,
             params: nextItem.params,

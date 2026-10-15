@@ -626,6 +626,7 @@
         log('🚀 Mandando a ' + nombreDe(destino) + ' (' + modelo + ', ' + ancho + 'px, ' + steps + ' steps)...');
         api('/api/red/generar', {
             json: {
+                pedidoPor: (typeof window.quienPide === 'function') ? window.quienPide() : null,
                 peerId: destino,
                 tipo: modelo === 'ltx2' ? 'video' : 'imagen',
                 prompt: prompt,

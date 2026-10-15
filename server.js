@@ -65,7 +65,7 @@ function guardarConfigLocal() {
             comfyAddress,
             red: {
                 peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir,
-                nombreManual: RED.nombreManual, usuario: RED.usuario
+                nombreManual: RED.nombreManual, usuario: RED.usuario, propietario: RED.propietario
             }
         }, null, 2));
     } catch (e) {
@@ -219,11 +219,17 @@ app.get('/api/registro', (req, res) => {
                     computadora: pc.nombre || RED.nombre,
                     peerId: pc.peerId || RED.peerId,
                     host: '',
-                    dueno: pc.dueno || (RED.usuario && (RED.usuario.username || RED.usuario.displayName)) || 'local',
+                    dueno: pc.dueno || (RED.propietario && RED.propietario.usuario) || 'sin dueño registrado',
+                    duenoNombre: pc.duenoNombre || pc.dueno || '',
                     pedidoPor: pp.displayName || pp.usuario || 'desconocido',
                     pedidoPorUsuario: pp.usuario || '',
                     avatar: pp.avatar || '',
+                    pedidoDesde: pp.tipo === 'web' ? 'la web'
+                        : (pp.tipo === 'app-local' ? 'otra app local' : 'esta app (local)'),
                     origen: m.origen || (m.red ? 'red' : 'local'),
+                    // Las generaciones viejas se anotaron con el usuario global de
+                    // la app (bug): si no tienen 'tipo', la atribución no es segura.
+                    certero: !!pp.tipo,
                     modelo: m.modelo || ''
                 };
             });
@@ -1450,6 +1456,7 @@ const RED = {
     nodos: [],
     pasados: [],
     usuario: null,
+    propietario: null,
     nombreManual: false,
     clientes: null,
     enVuelo: 0,
@@ -1472,6 +1479,7 @@ function estadoRed() {
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
         usuario: RED.usuario,
+        propietario: RED.propietario,
         computadora: datosDeEstaPC(),
         clientes: RED.clientes,
         enVueloDetalle: RED.enVueloDetalle || [],
@@ -1576,16 +1584,48 @@ app.post('/api/red/evento', (req, res) => {
 // --- ENCOLAR UN TRABAJO EN ESTE NODO --------------------------------------
 // Lo usan el agente (trabajos que llegan de la red) y el propio front cuando
 // el nodo elegido es este mismo.
+// QUIÉN PIDE este trabajo. Viaja CON el trabajo (el front manda su usuario
+// logueado en el mensaje); si no viene, se usa el que está logueado en la app.
+// Antes se tomaba el usuario global de la app y por eso CUALQUIER generación
+// quedaba a nombre del último que se había logueado en esa PC.
+function datosDelPedido(fuente) {
+    const pp = (fuente && fuente.pedidoPor) || null;
+    if (pp && (pp.usuario || pp.displayName)) {
+        return {
+            usuario: pp.usuario || pp.displayName,
+            displayName: pp.displayName || pp.usuario,
+            avatar: pp.avatar || '',
+            tipo: pp.tipo || 'local',
+            sesion: pp.sesion || null
+        };
+    }
+    const u = RED.usuario || {};
+    if (u.username || u.displayName) {
+        return {
+            usuario: u.username || u.displayName,
+            displayName: u.displayName || u.username,
+            avatar: u.avatar || '',
+            tipo: 'local',
+            sesion: null
+        };
+    }
+    return { usuario: 'sin sesión', displayName: 'sin sesión (nadie logueado)', avatar: '', tipo: 'local', sesion: null };
+}
+
 // Los datos de ESTA computadora: cómo se llama en la red y a qué usuario está
 // registrada (lo que después queda anotado en el registro de generaciones).
 function datosDeEstaPC() {
+    // El DUEÑO es el propietario registrado de esta computadora (estable), no el
+    // usuario que esté logueado en este momento.
+    const pr = RED.propietario || {};
     const u = RED.usuario || {};
     return {
         peerId: RED.peerId,
         nombre: RED.nombre,
         // el hostname NO se publica: la red muestra el nombre de la computadora
-        dueno: u.username || u.displayName || 'local',
-        avatar: u.avatar || ''
+        dueno: pr.usuario || u.username || u.displayName || 'local',
+        duenoNombre: pr.displayName || pr.usuario || u.displayName || u.username || 'local',
+        avatar: pr.avatar || u.avatar || ''
     };
 }
 
@@ -1606,10 +1646,7 @@ async function encolarTrabajoRed(b) {
 
     // Quién lo pidió: si viene de la red, el hub manda pedidoPor; si es local,
     // es el usuario logueado en esta PC (o "vos").
-    const pedidoPor = (b && b.pedidoPor) || {
-        usuario: (b && b.de) || 'la red', displayName: (b && b.de) || 'la red',
-        avatar: '', tipo: 'web'
-    };
+    const pedidoPor = datosDelPedido(b);
     const details = {
         prompt,
         params,
@@ -1657,7 +1694,9 @@ app.post('/api/red/generar', async (req, res) => {
     const destino = String(b.peerId || '');
     if (!destino || destino === RED.peerId) {
         try {
-            const d = await encolarTrabajoRed(Object.assign({ tipo: 'imagen' }, b, { de: b.de || 'vos (local)' }));
+            const d = await encolarTrabajoRed(Object.assign({ tipo: 'imagen' }, b, {
+                de: (b.pedidoPor && (b.pedidoPor.displayName || b.pedidoPor.usuario)) || b.de || 'local'
+            }));
             return res.json(Object.assign({ success: true, local: true }, d));
         } catch (e) {
             return res.status(500).json({ success: false, message: e.message });
@@ -1721,13 +1760,33 @@ app.post('/api/red/perfil', async (req, res) => {
         avatar: b.avatar || null,
         id: b.id || null
     };
+    // PROPIETARIO de la computadora: es ESTABLE. El primero que se loguea en esta
+    // máquina queda como dueño (o el dueño se cambia a mano con ?propietario=1).
+    // Antes se usaba el usuario logueado de turno y así cualquier generación
+    // quedaba a nombre del último que abrió la app.
+    if (!RED.propietario && RED.usuario.username) {
+        RED.propietario = {
+            usuario: RED.usuario.username,
+            displayName: RED.usuario.displayName || RED.usuario.username,
+            avatar: RED.usuario.avatar || ''
+        };
+        console.log(`🔑 Dueño de esta computadora: ${RED.propietario.displayName} (@${RED.propietario.usuario})`);
+    }
+    if (b.propietario === true && RED.usuario.username) {
+        RED.propietario = {
+            usuario: RED.usuario.username,
+            displayName: RED.usuario.displayName || RED.usuario.username,
+            avatar: RED.usuario.avatar || ''
+        };
+        console.log(`🔑 Dueño de esta computadora cambiado a ${RED.propietario.displayName}`);
+    }
     // si el dueño nunca eligió un nombre a mano, se usa el del perfil
     if (!RED.nombreManual && RED.usuario.displayName) {
         RED.nombre = RED.usuario.displayName + ' · ComfyLatam';
     }
     guardarConfigLocal();
     avisarRedATodos();
-    console.log(`👤 Perfil del nodo: ${RED.usuario.displayName || RED.usuario.username || '?'}`);
+    console.log(`👤 Perfil de la app: ${RED.usuario.displayName || RED.usuario.username || '?'}`);
     res.json({ success: true, red: estadoRed() });
 });
 
@@ -1791,6 +1850,7 @@ function leerIdentidadRedDeConfig() {
             // sobrevivir a los reinicios, si no cada login te renombra el nodo.
             RED.nombreManual = !!c.red.nombreManual;
             RED.usuario = c.red.usuario || null;
+            RED.propietario = c.red.propietario || null;
             console.log(`🌎 Nodo de la red: ${RED.peerId} (${RED.nombre}) compartir=${RED.compartir}${RED.nombreManual ? ' [nombre propio]' : ''}`);
         }
     } catch (e) {
@@ -1931,9 +1991,8 @@ wss.on('connection', (ws) => {
                         imageFilename: message.imageFilename,
                         // De dónde salió: local (esta PC) o red (un pedido que llegó del VPS)
                         origen: 'local',
-                        pedidoPor: (RED.usuario && (RED.usuario.username || RED.usuario.displayName))
-                            ? { usuario: RED.usuario.username, displayName: RED.usuario.displayName || RED.usuario.username, avatar: RED.usuario.avatar || '', tipo: 'local' }
-                            : { usuario: 'vos', displayName: 'vos (local)', avatar: '', tipo: 'local' },
+                        // Quién pidió: viene en el mensaje del front (su sesión)
+                        pedidoPor: datosDelPedido(message),
                         computadora: datosDeEstaPC(),
                         // 'storyboard' = imagen (asi el editor la indexa como imagen);
                         // 'video' = video. Lo lee el manejador de 'executed'.

@@ -98,8 +98,8 @@
                     (r.origen === 'red' ? 'pedido de la red' : 'tu batch local') + '</span></div>' +
                     '  <div class="reg-datos">' +
                     '    <span>💬 <b>' + esc(String(r.prompt || '').slice(0, 140)) + '</b></span>' +
-                    '    <span>🖥️ generada en <b>' + esc(r.computadora) + '</b></span>' +
-                    '    <span>🔑 esa computadora está registrada a <b>@' + esc(r.dueno) + '</b></span>' +
+                    '    <span>🖥️ se generó en <b>' + esc(r.computadora) + '</b> (dueño: @' + esc(r.dueno) + ')</span>' +
+                    '    <span>📨 el pedido salió de <b>' + esc(r.pedidoDesde || 'esta app (local)') + '</b></span>' +
                     '    <span>📄 ' + esc(r.archivo) + ' · ' + hora(r.fecha) + '</span>' +
                     '  </div>' +
                     '</div>';
@@ -108,18 +108,24 @@
 
         if (tab) {
             var filas = regs.slice(0, 15).map(function (r) {
+                var foto = r.avatar ? '<img class="red-avatar" src="' + esc(r.avatar) + '" alt="">' : '👤 ';
+                // '≈' = generación vieja, anotada antes de que el pedido viajara
+                // con cada trabajo: el usuario puede no ser el correcto.
+                var dudoso = r.certero === false ? ' <span title="anotado antes del arreglo: el usuario puede no ser el correcto" style="color:#f59e0b">≈</span>' : '';
                 return '<tr>' +
                     '<td>' + esc(r.archivo) + '</td>' +
-                    '<td>' + esc(String(r.prompt || '').slice(0, 46)) + '</td>' +
-                    '<td>@' + esc(r.pedidoPorUsuario || r.pedidoPor) + '</td>' +
-                    '<td>' + esc(r.computadora) + ' <span style="color:var(--text-muted)">(@' + esc(r.dueno) + ')</span></td>' +
-                    '<td>' + (r.origen === 'red' ? '🌎 red' : '🏠 local') + '</td>' +
+                    '<td>' + esc(String(r.prompt || '').slice(0, 40)) + '</td>' +
+                    '<td>' + foto + '@' + esc(r.pedidoPorUsuario || r.pedidoPor) + dudoso + '</td>' +
+                    '<td>' + (r.pedidoDesde === 'esta app (local)' ? '🏠' : (r.pedidoDesde === 'la web' ? '🌐' : '🖥️')) + ' ' + esc(r.pedidoDesde || '—') + '</td>' +
+                    '<td>🖥️ <b>' + esc(r.computadora) + '</b><br><span style="color:var(--text-muted)">dueño: @' + esc(r.dueno) + '</span></td>' +
                     '<td>' + hora(r.fecha) + '</td>' +
                     '</tr>';
             }).join('');
-            tab.innerHTML = '<h3>📋 REGISTRO — quién pidió, qué computadora lo hizo, a quién pertenece</h3>' +
+            tab.innerHTML = '<h3>📋 REGISTRO</h3>' +
+                '<div class="reg-datos" style="margin-bottom:10px"><span>Quién lo pidió · de dónde salió el pedido · en qué computadora se hizo y a quién pertenece. ' +
+                    'El <b style="color:#f59e0b">≈</b> marca las generaciones viejas, de antes del arreglo: ahí el usuario puede no ser el correcto.</span></div>' +
                 (filas
-                    ? '<table class="reg-tabla"><thead><tr><th>Archivo</th><th>Prompt</th><th>Lo pidió</th><th>Computadora (dueño)</th><th>Origen</th><th>Cuándo</th></tr></thead><tbody>' + filas + '</tbody></table>'
+                    ? '<table class="reg-tabla"><thead><tr><th>Archivo</th><th>Prompt</th><th>Lo pidió</th><th>El pedido salió de</th><th>Se hizo en (dueño)</th><th>Cuándo</th></tr></thead><tbody>' + filas + '</tbody></table>'
                     : '<div class="reg-datos"><span>sin registros todavía</span></div>');
         }
     }
