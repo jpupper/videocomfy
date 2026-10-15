@@ -69,11 +69,19 @@
         var stage = document.getElementById('tabOutput');
         if (!arriba) return;
 
+        // Los busco por ID en TODO el documento: el usuario (#jpiCuentaBtn) y RED
+        // (#redBtn) los cuelga cada módulo donde quiere, no siempre en la misma fila.
         var botones = [];
-        if (fila) botones = botones.concat(Array.prototype.slice.call(fila.querySelectorAll('button')));
-        // también puede haber quedado alguno suelto en la barra de arriba
-        document.querySelectorAll('#projectTabsNav button, .project-tabs-nav button').forEach(function (b) {
-            if (botones.indexOf(b) < 0) botones.push(b);
+        ['jpiCuentaBtn', 'redBtn', 'ckVersionChip', 'newProjectBtn', 'saveProjectBtn'].forEach(function (id) {
+            var b = document.getElementById(id);
+            if (b) botones.push(b);
+        });
+        // y barro cualquier botón suelto de esas filas que diga perfil/cuenta/red/pausar
+        document.querySelectorAll('button').forEach(function (b) {
+            if (botones.indexOf(b) >= 0) return;
+            var t = texto(b).toLowerCase();
+            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0 || t.indexOf('perfil') >= 0
+                || t.indexOf('cuenta') >= 0 || t === '🌎 red' || t.indexOf('🌎 red') >= 0) botones.push(b);
         });
 
         botones.forEach(function (b) {
