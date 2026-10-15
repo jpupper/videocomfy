@@ -594,6 +594,62 @@ app.use((req, res, next) => {
     next();
 });
 
+// ===========================================================================
+// IACOMFY - estadísticas, ranking y registro en la base (MongoDB)
+// ===========================================================================
+
+// El nodo avisa cada generación terminada (queda por usuario y por computadora).
+app.post(rutasRed('/api/red/generacion'), express.json({ limit: '2mb' }), async (req, res) => {
+    if (!esAgente(req)) return res.status(403).json({ success: false, message: 'token de agente inválido' });
+    const doc = await db.anotarGeneracion(req.body || {});
+    res.json({ success: !!doc, id: doc && doc._id });
+});
+
+// Estado de la base (para el panel).
+app.get(rutasRed('/api/iacomfy/estado'), (req, res) => {
+    res.json(Object.assign({ success: true }, db.estadoDb()));
+});
+
+// Resumen general del proyecto.
+app.get(rutasRed('/api/iacomfy/resumen'), async (req, res) => {
+    const r = await db.resumen();
+    res.json({ success: !!r, ...(r || {}), db: db.estadoDb() });
+});
+
+// RANKING DE LOS FIERROS: tiempo prendido / generaciones provistas / fierros
+app.get(rutasRed('/api/ranking/fierros'), async (req, res) => {
+    const r = await db.ranking(req.query.orden);
+    if (!r) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...r });
+});
+
+// Mis estadísticas: assets creados, mis fierros con uptime, mis generaciones.
+// Con sesión (web) o con ?usuario=<email|username> (app local sin login).
+app.get(rutasRed('/api/estadisticas/mia'), async (req, res) => {
+    let clave = null;
+    if (req.usuario) clave = req.usuario.email || req.usuario.username;
+    if (!clave && esAgente(req)) clave = req.query.usuario || null;
+    if (!clave && req.query.usuario) {
+        // sin token de agente sólo se permite ver stats públicas
+        const pub = await db.estadisticasDe(req.query.usuario);
+        return res.json({ success: !!pub, ...(pub || {}), publico: true });
+    }
+    if (!clave) return res.status(401).json({ success: false, message: 'requiereLogin' });
+    const d = await db.estadisticasDe(clave);
+    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...d, yo: true });
+});
+
+// Estadísticas públicas de un usuario (para el ranking).
+app.get(rutasRed('/api/estadisticas/usuario/:clave'), async (req, res) => {
+    const d = await db.estadisticasDe(req.params.clave);
+    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...d, publico: true });
+});
+
+
+
+
 app.use((req, res, next) => {
     if (!esRutaRelay(req.path)) return next();
 
@@ -873,57 +929,3 @@ servidorHttp.listen(PORT, '0.0.0.0', () => {
 
 process.on('SIGTERM', () => { servidorHttp.close(); process.exit(0); });
 process.on('SIGINT', () => { servidorHttp.close(); process.exit(0); });
-// ===========================================================================
-// IACOMFY - estadísticas, ranking y registro en la base (MongoDB)
-// ===========================================================================
-
-// El nodo avisa cada generación terminada (queda por usuario y por computadora).
-app.post(rutasRed('/api/red/generacion'), express.json({ limit: '2mb' }), async (req, res) => {
-    if (!esAgente(req)) return res.status(403).json({ success: false, message: 'token de agente inválido' });
-    const doc = await db.anotarGeneracion(req.body || {});
-    res.json({ success: !!doc, id: doc && doc._id });
-});
-
-// Estado de la base (para el panel).
-app.get(rutasRed('/api/iacomfy/estado'), (req, res) => {
-    res.json(Object.assign({ success: true }, db.estadoDb()));
-});
-
-// Resumen general del proyecto.
-app.get(rutasRed('/api/iacomfy/resumen'), async (req, res) => {
-    const r = await db.resumen();
-    res.json({ success: !!r, ...(r || {}), db: db.estadoDb() });
-});
-
-// RANKING DE LOS FIERROS: tiempo prendido / generaciones provistas / fierros
-app.get(rutasRed('/api/ranking/fierros'), async (req, res) => {
-    const r = await db.ranking(req.query.orden);
-    if (!r) return res.json({ success: false, message: 'la base no está disponible' });
-    res.json({ success: true, ...r });
-});
-
-// Mis estadísticas: assets creados, mis fierros con uptime, mis generaciones.
-// Con sesión (web) o con ?usuario=<email|username> (app local sin login).
-app.get(rutasRed('/api/estadisticas/mia'), async (req, res) => {
-    let clave = null;
-    if (req.usuario) clave = req.usuario.email || req.usuario.username;
-    if (!clave && esAgente(req)) clave = req.query.usuario || null;
-    if (!clave && req.query.usuario) {
-        // sin token de agente sólo se permite ver stats públicas
-        const pub = await db.estadisticasDe(req.query.usuario);
-        return res.json({ success: !!pub, ...(pub || {}), publico: true });
-    }
-    if (!clave) return res.status(401).json({ success: false, message: 'requiereLogin' });
-    const d = await db.estadisticasDe(clave);
-    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
-    res.json({ success: true, ...d, yo: true });
-});
-
-// Estadísticas públicas de un usuario (para el ranking).
-app.get(rutasRed('/api/estadisticas/usuario/:clave'), async (req, res) => {
-    const d = await db.estadisticasDe(req.params.clave);
-    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
-    res.json({ success: true, ...d, publico: true });
-});
-
-
