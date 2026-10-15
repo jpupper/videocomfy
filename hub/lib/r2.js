@@ -142,20 +142,35 @@ async function inventario(prefijo = '') {
 }
 
 // Sube un archivo del disco (para la migración de lo ya guardado).
-async function subirArchivoLocal(discoPath, { tipo = 'jpshadereditor', sub = '', key } = {}) {
-    const buf = fs.readFileSync(discoPath);
-    const ext = path.extname(discoPath).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif'
-        : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+async function subirArchivoLocal(discoPath, { tipo = 'comfylatam', sub = '', key, filename = null, mime = null, size = null } = {}) {
     if (!r2Configurado()) return null;
+    const ext = String(path.extname(discoPath || '')).toLowerCase();
+    const MIME = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
+        '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4'
+    };
+    const contentType = mime || MIME[ext] || 'application/octet-stream';
     const c = clienteR2();
-    const nombre = key || [tipo, sub, path.basename(discoPath)].filter(Boolean).join('/');
-    const up = new libUpload.Upload({ client: c, params: { Bucket: bucket(), Key: nombre, Body: buf, ContentType: mime } });
-    await up.done();
-    return { key: nombre, url: urlMedia(nombre), bytes: buf.length };
+    const nombre = key || [tipo, sub, filename || path.basename(discoPath)].filter(Boolean).join('/');
+    try {
+        // STREAMING: nunca carga el archivo entero en memoria. Antes esto hacía
+        // fs.readFileSync: un video de 1,7 GB se comía 1,7 GB de RAM.
+        const up = new libUpload.Upload({
+            client: c,
+            params: { Bucket: bucket(), Key: nombre, Body: fs.createReadStream(discoPath), ContentType: contentType }
+        });
+        await up.done();
+        const bytes = size || (fs.existsSync(discoPath) ? fs.statSync(discoPath).size : null);
+        return { key: nombre, url: urlMedia(nombre), bytes };
+    } catch (e) {
+        console.error('[R2] Error subiendo ' + nombre + ':', e.message || e);
+        return null;
+    }
 }
+const subirArchivo = subirArchivoLocal;
 
 module.exports = {
     r2Configurado, urlPublicaConfigurada, urlMedia, claveDeUrl, setBaseProxy,
-    subirMedia, borrarMedia, inventario, subirArchivoLocal, bucket, clienteR2
+    subirMedia, borrarMedia, inventario, subirArchivoLocal, subirArchivo, bucket, clienteR2
 };

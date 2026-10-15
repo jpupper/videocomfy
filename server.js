@@ -242,6 +242,189 @@ app.get('/api/registro', (req, res) => {
     res.json({ success: true, total: todo.length, registros: todo.slice(0, Number(req.query.limite) || 60) });
 });
 
+// ===========================================================================
+// MEDIA A CLOUDFLARE R2 (la media NO viaja por el VPS)
+// ---------------------------------------------------------------------------
+// Regla del ecosistema (skillmaestro §0.5): R2 es el único almacenamiento de
+// binarios. Acá la app sube cada imagen/video/audio a R2, lo anota en el mapa
+// de media y lo registra en fscauth; el hub después redirige (302) el pedido
+// al CDN, así el VPS no mueve un solo byte de media.
+// El 15/10 el relay tiraba el archivo entero por el túnel: un video de 1 GB
+// dejaba el VPS (4 GB de RAM) sin memoria y se cayó todo.
+// ===========================================================================
+const r2lib = require('./hub/lib/r2');
+const mediaMap = require('./hub/lib/media-map');
+const R2_ACTIVO = String(process.env.SUBIR_A_R2 || 'true').toLowerCase() !== 'false';
+const CARPETAS_MEDIA = { uploads: 'imagenes', videos: 'videos', audio: 'audio' };
+const MIME_POR_EXT = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+    '.gif': 'image/gif', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4'
+};
+const r2Estado = { activo: R2_ACTIVO, subidos: 0, bytes: 0, errores: 0, ultimo: null, enCurso: false, faltan: null };
+
+function mimeDe(nombre) {
+    return MIME_POR_EXT[String(path.extname(nombre)).toLowerCase()] || 'application/octet-stream';
+}
+
+// Registra el asset en fscauth (así aparece en el panel central del ecosistema).
+async function registrarAsset(nombre, url, bytes) {
+    try {
+        const base = String(process.env.FSC_AUTH_API || process.env.FSC_AUTH_URL
+            || 'https://vps-4455523-x.dattaweb.com/fscauth').replace(/\/+$/, '').replace(/\/api$/, '');
+        const clave = String(process.env.FSC_INTERNAL_KEY || '');
+        if (!clave) { console.log('⚠️  [R2] sin FSC_INTERNAL_KEY: no registro el asset en fscauth'); return false; }
+        const r = await fetch(base + '/api/assets/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-fsc-internal': clave },
+            body: JSON.stringify({
+                application: 'comfylatam',
+                publicId: nombre,
+                url,
+                originalName: nombre,
+                mimetype: mimeDe(nombre),
+                size: bytes || 0,
+                username: (RED.propietario && RED.propietario.usuario) || (RED.usuario && RED.usuario.username) || 'comfylatam'
+            })
+        });
+        if (!r.ok) console.log('⚠️  [R2] fscauth no aceptó el registro de ' + nombre + ': HTTP ' + r.status);
+        return r.ok;
+    } catch (e) {
+        console.log('⚠️  [R2] no pude registrar ' + nombre + ' en fscauth: ' + e.message);
+        return false;
+    }
+}
+
+// Sube un archivo puntual (si ya está en R2 no hace nada).
+async function subirArchivoAR2(carpeta, nombre) {
+    const ruta = path.join(__dirname, 'public', carpeta, nombre);   // la media vive en public/
+    try {
+        if (!fs.existsSync(ruta)) return false;
+        if (mediaMap.urlDeArchivo(nombre)) return false;   // ya está en la nube
+        const st = fs.statSync(ruta);
+        if (!st.isFile() || st.size === 0) return false;
+        const r = await r2lib.subirArchivo(ruta, {
+            tipo: 'comfylatam', sub: carpeta, filename: nombre,
+            mime: mimeDe(nombre), size: st.size
+        });
+        if (!r) { r2Estado.errores++; return false; }
+        mediaMap.anotar(nombre, r.url, { carpeta, bytes: st.size, cuando: Date.now() });
+        colaMapa.set(nombre, { url: r.url, bytes: st.size });   // avisa al hub (302 al CDN)
+        r2Estado.subidos++; r2Estado.bytes += st.size; r2Estado.ultimo = nombre;
+        console.log('☁️  [R2] subido ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB) -> ' + r.url);
+        registrarAsset(nombre, r.url, st.size).catch(() => { });
+        return true;
+    } catch (e) {
+        r2Estado.errores++;
+        console.log('⚠️  [R2] error con ' + nombre + ': ' + e.message);
+        return false;
+    }
+}
+
+// Barre todas las carpetas de media y sube lo que falte (de lo más nuevo a lo
+// más viejo, de a uno, para no saturar la PC ni la conexión).
+async function barrerMediaAR2() {
+    if (!R2_ACTIVO || r2Estado.enCurso) return r2Estado;
+    if (!r2lib.r2Configurado()) {
+        console.log('⚠️  [R2] no hay credenciales de R2 en el .env: la media va a seguir yendo por el VPS.');
+        return r2Estado;
+    }
+    r2Estado.enCurso = true;
+    let total = 0, hechos = 0;
+    try {
+        const pendientes = [];
+        for (const carpeta of Object.keys(CARPETAS_MEDIA)) {
+            const dir = path.join(__dirname, 'public', carpeta);
+            if (!fs.existsSync(dir)) continue;
+            for (const f of fs.readdirSync(dir)) {
+                try {
+                    if (!/\.(png|jpe?g|webp|gif|mp4|webm|mov|mkv|mp3|wav|ogg|m4a)$/i.test(f)) continue;
+                    const st = fs.statSync(path.join(dir, f));
+                    if (!st.isFile() || st.size === 0) continue;
+                    total++;
+                    if (mediaMap.urlDeArchivo(f)) continue;
+                    pendientes.push({ carpeta, f, mtime: st.mtimeMs, bytes: st.size });
+                } catch (e) { }
+            }
+        }
+        pendientes.sort((a, b) => b.mtime - a.mtime);
+        r2Estado.faltan = pendientes.length;
+        const bytesFaltan = pendientes.reduce((a, x) => a + x.bytes, 0);
+        if (pendientes.length) {
+            console.log(`☁️  [R2] faltan ${pendientes.length} archivo(s) (${(bytesFaltan / 1048576).toFixed(0)} MB) — los subo de a uno en segundo plano...`);
+        }
+        for (const x of pendientes) {
+            if (await subirArchivoAR2(x.carpeta, x.f)) hechos++;
+            r2Estado.faltan = pendientes.length - hechos;
+        }
+        if (hechos) console.log(`☁️  [R2] listo: ${hechos} archivo(s) nuevos en la nube (${(r2Estado.bytes / 1048576).toFixed(0)} MB acumulados)`);
+    } catch (e) {
+        console.log('⚠️  [R2] error en el barrido: ' + e.message);
+    }
+    r2Estado.enCurso = false;
+    r2Estado.total = total;
+    return r2Estado;
+}
+
+// Vigila las carpetas: lo que se genera se sube enseguida.
+function vigilarMedia() {
+    if (!R2_ACTIVO) return;
+    for (const carpeta of Object.keys(CARPETAS_MEDIA)) {
+        const dir = path.join(__dirname, 'public', carpeta);
+        try {
+            if (!fs.existsSync(dir)) continue;
+            fs.watch(dir, (evento, nombre) => {
+                if (!nombre || !/\.(png|jpe?g|webp|gif|mp4|webm|mov|mp3|wav|ogg|m4a)$/i.test(nombre)) return;
+                clearTimeout(vigilarMedia['t_' + nombre]);
+                vigilarMedia['t_' + nombre] = setTimeout(() => subirArchivoAR2(carpeta, nombre).catch(() => { }), 4000);
+            });
+        } catch (e) { }
+    }
+}
+
+if (R2_ACTIVO) {
+    setTimeout(() => { barrerMediaAR2().catch(() => { }); vigilarMedia(); }, 15000);
+    setInterval(() => { barrerMediaAR2().catch(() => { }); }, 30 * 60 * 1000);
+    console.log('☁️  R2 activo: la media se sube a Cloudflare y el hub la sirve por el CDN (no por el VPS)');
+} else {
+    console.log('ℹ️  SUBIR_A_R2=false: la media se sirve por el túnel del hub (puede cargar el VPS)');
+}
+
+// Avisa al hub qué hay en la nube (para que sirva 302 al CDN y no traiga la
+// media por el túnel). Se acumula y se manda cada 15 s.
+const colaMapa = new Map();
+function avisarMapaAlHub() {
+    if (!colaMapa.size) return;
+    const items = [...colaMapa.entries()].map(([nombre, v]) => ({ nombre, url: v.url, bytes: v.bytes }));
+    colaMapa.clear();
+    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
+    if (!base) return;
+    fetch(base + '/api/red/media-mapa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
+        body: JSON.stringify({ items })
+    }).then((r) => {
+        if (!r.ok) console.log('⚠️  [R2] el hub no aceptó el mapa de media: HTTP ' + r.status);
+    }).catch((e) => {
+        for (const it of items) colaMapa.set(it.nombre, { url: it.url, bytes: it.bytes });
+    });
+}
+setInterval(avisarMapaAlHub, 15000);
+
+app.get('/api/r2/estado', (req, res) => {
+    res.json(Object.assign({ success: true }, r2Estado, {
+        mapeados: mediaMap.cantidad(),
+        publico: (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, ''),
+        bucket: process.env.R2_BUCKET_NAME || null
+    }));
+});
+
+app.post('/api/r2/barrer', async (req, res) => {
+    res.json({ success: true, message: 'barrido iniciado', antes: Object.assign({}, r2Estado) });
+    barrerMediaAR2().catch(() => { });
+});
+
+// ---------------------------------------------------------------------------
 // Momento en que el "quién lo pidió" pasó a viajar con cada trabajo. Antes de
 // esta fecha el registro usaba el usuario logueado de turno (poco confiable).
 const ATRIBUCION_DESDE = 1792071000000;   // 2026-10-15 10:30 (desde acá el pedido viaja con cada trabajo)

@@ -510,6 +510,23 @@ app.get(rutasRed('/api/red/clientes'), (req, res) => {
 });
 
 // La app local avisa si habilitó / deshabilitó compartir su Comfy.
+// El nodo (la app local) avisa qué media subió a Cloudflare R2. Con esto el hub
+// puede responder un 302 al CDN en vez de traer el archivo por el túnel: la
+// media nunca pasa por el VPS.
+app.post(rutasRed('/api/red/media-mapa'), express.json({ limit: '16mb' }), (req, res) => {
+    if (!AGENT_TOKEN) return res.status(500).json({ success: false, message: 'AGENT_TOKEN no configurado' });
+    if (String(req.headers['x-agent-token'] || '') !== AGENT_TOKEN) {
+        return res.status(403).json({ success: false, message: 'token inválido' });
+    }
+    const items = (req.body && req.body.items) || [];
+    let n = 0;
+    for (const it of items) {
+        if (it && it.nombre && it.url) { mediaMap.anotar(it.nombre, it.url, { bytes: it.bytes || null }); n++; }
+    }
+    console.log('☁️  Mapa de media actualizado desde el nodo: +' + n + ' (total ' + mediaMap.cantidad() + ')');
+    res.json({ success: true, anotados: n, total: mediaMap.cantidad() });
+});
+
 app.post(rutasRed('/api/red/compartir'), express.json({ limit: '32mb' }), (req, res) => {
     const quien = autorizadoRed(req);
     if (!quien) return res.status(401).json({ success: false, message: 'Sin permiso.' });
@@ -562,6 +579,29 @@ app.use((req, res, next) => {
             success: false,
             message: 'Ningún nodo conectado. En la PC tiene que estar corriendo conectar-comfylatam.bat (y la app local).'
         });
+    }
+
+    // =====================================================================
+    // LA MEDIA NO PASA POR EL VPS
+    // Si el archivo ya está en Cloudflare R2, el navegador lo trae DIRECTO del
+    // CDN (302) y el VPS no mueve un solo byte. Antes la media viajaba por el
+    // túnel del hub, junta en memoria: un video de 1 GB dejaba el server sin
+    // RAM y lo colgaba (pasó el 15/10 y se cayó todo el VPS).
+    // Regla del ecosistema (skillmaestro §0.5): R2 es el único almacenamiento
+    // de binarios.
+    // =====================================================================
+    if (req.method === 'GET' || req.method === 'HEAD') {
+        const mMedia = /^\/(uploads|videos|audio)\/(.+)$/.exec(limpio || '');
+        if (mMedia) {
+            const clave = decodeURIComponent(mMedia[2]).split('?')[0];
+            let urlR2 = null;
+            try { urlR2 = mediaMap.urlDeArchivo(clave); } catch (e) { }
+            if (!urlR2 && req.query && req.query.r2) urlR2 = req.query.r2;
+            if (urlR2) {
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                return res.redirect(302, urlR2);
+            }
+        }
     }
 
     relay.reenviarHttp({
