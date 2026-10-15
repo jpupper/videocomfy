@@ -615,10 +615,16 @@ app.use((req, res, next) => {
     const limpio = req.path.startsWith(BASE_PATH) ? req.path.slice(BASE_PATH.length) : req.path;
     const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1) : '';
 
-    if (!relay.principal()) {
+    // El ranking, las estadísticas y el estado de la base NO necesitan que haya
+    // un nodo conectado: se leen de la base IACOMFY (MongoDB).
+    const sinNodo = limpio.indexOf('/api/ranking/') === 0
+        || limpio.indexOf('/api/estadisticas/') === 0
+        || limpio.indexOf('/api/iacomfy/') === 0;
+
+    if (!relay.principal() && !sinNodo) {
         return res.status(503).json({
             success: false,
-            message: 'Ningún nodo conectado. En la PC tiene que estar corriendo conectar-comfylatam.bat (y la app local).'
+            message: 'Ningún nodo conectado: abrí COMFYLATAM en la PC que va a generar (el botón "Transmitir mi Comfy" de la pestaña RED) y reintentá.'
         });
     }
 
