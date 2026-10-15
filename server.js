@@ -2855,3 +2855,4 @@ app.delete('/api/presets/:workflow/:name', (req, res) => {
 // Iniciar conexión con ComfyUI una vez que el servidor está listo
 connectToComfy();
 
+// prueba de reinicio automatico 1044
