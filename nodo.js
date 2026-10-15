@@ -318,16 +318,44 @@ function arrancar(opciones) {
                     method: r.method || 'GET', headers,
                     body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined)
                 });
+
+                const ct = resp.headers.get('content-type') || '';
+                const largo = Number(resp.headers.get('content-length') || 0);
+                const cabeceras = {
+                    'Content-Range': resp.headers.get('content-range') || '',
+                    'Accept-Ranges': resp.headers.get('accept-ranges') || '',
+                    'Content-Length': resp.headers.get('content-length') || ''
+                };
+
+                // MEDIA: se manda en pedazos, NUNCA entera en un solo mensaje.
+                // Antes iba todo en un mensaje (y en base64): un video de 1 GB
+                // ocupaba ~1.3 GB de RAM en el VPS y lo colgaba. Ahora el hub
+                // recibe pedazos de 512 KB y los escribe directo al navegador.
+                const esMedia = /^(video|audio|image)\//i.test(ct)
+                    || /octet-stream/i.test(ct)
+                    || largo > 1500000;
+                if (esMedia && resp.body && resp.body.getReader) {
+                    socket.emit('tunnel:http:meta', { reqId: r.reqId, status: resp.status, contentType: ct, headers: cabeceras });
+                    const reader = resp.body.getReader();
+                    let enviados = 0;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        if (value && value.length) {
+                            socket.emit('tunnel:http:chunk', { reqId: r.reqId, chunk: Buffer.from(value) });
+                            enviados += value.length;
+                        }
+                    }
+                    socket.emit('tunnel:http:fin', { reqId: r.reqId, bytes: enviados });
+                    return;
+                }
+
                 const buf = Buffer.from(await resp.arrayBuffer());
                 socket.emit('tunnel:http:result', {
                     reqId: r.reqId,
                     status: resp.status,
-                    contentType: resp.headers.get('content-type') || '',
-                    headers: {
-                        'Content-Range': resp.headers.get('content-range') || '',
-                        'Accept-Ranges': resp.headers.get('accept-ranges') || '',
-                        'Content-Length': resp.headers.get('content-length') || ''
-                    },
+                    contentType: ct,
+                    headers: cabeceras,
                     body: buf
                 });
             } catch (e) {

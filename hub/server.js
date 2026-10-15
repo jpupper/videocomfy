@@ -577,9 +577,29 @@ app.use((req, res, next) => {
         origen: (req.get('x-forwarded-proto') || req.protocol) + '://' + req.get('host'),
         contentType: req.headers['content-type'] || '',
         range: req.headers.range || '',
-        stream: req
+        stream: req,
+        // MEDIA GRANDE: se escribe al navegador a medida que llega, sin juntarla
+        // en memoria. Antes el nodo mandaba el archivo entero en un mensaje y el
+        // VPS (4 GB de RAM) se quedaba sin memoria y se colgaba.
+        alStream: {
+            meta: (m) => {
+                if (m.contentType) res.setHeader('Content-Type', m.contentType);
+                if (m.headers) {
+                    Object.keys(m.headers).forEach((h) => {
+                        if (m.headers[h]) res.setHeader(h, m.headers[h]);
+                    });
+                }
+                res.setHeader('Cache-Control', 'no-store');
+                res.status(m.status || 200);
+            },
+            chunk: (c) => { try { res.write(c); } catch (e) { } },
+            fin: () => { try { res.end(); } catch (e) { } },
+            error: () => { try { res.end(); } catch (e) { } }
+        }
     })
         .then((r) => {
+            // ya se escribió todo desde alStream (modo pedazos)
+            if (r.streamed) return;
             if (r.contentType) res.setHeader('Content-Type', r.contentType);
             // Streaming de video: hay que devolver 206 + Content-Range tal cual,
             // si no el navegador no puede reproducir ni hacer seek.

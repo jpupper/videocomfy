@@ -16,6 +16,10 @@ const mediaMap = require('./media-map');
 
 const state = { io: null, agent: null, basePath: '/comfylatam', info: {}, estado: null, peers: new Map(), historial: new Map() };
 const pendientes = new Map();
+// Respuestas que se mandan EN PEDAZOS (media): el hub las escribe directo al
+// navegador sin juntarlas en memoria. Antes un video grande se acumulaba entero
+// en el VPS y lo colgaba (4 GB de RAM).
+const enStream = new Map();
 let seq = 0;
 let onBroadcast = null;
 let onPeers = null;
@@ -330,6 +334,25 @@ function iniciar(io, basePath) {
             pd.resolve(r);
         });
 
+        // --- respuesta EN PEDAZOS (media grande): nunca se junta en memoria ---
+        socket.on('tunnel:http:meta', (r) => {
+            const es = enStream.get(r && r.reqId);
+            if (!es) return;
+            try { es.meta(r); } catch (e) { }
+        });
+        socket.on('tunnel:http:chunk', (r) => {
+            const es = enStream.get(r && r.reqId);
+            if (!es) return;
+            try { es.chunk(r.chunk); } catch (e) { }
+        });
+        socket.on('tunnel:http:fin', (r) => {
+            const es = enStream.get(r && r.reqId);
+            if (!es) return;
+            enStream.delete(r.reqId);
+            clearTimeout(es.timer);
+            try { es.fin(r.bytes); } catch (e) { }
+        });
+
         socket.on('tunnel:ws:broadcast', ({ data } = {}) => {
             p.ultimoLatido = ahora();
             if (typeof onBroadcast === 'function' && data != null) onBroadcast(p.id, data);
@@ -375,6 +398,11 @@ function iniciar(io, basePath) {
                 }));
                 console.log(`❌ Nodo desconectado: ${p.id} (${motivo})`);
                 if (state.agent === socket) state.agent = null;
+                for (const [reqId, es] of enStream) {
+                    clearTimeout(es.timer);
+                    try { es.error(new Error('nodo desconectado')); } catch (e) { }
+                    enStream.delete(reqId);
+                }
                 for (const [reqId, pd] of pendientes) {
                     if (pd.peerId === p.id) {
                         clearTimeout(pd.timer);
@@ -483,7 +511,7 @@ function reescribirTexto(texto, basePath, peerId) {
     });
 }
 
-async function reenviarHttp({ peerId, method, ruta, query, contentType, range, stream, origen }) {
+async function reenviarHttp({ peerId, method, ruta, query, contentType, range, stream, origen, alStream }) {
     const nodo = peer(peerId);
     if (!nodo || !nodo.socket || !nodo.socket.connected) throw new Error('nodo offline');
 
@@ -500,7 +528,25 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
             reject(new Error('timeout esperando al nodo'));
         }, TIMEOUT_HTTP);
 
-        pendientes.set(reqId, { resolve, reject, timer, peerId: nodo.id });
+        if (alStream) {
+            // Se resuelve apenas llegan las cabeceras; los pedazos se escriben
+            // directo (alStream.chunk) y el cierre avisa (alStream.fin).
+            enStream.set(reqId, {
+                timer,
+                meta: (m) => {
+                    clearTimeout(timer);
+                    // primero el caller escribe las cabeceras (si no, los pedazos
+                    // salen sin Content-Type ni 206 y el video no se puede mover)
+                    try { if (alStream.meta) alStream.meta(m); } catch (e) { }
+                    resolve({ streamed: true, status: m.status, contentType: m.contentType, headers: m.headers || {} });
+                },
+                chunk: (c) => alStream.chunk(c),
+                fin: (bytes) => alStream.fin(bytes),
+                error: (e) => { alStream.error(e); resolve({ streamed: true, error: e }); }
+            });
+        } else {
+            pendientes.set(reqId, { resolve, reject, timer, peerId: nodo.id });
+        }
 
         nodo.socket.emit('tunnel:http', {
             reqId,
@@ -514,6 +560,7 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
             body: body || null
         });
     }).then((r) => {
+        if (r && r.streamed) return r;
         const cuerpo = Buffer.isBuffer(r.body) ? r.body : Buffer.from(r.body || '');
         const esJson = String(r.contentType || '').includes('json');
         let jsonReescrito = null;
