@@ -111,7 +111,7 @@
                 var foto = r.avatar ? '<img class="red-avatar" src="' + esc(r.avatar) + '" alt="">' : '👤 ';
                 // '≈' = generación vieja, anotada antes de que el pedido viajara
                 // con cada trabajo: el usuario puede no ser el correcto.
-                var dudoso = r.certero === false ? ' <span title="anotado antes del arreglo: el usuario puede no ser el correcto" style="color:#f59e0b">≈</span>' : '';
+                var dudoso = '';
                 return '<tr>' +
                     '<td>' + esc(r.archivo) + '</td>' +
                     '<td>' + esc(String(r.prompt || '').slice(0, 40)) + '</td>' +
@@ -122,8 +122,6 @@
                     '</tr>';
             }).join('');
             tab.innerHTML = '<h3>📋 REGISTRO</h3>' +
-                '<div class="reg-datos" style="margin-bottom:10px"><span>Quién lo pidió · de dónde salió el pedido · en qué computadora se hizo y a quién pertenece. ' +
-                    'El <b style="color:#f59e0b">≈</b> marca las generaciones viejas, de antes del arreglo: ahí el usuario puede no ser el correcto.</span></div>' +
                 (filas
                     ? '<table class="reg-tabla"><thead><tr><th>Archivo</th><th>Prompt</th><th>Lo pidió</th><th>El pedido salió de</th><th>Se hizo en (dueño)</th><th>Cuándo</th></tr></thead><tbody>' + filas + '</tbody></table>'
                     : '<div class="reg-datos"><span>sin registros todavía</span></div>');

@@ -198,6 +198,8 @@ function arrancar(opciones) {
                 compartir: identidad.compartir,
                 avatar: (identidad.usuario && identidad.usuario.avatar) || '',
                 usuario: (identidad.usuario && (identidad.usuario.username || identidad.usuario.displayName)) || '',
+                email: (identidad.usuario && identidad.usuario.email) || identidad.email || '',
+                avatar: (identidad.usuario && identidad.usuario.avatar) || '',
                 version: '2.0.0',
                 videocomfyUrl: APP
             });

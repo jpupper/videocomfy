@@ -309,7 +309,12 @@ async function subirArchivoAR2(carpeta, nombre) {
         });
         if (!r) { r2Estado.errores++; return false; }
         mediaMap.anotar(nombre, r.url, { carpeta, bytes: st.size, cuando: Date.now() });
-        colaMapa.set(nombre, { url: r.url, bytes: st.size });   // avisa al hub (302 al CDN)
+        colaMapa.set(nombre, {          // avisa al hub (302 al CDN) y queda en la base
+            url: r.url, bytes: st.size, key: r.key || '',
+            tipo: (MIME_POR_EXT[String(path.extname(nombre)).toLowerCase()] || '').split('/')[0] === 'video' ? 'video'
+                : (MIME_POR_EXT[String(path.extname(nombre)).toLowerCase()] || '').split('/')[0] === 'audio' ? 'audio' : 'image',
+            mimetype: mimeDe(nombre)
+        });
         r2Estado.subidos++; r2Estado.bytes += st.size; r2Estado.ultimo = nombre;
         console.log('☁️  [R2] subido ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB) -> ' + r.url);
         registrarAsset(nombre, r.url, st.size).catch(() => { });
@@ -390,19 +395,68 @@ if (R2_ACTIVO) {
     console.log('ℹ️  SUBIR_A_R2=false: la media se sirve por el túnel del hub (puede cargar el VPS)');
 }
 
+// Avisa al hub cada generación terminada: así queda en la base IACOMFY (quién
+// la pidió, en qué computadora se hizo y a quién pertenece esa computadora).
+const colaGeneraciones = [];
+function avisarGeneracionAlHub(archivo, meta) {
+    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
+    if (!base || !archivo) return;
+    const ext = String(path.extname(archivo)).toLowerCase();
+    const cuerpo = {
+        archivo,
+        prompt: (meta && meta.prompt) || '',
+        modelo: (meta && meta.modelo) || '',
+        tipo: /mp4|webm|mov|mkv/.test(ext) ? 'video' : (/png|jpe?g|webp|gif/.test(ext) ? 'imagen' : 'otro'),
+        pedidoPor: (meta && meta.pedidoPor) || datosDelPedido(null),
+        computadora: (meta && meta.computadora) || datosDeEstaPC(),
+        origen: (meta && meta.origen) || 'local',
+        cuando: (meta && meta.timestamp) || Date.now()
+    };
+    colaGeneraciones.push(cuerpo);
+    if (colaGeneraciones.length > 200) colaGeneraciones.shift();
+}
+function enviarGeneracionesAlHub() {
+    if (!colaGeneraciones.length) return;
+    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
+    if (!base) return;
+    const lote = colaGeneraciones.splice(0, colaGeneraciones.length);
+    (async () => {
+        for (const g of lote) {
+            try {
+                const r = await fetch(base + '/api/red/generacion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
+                    body: JSON.stringify(g)
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+            } catch (e) {
+                colaGeneraciones.push(g);   // se reintenta en la próxima vuelta
+            }
+        }
+    })();
+}
+setInterval(enviarGeneracionesAlHub, 20000);
+
 // Avisa al hub qué hay en la nube (para que sirva 302 al CDN y no traiga la
 // media por el túnel). Se acumula y se manda cada 15 s.
 const colaMapa = new Map();
 function avisarMapaAlHub() {
     if (!colaMapa.size) return;
-    const items = [...colaMapa.entries()].map(([nombre, v]) => ({ nombre, url: v.url, bytes: v.bytes }));
+    const yo = datosDeEstaPC();
+    const items = [...colaMapa.entries()].map(([nombre, v]) => ({
+        nombre, url: v.url, bytes: v.bytes, key: v.key, tipo: v.tipo, mimetype: v.mimetype
+    }));
     colaMapa.clear();
     const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
     if (!base) return;
     fetch(base + '/api/red/media-mapa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
-        body: JSON.stringify({ items })
+        body: JSON.stringify({
+            items,
+            email: yo.email || '', username: yo.dueno || '', displayName: yo.duenoNombre || '',
+            avatar: yo.avatar || '', peerId: yo.peerId || '', computadora: yo.nombre || ''
+        })
     }).then((r) => {
         if (!r.ok) console.log('⚠️  [R2] el hub no aceptó el mapa de media: HTTP ' + r.status);
     }).catch((e) => {
@@ -1149,6 +1203,7 @@ function saveImageMetadata(filename, metadata) {
 }
 
 function saveMetadata(metaPath, filename, metadata) {
+    try { avisarGeneracionAlHub(filename, metadata); } catch (e) { }
     let allMetadata = {};
     try {
         if (fs.existsSync(metaPath)) {
@@ -1869,6 +1924,7 @@ function estadoRed() {
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
         usuario: RED.usuario,
+        email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,
         computadora: datosDeEstaPC(),
         clientes: RED.clientes,
@@ -2015,6 +2071,9 @@ function datosDeEstaPC() {
         // el hostname NO se publica: la red muestra el nombre de la computadora
         dueno: pr.usuario || u.username || u.displayName || 'local',
         duenoNombre: pr.displayName || pr.usuario || u.displayName || u.username || 'local',
+        // el EMAIL es el identificador universal del ecosistema (skillmaestro)
+        email: pr.email || u.email || '',
+        emailDueno: pr.email || u.email || '',
         avatar: pr.avatar || u.avatar || ''
     };
 }
@@ -2148,6 +2207,7 @@ app.post('/api/red/perfil', async (req, res) => {
         username: b.username || null,
         displayName: b.displayName || null,
         avatar: b.avatar || null,
+        email: b.email || null,
         id: b.id || null
     };
     // PROPIETARIO de la computadora: es ESTABLE. El primero que se loguea en esta
@@ -2158,7 +2218,8 @@ app.post('/api/red/perfil', async (req, res) => {
         RED.propietario = {
             usuario: RED.usuario.username,
             displayName: RED.usuario.displayName || RED.usuario.username,
-            avatar: RED.usuario.avatar || ''
+            avatar: RED.usuario.avatar || '',
+            email: RED.usuario.email || ''
         };
         console.log(`🔑 Dueño de esta computadora: ${RED.propietario.displayName} (@${RED.propietario.usuario})`);
     }
@@ -2166,7 +2227,8 @@ app.post('/api/red/perfil', async (req, res) => {
         RED.propietario = {
             usuario: RED.usuario.username,
             displayName: RED.usuario.displayName || RED.usuario.username,
-            avatar: RED.usuario.avatar || ''
+            avatar: RED.usuario.avatar || '',
+            email: RED.usuario.email || ''
         };
         console.log(`🔑 Dueño de esta computadora cambiado a ${RED.propietario.displayName}`);
     }

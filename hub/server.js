@@ -127,6 +127,18 @@ function exigirSesion(req, res, next) {
 }
 
 const PORT = process.env.PORT || 8086;
+
+// ---- Base IACOMFY (MongoDB): estadísticas, uptime de fierros y ranking ----
+db.conectar().catch(() => { });
+// latido: cada 30 s se anota qué computadoras están prendidas (para el uptime).
+// Si un fierro deja de latir, la sesión se cierra sola 3 minutos después.
+setInterval(async () => {
+    try {
+        const peers = relay.listarPeers ? relay.listarPeers() : [];
+        for (const pp of peers) { await db.latidoDeComputadora(pp); }
+    } catch (e) { }
+}, 30000);
+setInterval(() => { db.cerrarSesionesViejas().catch(() => { }); }, 60000);
 const BASE_PATH = process.env.BASE_PATH || '/comfylatam';
 const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 
@@ -207,6 +219,7 @@ app.get(['/health', BASE_PATH + '/health'], (req, res) => {
 const multer = require('multer');
 const r2 = require('./lib/r2');
 const mediaMap = require('./lib/media-map');
+const db = require('./modelos');           // base IACOMFY (estadísticas y ranking)
 const subidaMedia = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
 
 function soloPuente(req, res, next) {
@@ -430,6 +443,11 @@ function autorizadoRed(req) {
 }
 const rutasRed = (sufijo) => [BASE_PATH + sufijo, sufijo];
 
+// ¿el pedido viene del nodo (la app local) con el token de agente?
+function esAgente(req) {
+    return !!AGENT_TOKEN && String(req.headers['x-agent-token'] || '') === AGENT_TOKEN;
+}
+
 // Lista de nodos de la red (los que están corriendo la app con su Comfy).
 app.get(rutasRed('/api/red/peers'), (req, res) => {
     const quien = autorizadoRed(req);
@@ -521,7 +539,20 @@ app.post(rutasRed('/api/red/media-mapa'), express.json({ limit: '16mb' }), (req,
     const items = (req.body && req.body.items) || [];
     let n = 0;
     for (const it of items) {
-        if (it && it.nombre && it.url) { mediaMap.anotar(it.nombre, it.url, { bytes: it.bytes || null }); n++; }
+        if (it && it.nombre && it.url) {
+            mediaMap.anotar(it.nombre, it.url, { bytes: it.bytes || null });
+            // y queda en la base, asociado al usuario que lo creó (IACOMFY)
+            db.anotarAsset({
+                publicId: it.nombre, url: it.url, bytes: it.bytes || 0,
+                tipo: it.tipo || 'image', mimetype: it.mimetype || '', key: it.key || '',
+                email: (req.body && req.body.email) || '', username: (req.body && req.body.username) || '',
+                displayName: (req.body && req.body.displayName) || '', avatar: (req.body && req.body.avatar) || '',
+                computadoraPeerId: (req.body && req.body.peerId) || '',
+                computadoraNombre: (req.body && req.body.computadora) || '',
+                modelo: it.modelo || '', prompt: it.prompt || ''
+            }).catch(() => { });
+            n++;
+        }
     }
     console.log('☁️  Mapa de media actualizado desde el nodo: +' + n + ' (total ' + mediaMap.cantidad() + ')');
     res.json({ success: true, anotados: n, total: mediaMap.cantidad() });
@@ -826,3 +857,57 @@ servidorHttp.listen(PORT, '0.0.0.0', () => {
 
 process.on('SIGTERM', () => { servidorHttp.close(); process.exit(0); });
 process.on('SIGINT', () => { servidorHttp.close(); process.exit(0); });
+// ===========================================================================
+// IACOMFY - estadísticas, ranking y registro en la base (MongoDB)
+// ===========================================================================
+
+// El nodo avisa cada generación terminada (queda por usuario y por computadora).
+app.post(rutasRed('/api/red/generacion'), express.json({ limit: '2mb' }), async (req, res) => {
+    if (!esAgente(req)) return res.status(403).json({ success: false, message: 'token de agente inválido' });
+    const doc = await db.anotarGeneracion(req.body || {});
+    res.json({ success: !!doc, id: doc && doc._id });
+});
+
+// Estado de la base (para el panel).
+app.get(rutasRed('/api/iacomfy/estado'), (req, res) => {
+    res.json(Object.assign({ success: true }, db.estadoDb()));
+});
+
+// Resumen general del proyecto.
+app.get(rutasRed('/api/iacomfy/resumen'), async (req, res) => {
+    const r = await db.resumen();
+    res.json({ success: !!r, ...(r || {}), db: db.estadoDb() });
+});
+
+// RANKING DE LOS FIERROS: tiempo prendido / generaciones provistas / fierros
+app.get(rutasRed('/api/ranking/fierros'), async (req, res) => {
+    const r = await db.ranking(req.query.orden);
+    if (!r) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...r });
+});
+
+// Mis estadísticas: assets creados, mis fierros con uptime, mis generaciones.
+// Con sesión (web) o con ?usuario=<email|username> (app local sin login).
+app.get(rutasRed('/api/estadisticas/mia'), async (req, res) => {
+    let clave = null;
+    if (req.usuario) clave = req.usuario.email || req.usuario.username;
+    if (!clave && esAgente(req)) clave = req.query.usuario || null;
+    if (!clave && req.query.usuario) {
+        // sin token de agente sólo se permite ver stats públicas
+        const pub = await db.estadisticasDe(req.query.usuario);
+        return res.json({ success: !!pub, ...(pub || {}), publico: true });
+    }
+    if (!clave) return res.status(401).json({ success: false, message: 'requiereLogin' });
+    const d = await db.estadisticasDe(clave);
+    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...d, yo: true });
+});
+
+// Estadísticas públicas de un usuario (para el ranking).
+app.get(rutasRed('/api/estadisticas/usuario/:clave'), async (req, res) => {
+    const d = await db.estadisticasDe(req.params.clave);
+    if (!d) return res.json({ success: false, message: 'la base no está disponible' });
+    res.json({ success: true, ...d, publico: true });
+});
+
+

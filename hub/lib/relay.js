@@ -43,6 +43,8 @@ function crearPeer(socket, auth) {
         version: a.version || '',
         avatar: a.avatar || '',
         usuario: a.usuario || '',
+        email: a.email || '',
+        avatar: (a.usuario && a.usuario.avatar) || a.avatar || '',
         compartir: a.compartir === true || a.compartir === 'true',
         estado: null,
         desde: ahora(),
@@ -61,6 +63,7 @@ function publico(p) {
         version: p.version,
         avatar: p.avatar || '',
         usuario: p.usuario || '',
+        email: p.email || '',
         compartir: !!p.compartir,
         principal: !!p.principal,
         conectado: !!(p.socket && p.socket.connected),
@@ -311,6 +314,8 @@ function iniciar(io, basePath) {
             const i = info || {};
             p.nombre = i.nombre || p.nombre;
             p.host = i.host || p.host;
+            p.email = i.email || p.email || '';
+            p.hostname = i.hostname || p.hostname || '';
             p.gpu = i.gpu || p.gpu;
             p.modelos = Array.isArray(i.modelos) ? i.modelos : p.modelos;
             p.version = i.version || p.version;
