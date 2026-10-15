@@ -49,3 +49,9 @@ backup/
 # Herramientas locales de agentes
 .freebuff/
 config-local.json
+
+# --- orden del repo ---
+tg_token.txt
+pruebas/logs/
+config-local*.json
+temp/

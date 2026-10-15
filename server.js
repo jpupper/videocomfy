@@ -15,7 +15,7 @@ const multer = require('multer');
 require('dotenv').config();
 
 // Telegram Bot (auto-sends generated media)
-const telegramBot = require('./telegram-bot.js');
+const telegramBot = require('./tools/telegram-bot.js');
 
 // Default Telegram settings
 const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
@@ -229,6 +229,49 @@ app.get('/api/registro', (req, res) => {
         .sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
     res.set('Cache-Control', 'no-store');
     res.json({ success: true, total: todo.length, registros: todo.slice(0, Number(req.query.limite) || 60) });
+});
+
+// ---------------------------------------------------------------------------
+// ÍNDICE DE WORKFLOWS: todo lo que hay en la carpeta workflows/ se lista acá
+// (así se agregan nuevos archivos sin tocar el código).
+// ---------------------------------------------------------------------------
+const WORKFLOWS_DIR = path.join(__dirname, 'workflows');
+
+function indiceDeWorkflows() {
+    try {
+        return fs.readdirSync(WORKFLOWS_DIR)
+            .filter((f) => f.toLowerCase().endsWith('.json'))
+            .map((f) => {
+                const ruta = path.join(WORKFLOWS_DIR, f);
+                let nodos = 0, ok = true;
+                try {
+                    const d = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+                    nodos = Object.keys(d || {}).length;
+                } catch (e) { ok = false; }
+                const st = fs.statSync(ruta);
+                return {
+                    archivo: f,
+                    ruta: 'workflows/' + f,
+                    kb: Math.round(st.size / 1024),
+                    nodos,
+                    valido: ok,
+                    modificado: st.mtimeMs,
+                    enUso: Object.values(MODELOS_IMAGEN).some((m) => m.archivo === 'workflows/' + f)
+                        || ['video_ltx2_t2v_api.json', 'video_ltx2_i2v_api.json', 'flux_dev_fp8_api.json',
+                            'flux_dev_full_text_to_image_api.json', 'video_wan2_2_14B_flf2v_api.json']
+                           .some((x) => x === f)
+                };
+            })
+            .sort((a, b) => (b.enUso - a.enUso) || a.archivo.localeCompare(b.archivo));
+    } catch (e) {
+        return [];
+    }
+}
+
+app.get('/api/workflows', (req, res) => {
+    const lista = indiceDeWorkflows();
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, carpeta: 'workflows/', total: lista.length, workflows: lista });
 });
 
 app.get('/api/comfy/cola', async (req, res) => {
@@ -855,7 +898,7 @@ app.post('/api/generate-avatar', upload.fields([
         // Generar avatar via WebSocket (para que el frontend reciba updates)
         const outputFilename = `longcat_${Date.now()}.mp4`;
         const outputPath = path.join(__dirname, 'public', 'videos', outputFilename);
-        const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+        const scriptPath = path.join(__dirname, 'tools', 'longcat_avatar.py');
         
         if (!fs.existsSync(scriptPath)) {
             return res.status(500).json({ error: 'Script LongCat no encontrado. Ejecutá setup primero.' });
@@ -915,7 +958,7 @@ app.post('/api/generate-avatar', upload.fields([
 
 app.post('/api/setup-longcat', async (req, res) => {
     try {
-        const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+        const scriptPath = path.join(__dirname, 'tools', 'longcat_avatar.py');
         if (!fs.existsSync(scriptPath)) {
             return res.status(500).json({ error: 'longcat_avatar.py no encontrado' });
         }
@@ -1798,6 +1841,11 @@ process.on('uncaughtException', (e) => {
 
 server.listen(port, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
+    try {
+        const wfs = indiceDeWorkflows();
+        console.log(`🧩 Workflows indexados desde workflows/: ${wfs.length} archivo(s)`);
+        wfs.filter((w) => w.enUso).forEach((w) => console.log(`   · en uso: ${w.archivo} (${w.nodos} nodos, ${w.kb} KB)`));
+    } catch (e) { }
 
     // --- NODO DE LA RED: va DENTRO de la app, no hace falta ningún .bat ----
     // Al abrir COMFYLATAM la app se conecta sola al hub; el switch de la
@@ -2069,7 +2117,7 @@ async function downloadImage(url, targetPath) {
 
 async function generarVideo(promptText, params = {}, imageFilename = null) {
     const isI2V = !!imageFilename;
-    const workflowFile = isI2V ? 'video_ltx2_i2v_api.json' : 'video_ltx2_t2v_api.json';
+    const workflowFile = isI2V ? 'workflows/video_ltx2_i2v_api.json' : 'workflows/video_ltx2_t2v_api.json';
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
@@ -2209,7 +2257,7 @@ async function liberarVram() {
 // ============================================================
 const MODELOS_IMAGEN = {
     zimage: {
-        archivo: 'z_image_turbo_api.json',
+        archivo: 'workflows/z_image_turbo_api.json',
         etiqueta: 'Z-Image Turbo',
         tipoSalida: 'storyboard',            // el editor lo guarda como IMAGEN
         ayuda: 'Modelos: z_image_turbo_int8_convrot + qwen_3_4b + ae',
@@ -2229,7 +2277,7 @@ const MODELOS_IMAGEN = {
         }
     },
     qwen21: {
-        archivo: 'qwen_image_21_api.json',
+        archivo: 'workflows/qwen_image_21_api.json',
         etiqueta: 'Qwen-Image 2.1',
         tipoSalida: 'storyboard',
         ayuda: 'Modelos: qwen_image_2.1_Q8_0.gguf + qwen3vl_8b_int8_convrot + qwen_image_2.1_vae_bf16',
@@ -2310,10 +2358,10 @@ async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, b
     // Usar el checkpoint fused fp8 cuando está disponible: el workflow original
     // (flux1-dev fp16 23.8GB + t5xxl fp16 9.3GB) no entra en 24GB de VRAM y
     // hace crashear ComfyUI con segfault (exit 139) al cargar el CLIP.
-    const fp8File = 'flux_dev_fp8_api.json';
+    const fp8File = 'workflows/flux_dev_fp8_api.json';
     const workflowFile = fs.existsSync(path.join(__dirname, fp8File))
         ? fp8File
-        : 'flux_dev_full_text_to_image_api.json';
+        : 'workflows/flux_dev_full_text_to_image_api.json';
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
@@ -2347,7 +2395,7 @@ function broadcastComfyStatus(status) {
 }
 
 async function generarWan22Video(promptText, params = {}, startImageFilename = null, endImageFilename = null) {
-    const workflowFile = 'video_wan2_2_14B_flf2v_api.json';
+    const workflowFile = 'workflows/video_wan2_2_14B_flf2v_api.json';
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
@@ -2421,7 +2469,7 @@ async function generarLongCat(message) {
     
     const outputFilename = `longcat_${Date.now()}.mp4`;
     const outputPath = path.join(__dirname, 'public', 'videos', outputFilename);
-    const scriptPath = path.join(__dirname, 'longcat_avatar.py');
+    const scriptPath = path.join(__dirname, 'tools', 'longcat_avatar.py');
     
     // Si no existe el script, crearlo (ya debería estar)
     if (!fs.existsSync(scriptPath)) {

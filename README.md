@@ -191,3 +191,19 @@ Si no aparece, el panel RED (modo local) lo dice:
 
 > El **dueño del hub** (el VPS) sí usa el `AGENT_TOKEN` privado en su `.env`: así su
 > máquina entra con el token privado y las instalaciones nuevas con el público.
+
+## Estructura del proyecto
+
+```
+server.js  nodo.js  run.bat  package.json      # la app (raíz, sólo lo esencial)
+workflows/          # los workflows de ComfyUI (la app los indexa de acá)
+workflows/viejos/   # variantes y pruebas viejas (no las usa la app)
+tools/              # telegram-bot, longcat_avatar.py
+herramientas/       # scripts de mantenimiento (normalizar-metadata)
+pruebas/            # scripts de prueba (clientes, pipelines, logs)
+docs/               # notas y documentación vieja
+public/             # front (html/css/js) + uploads, videos, audio, presets
+```
+
+`GET /api/workflows` lista todo lo que hay en `workflows/` (nombre, nodos, KB y
+si está en uso). Para agregar un workflow nuevo alcanza con dejarlo ahí.
