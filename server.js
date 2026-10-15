@@ -373,12 +373,26 @@ app.post('/api/actualizar', async (req, res) => {
             if (guardado) console.log('📦 Cambios locales guardados aparte (stash) para poder actualizar...');
         }
 
-        const pull = await correr('git', ['merge', '--ff-only', 'origin/' + rama], { cwd: __dirname });
+        // Escalera para llegar SIEMPRE a la última versión:
+        //   1. avance simple (ff)       -> lo normal
+        //   2. rebase sobre el remoto   -> si esta copia tiene algún commit propio
+        //   3. reset --hard al remoto   -> último recurso: manda la versión oficial
+        let ajuste = 'ff';
+        let pull = await correr('git', ['merge', '--ff-only', 'origin/' + rama], { cwd: __dirname });
         if (!pull.ok) {
-            const pull2 = await correr('git', ['pull', '--ff-only'], { cwd: __dirname });
-            if (!pull2.ok) {
-                if (guardado) await correr('git', ['stash', 'pop'], { cwd: __dirname });
-                throw new Error(pull2.error || pull.error);
+            console.log('↩️  No fue avance simple: reaplico los commits locales sobre el remoto (rebase)...');
+            pull = await correr('git', ['rebase', 'origin/' + rama], { cwd: __dirname });
+            ajuste = 'rebase';
+            if (!pull.ok) {
+                await correr('git', ['rebase', '--abort'], { cwd: __dirname });
+                console.log('🔁 El rebase no se pudo: dejo la versión oficial del repositorio (reset)...');
+                const rst = await correr('git', ['fetch', 'origin'], { cwd: __dirname });
+                const rst2 = await correr('git', ['reset', '--hard', 'origin/' + rama], { cwd: __dirname });
+                if (!rst2.ok) {
+                    if (guardado) await correr('git', ['stash', 'pop'], { cwd: __dirname });
+                    throw new Error(rst2.error || pull.error || rst.error);
+                }
+                ajuste = 'reset';
             }
         }
 
@@ -408,7 +422,7 @@ app.post('/api/actualizar', async (req, res) => {
         res.json({
             success: true, antes, despues,
             commits: REMOTO ? REMOTO.atras : null,
-            npm: instalo, reiniciar: backendCambio,
+            npm: instalo, reiniciar: backendCambio, ajuste,
             cambiosLocalesGuardados: guardado, conflicto
         });
 
