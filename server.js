@@ -2856,3 +2856,4 @@ app.delete('/api/presets/:workflow/:name', (req, res) => {
 connectToComfy();
 
 // prueba de reinicio automatico 1044
+// reinicio automatico v2 104523
