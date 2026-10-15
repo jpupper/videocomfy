@@ -34,7 +34,7 @@
         // WebSocket crudo del editor (el protocolo de videocomfy).
         // En la web el token viaja como ?token= porque el backend lo pide.
         WS: ORIGIN.replace(/^http/, 'ws') + BASE + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : ''),
-        FSCAUTH_URL: 'https://vps-4455523-x.dattaweb.com/jpconnect'   // login unificado del ecosistema (jpconnect),   // login unificado del ecosistema
+        FSCAUTH_URL: 'https://vps-4455523-x.dattaweb.com/jpconnect',   // login unificado del ecosistema (jpconnect)ificado del ecosistema
         esServidor: esServidor,
         TOKEN: TOKEN
     };

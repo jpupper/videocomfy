@@ -146,7 +146,7 @@
         var elegido = '';
         try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
         var pedir = function (id) {
-            fetch(BASE + '/p/' + encodeURIComponent(id) + '/api/registro')
+            fetch(BASE + '/api/registro')
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
                 .catch(function () { });

@@ -143,6 +143,24 @@
             '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
             '</div>',
 
+            '<div class="red-gen">',
+            '  <h3>🎯 GENERAR EN LA RED</h3>',
+            '  <textarea id="redPrompt" placeholder="Escribí el prompt... el trabajo va al nodo elegido"></textarea>',
+            '  <div class="red-fila">',
+            '    <label class="red-etiqueta">Nodo</label>',
+            '    <select id="redDestino"></select>',
+            '    <label class="red-etiqueta">Modelo</label>',
+            '    <select id="redModelo">',
+            '      <option value="zimage">Z-Image Turbo (imagen, rápido)</option>',
+            '      <option value="qwen21">Qwen-Image 2.1 (imagen, mejor calidad)</option>',
+            '      <option value="ltx2">LTX-2 (video)</option>',
+            '    </select>',
+            '    <input type="number" id="redSteps" value="10" min="1" max="40" style="width:78px" title="steps">',
+            '    <input type="number" id="redAncho" value="1024" min="256" max="2048" step="64" style="width:88px" title="ancho">',
+            '    <button class="red-btn" id="redGenerar">GENERAR EN LA RED</button>',
+            '  </div>',
+            '  <div class="red-log" id="redLog">Todavía no hay movimientos.</div>',
+            '</div>'
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
 

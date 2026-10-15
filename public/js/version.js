@@ -43,7 +43,7 @@
     function traer() {
         if (!esLocal) {
             // en la web sólo mostramos la versión del hub
-            fetch(BASE + '/health').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+            fetch(BASE + '/api/version').then(function (r) { return r.ok ? r.json() : fetch(BASE + '/health').then(function (x) { return x.ok ? x.json() : null; }); }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
                 if (!chip) return;
                 var v = (d && (d.version || d.commit)) || null;
                 chip.className = 'ck-version-chip solo-lectura';
