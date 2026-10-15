@@ -182,7 +182,12 @@
 
     function traer() {
         var u = usuarioLocal();
-        if (!u) { quienSoyLocal().then(function (y) { if (y) { sinSesionYo = y; cargar(true); } }); }
+        // Sin sesión: pido al servidor quién es el dueño de esta computadora
+        // (una sola vez; el centinela evita repetir el pedido en loop).
+        if (!u && !sinSesionYo) {
+            quienSoyLocal().then(function (y) { sinSesionYo = y || 'nada'; if (y) traer(); });
+        }
+        if (!u && sinSesionYo && sinSesionYo !== 'nada') u = sinSesionYo;
         var clave = (u && (u.email || u.username)) || null;
         var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
         var cabeceras = token() ? { Authorization: 'Bearer ' + token() } : {};
@@ -191,6 +196,8 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
                 perfil = me && (me.usuario || me);
+                // Sin sesión igual se muestra el perfil: el del dueño local.
+                if (!perfil) perfil = usuarioLocal() || (sinSesionYo && sinSesionYo !== 'nada' ? sinSesionYo : null);
                 datosFsc = perfil || null;
                 if (perfil) {
                     try {
