@@ -173,7 +173,7 @@ async function anotarUsuario(input) {
                 $setOnInsert: { primeraVez: new Date() },
                 $inc: { vistas: 1 }
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     } catch (e) { console.log('⚠️  IACOMFY usuario: ' + e.message); return null; }
 }
@@ -196,7 +196,7 @@ async function anotarAsset(a) {
                 },
                 $setOnInsert: { cuando: new Date() }
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     } catch (e) { console.log('⚠️  IACOMFY asset: ' + e.message); return null; }
 }
@@ -229,7 +229,7 @@ async function latidoDeComputadora(peer) {
         const comp = await Computadora.findOneAndUpdate(
             { peerId: peer.id },
             { $set: set, $setOnInsert: { primerVisto: new Date() } },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
         // la cuenta queda registrada (para las listas de usuarios)
         if (nueva) await anotarUsuario(fuente).catch(() => { });
@@ -310,7 +310,7 @@ async function anotarGeneracion(g) {
 // Segundos de las sesiones ABIERTAS ahora mismo, por email. Así el tiempo
 // aportado se ve al instante (no hay que esperar a que se apague la PC).
 async function segundosEnVivo() {
-    if (!conectado) return { porEmail: {}, porPeer: {} };
+    if (!conectado) return { porEmail: {}, porPeer: {}, porPeerSeguido: {}, seguidoPorEmail: {} };
     try {
         const abiertas = await Sesion.find({ abierta: true }).lean();
         const ahora = Date.now();
@@ -321,8 +321,26 @@ async function segundosEnVivo() {
             const k = String(s.email || '').toLowerCase();
             if (k) porEmail[k] = (porEmail[k] || 0) + seg;
         }
-        return { porEmail, porPeer };
-    } catch (e) { return { porEmail: {}, porPeer: {} }; }
+        // El tiempo SEGUIDO (la sesión abierta más larga) se calcula aparte.
+        const porPeerSeguido = Object.assign({}, porPeer);
+        const seguidoPorEmail = Object.assign({}, porEmail);
+        // Si una sesión no tiene email (arrancó antes de loguearse), lo saco de su
+        // computadora: así el tiempo en vivo se le acredita igual al dueño.
+        const sinMail = abiertas.filter((x) => !x.email);
+        if (sinMail.length) {
+            const comps = await Computadora.find({ peerId: { $in: sinMail.map((x) => x.peerId) } }, { peerId: 1, email: 1 }).lean();
+            const mapa = {};
+            comps.forEach((c) => { if (c.email) mapa[c.peerId] = String(c.email).toLowerCase(); });
+            sinMail.forEach((x) => {
+                const k = mapa[x.peerId];
+                if (!k) return;
+                const seg = porPeer[x.peerId] || 0;
+                porEmail[k] = (porEmail[k] || 0) + seg;
+                seguidoPorEmail[k] = Math.max(seguidoPorEmail[k] || 0, seg);
+            });
+        }
+        return { porEmail, porPeer, porPeerSeguido, seguidoPorEmail };
+    } catch (e) { return { porEmail: {}, porPeer: {}, porPeerSeguido: {}, seguidoPorEmail: {} }; }
 }
 
 // ¿Está conectada ahora? Sí si tiene una sesión abierta o si latió hace menos
@@ -467,6 +485,7 @@ async function ranking(orden) {
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                     computadoras: f.computadoras, segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
                     enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
+                    seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
                     generacionesProvistas: mapaGen[f._id] || 0, ultimoVisto: f.ultimo
                 }))
             };
@@ -493,6 +512,7 @@ async function ranking(orden) {
             filas: filas.map((f, i) => ({
                 puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                 segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
+                seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
                 computadoras: f.computadoras, sesiones: f.sesiones,
                 enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
                 generacionesProvistas: mapaGen[f._id] || 0, generacionesPedidas: mapaPed[f._id] || 0,

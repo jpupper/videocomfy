@@ -78,21 +78,25 @@
         }
         var cabecera, celda;
         if (d.orden === 'generaciones') {
-            cabecera = '<th>#</th><th>Usuario</th><th>Generaciones provistas</th><th>Pidió</th><th>Fierros</th><th>Tiempo de sus fierros</th>';
+            cabecera = '<th>#</th><th>Usuario</th><th>Generaciones provistas</th><th>Pidió</th><th>Fierros</th><th>Tiempo de sus fierros</th><th>Prendida seguido</th>';
             celda = function (f) {
                 return '<td><b>' + f.generacionesProvistas + '</b></td><td>' + (f.generacionesPedidas || 0) + '</td>' +
-                    '<td>' + (f.computadoras || 0) + '</td><td>' + tiempo(f.segundosComputadora) + '</td>';
+                    '<td>' + (f.computadoras || 0) + '</td><td>' + tiempo(f.segundosComputadora) + '</td>' +
+                    '<td>' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>';
             };
         } else if (d.orden === 'fierros') {
-            cabecera = '<th>#</th><th>Usuario</th><th>Fierros en la red</th><th>Tiempo total</th><th>Generaciones provistas</th><th>Última vez</th>';
+            cabecera = '<th>#</th><th>Usuario</th><th>Fierros en la red</th><th>Tiempo total</th><th>Prendida seguido</th><th>Generaciones provistas</th><th>Última vez</th>';
             celda = function (f) {
                 return '<td><b>' + (f.computadoras || 0) + '</b></td><td>' + tiempo(f.segundosComputadora) + '</td>' +
+                    '<td>' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
                     '<td>' + (f.generacionesProvistas || 0) + '</td><td>' + fecha(f.ultimoVisto) + '</td>';
             };
         } else {
-            cabecera = '<th>#</th><th>Usuario</th><th>Tiempo prendida</th><th>Fierros</th><th>Sesiones</th><th>Generaciones provistas</th><th>Pidió</th>';
+            cabecera = '<th>#</th><th>Usuario</th><th>Tiempo total</th><th>Prendida seguido</th><th>Fierros</th><th>Sesiones</th><th>Generaciones provistas</th><th>Pidió</th>';
             celda = function (f) {
-                return '<td><b>' + tiempo(f.segundosComputadora) + '</b></td><td>' + (f.computadoras || 0) + '</td>' +
+                return '<td><b>' + tiempo(f.segundosComputadora) + '</b></td>' +
+                    '<td>' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
+                    '<td>' + (f.computadoras || 0) + '</td>' +
                     '<td>' + (f.sesiones || 0) + '</td><td>' + (f.generacionesProvistas || 0) + '</td><td>' + (f.generacionesPedidas || 0) + '</td>';
             };
         }

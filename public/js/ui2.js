@@ -89,7 +89,11 @@
             var id = b.id || '';
             if (id === 'newProjectBtn' || id === 'saveProjectBtn') return;   // ya van a CREATE
             if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0) {
-                if (stage && b.parentElement !== stage) stage.appendChild(b);
+                // se mueve UNA sola vez y se marca: antes el bucle cada 3 s lo
+                // volvía a mover, se duplicaba y titilaba.
+                if (b.dataset.ckPausar) return;
+                b.dataset.ckPausar = '1';
+                if (stage && !stage.contains(b)) stage.insertBefore(b, stage.firstChild);
                 b.classList.add('btn-pausar-stage');
                 return;
             }
@@ -110,6 +114,14 @@
             caja.appendChild(guardar);
             crear.insertBefore(caja, crear.firstChild);
         }
+
+        // si hay dos botones de pausa (uno viejo creado de nuevo), se saca el duplicado
+        var pausas = [];
+        document.querySelectorAll('button').forEach(function (b) {
+            var t = texto(b).toLowerCase();
+            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0) pausas.push(b);
+        });
+        pausas.slice(1).forEach(function (b) { b.remove(); });
 
         // si la fila quedó sin nada (ni sesiones), se esconde
         if (fila) {
@@ -182,7 +194,7 @@
     function arrancar() {
         armarStage();
         refrescar();
-        setInterval(refrescar, 3000);
+        setInterval(refrescar, 6000);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(arrancar, 1200); });

@@ -137,6 +137,15 @@ function exigirSesion(req, res, next) {
     next();
 }
 
+// El hub se reiniciaba (PM2 lo mostraba en rojo con 13 reinicios): un error sin
+// atrapar lo mataba. Ahora los errores se registran y el proceso sigue vivo.
+process.on('unhandledRejection', (e) => {
+    console.log('⚠️  Promesa rechazada sin atrapar:', (e && e.message) || e);
+});
+process.on('uncaughtException', (e) => {
+    console.log('⚠️  Excepción sin atrapar:', (e && e.message) || e);
+});
+
 const PORT = process.env.PORT || 8086;
 
 // ---- Base IACOMFY (MongoDB): estadísticas, uptime de fierros y ranking ----

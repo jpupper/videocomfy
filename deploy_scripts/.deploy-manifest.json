@@ -6,11 +6,11 @@
   "/comfylatam/css/energia.css": "21200adc19b02529a3dbf50b27b9bd583a7c5428",
   "/comfylatam/css/estado.css": "f041a985344939454fa8ffdc704fc87465606ff5",
   "/comfylatam/css/mobile.css": "22dec14ec9d4127468b06870a4d4c7f08391007e",
-  "/comfylatam/css/red.css": "380815bdd3385603bf199ecd74eaa24ef5b775e3",
+  "/comfylatam/css/red.css": "f7bf8a370abfc384b0ce3f086c163db20db382b3",
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "0c58d0608c58b73a42cdece26713dc893f884254",
-  "/comfylatam/index.html": "2d970d1852e47434980a48638cd1995449581810",
+  "/comfylatam/index.html": "66767527f34f86ad010601abf15026de8e44e804",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "0bf348cd1fee3976288f3cd11d88da03d4f10b1b",
   "/comfylatam/js/cola-pausa.js": "07ce91efdda543c112eb01d5b868589f83c19953",
@@ -40,5 +40,6 @@
   "/comfylatam/css/panel-izquierdo.css": "22d544d9981bd6a80975e36201700c9e496e8e09",
   "/comfylatam/js/panel-izquierdo.js": "0a5a7c1324564e65abc9ebac2674963b7df8f8b7",
   "/comfylatam/js/ui-ajustes.js": "b3a8ca6cb0ea6813b47f901a025ecb1ef951c0cb",
-  "/comfylatam/js/ui2.js": "1f197e5200bf19a0cc41bffe379938693ae88436"
+  "/comfylatam/js/ui2.js": "1f197e5200bf19a0cc41bffe379938693ae88436",
+  "/comfylatam/js/perfil-ck.js": "3484b719c5e95c0012dadbc900d62c29446ce0d1"
 }

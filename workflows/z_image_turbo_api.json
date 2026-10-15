@@ -2,7 +2,7 @@
   "16": {
     "class_type": "UNETLoader",
     "inputs": {
-      "unet_name": "z_image_turbo_fp8_e4m3fn.safetensors",
+      "unet_name": "z_image_turbo_int8_convrot.safetensors",
       "weight_dtype": "default"
     }
   },
