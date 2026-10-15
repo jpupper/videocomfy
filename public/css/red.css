@@ -629,3 +629,32 @@ body.red-arrastrando * { cursor: col-resize !important; }
     color: var(--primary) !important; border-bottom-color: var(--primary) !important;
     background: rgba(99,102,241,.08) !important; box-shadow: none !important;
 }
+
+/* --- PERFIL COMFYLATAM (botón del menú + panel) --- */
+.ck-perfil-btn { display: flex; align-items: center; gap: 8px; background: transparent !important;
+    border: none !important; padding: 0 10px !important; height: 100% !important; cursor: pointer;
+    color: var(--text-muted) !important; font-weight: 800; font-size: .65em !important;
+    text-transform: uppercase; letter-spacing: .5px; border-bottom: 4px solid transparent !important; }
+.ck-perfil-btn:hover { color: var(--foreground) !important; }
+.ck-perfil-btn:has(+ .active), .ck-perfil-btn.active { color: var(--primary) !important; border-bottom-color: var(--primary) !important; }
+.ck-perfil-foto { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: block; }
+.ck-perfil-inicial { display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent); color: #04121a; font-weight: 800; font-size: .9em; }
+.ck-perfil-nombre { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tabCuenta { padding: 22px 26px; overflow-y: auto; }
+.ckp-cabecera { display: flex; align-items: flex-start; gap: 16px; padding-bottom: 18px;
+    border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.ckp-foto { width: 78px; height: 78px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.ckp-inicial { display: inline-flex; align-items: center; justify-content: center; background: var(--accent);
+    color: #04121a; font-size: 2em; font-weight: 800; }
+.ckp-datos { flex: 1; min-width: 0; }
+.ckp-nombre { font-size: 1.5em; font-weight: 800; }
+.ckp-user { color: var(--accent); font-size: .95em; font-weight: 700; }
+.ckp-mail { color: var(--text-muted); font-size: .8em; }
+.ckp-bio { margin-top: 8px; color: var(--foreground); opacity: .85; font-size: .85em; max-width: 640px; }
+.ckp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ckp-chip { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 6px; padding: 2px 8px; font-size: .7em; font-weight: 700; text-transform: uppercase; }
+.ckp-chip.verde { color: var(--accent); border-color: rgba(0,255,213,.3); }
+.ckp-link { color: var(--text-muted); font-size: .72em; text-decoration: none; }
+.ckp-link:hover { color: var(--accent); }

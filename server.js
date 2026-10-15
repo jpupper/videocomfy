@@ -2295,7 +2295,13 @@ app.post('/api/red/clientes', (req, res) => {
         appsLocales: Number(d.appsLocales || 0),
         recibido: Date.now()
     };
-    console.log(`👥 Del hub: ${RED.clientes.total} cliente(s) — ${RED.clientes.web} web · ${RED.clientes.local} local · ${RED.clientes.usuariosTotal} usuario(s)`);
+    // Sólo se avisa cuando CAMBIA: antes escribía esto cada vez que el hub
+    // mandaba los clientes y el log era un chorro continuo de datos iguales.
+    const firma = `${RED.clientes.total}|${RED.clientes.web}|${RED.clientes.local}|${RED.clientes.usuariosTotal}`;
+    if (server_logClientes !== firma) {
+        server_logClientes = firma;
+        console.log(`👥 Del hub: ${RED.clientes.total} cliente(s) — ${RED.clientes.web} web · ${RED.clientes.local} local · ${RED.clientes.usuariosTotal} usuario(s)`);
+    }
     avisarRedATodos();
     res.json({ success: true });
 });
