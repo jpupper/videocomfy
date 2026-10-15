@@ -182,11 +182,20 @@ app.use(BASE_PATH, express.static(path.join(__dirname, '..', 'public')));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // --- Health -------------------------------------------------------------
+// Versión del hub: el commit del repo (la web lo muestra en el chip de versión).
+let versionCommit = null;
+try {
+    versionCommit = require('child_process')
+        .execSync('git rev-parse --short HEAD', { cwd: path.join(__dirname, '..'), windowsHide: true })
+        .toString().trim();
+} catch (e) { versionCommit = null; }
+
 app.get(['/health', BASE_PATH + '/health'], (req, res) => {
     res.json({
         status: 'ok',
         app: 'comfylatam',
-        version: '1.0.0',
+        version: versionCommit || '1.0.0',
+        commit: versionCommit,
         basePath: BASE_PATH,
         agente: !!relay.estado().agent
     });

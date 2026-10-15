@@ -440,3 +440,28 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .reg-tabla th { text-align: left; color: var(--text-muted); text-transform: uppercase; font-size: .78em; letter-spacing: .5px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .reg-tabla td { padding: 6px 8px; border-bottom: 1px solid rgba(148,163,184,.09); }
 .reg-tabla tr:hover td { background: rgba(0,255,213,.04); }
+
+/* --- chip de versión / botón actualizar --- */
+.ck-version-chip {
+    position: relative; z-index: 30;
+    margin-left: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: .74em; font-weight: 700; letter-spacing: .3px;
+    cursor: pointer; white-space: nowrap;
+}
+.ck-version-chip:hover { color: var(--foreground); border-color: var(--accent); }
+.ck-version-chip.al-dia { color: var(--accent); border-color: rgba(0,255,213,.3); }
+.ck-version-chip.hay-nueva {
+    color: #04121a;
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(0,255,213,.25);
+}
+.ck-version-chip.actualizando { color: #f59e0b; border-color: #f59e0b; }
+.ck-version-chip.error { color: #ff6b6b; border-color: #ff6b6b; }
+.ck-version-chip.solo-lectura { cursor: default; opacity: .8; }
+.ck-version-chip:disabled { cursor: progress; }

@@ -246,6 +246,162 @@ app.get('/api/registro', (req, res) => {
 // esta fecha el registro usaba el usuario logueado de turno (poco confiable).
 const ATRIBUCION_DESDE = 1792071000000;   // 2026-10-15 10:30 (desde acá el pedido viaja con cada trabajo)
 
+// ===========================================================================
+// VERSIÓN Y ACTUALIZACIÓN
+// ---------------------------------------------------------------------------
+// La app informa en qué versión está (commit git), chequea sola si hay una
+// nueva en el repositorio y, si hay, ofrece un botón para actualizarse.
+// ===========================================================================
+const { execFile } = require('child_process');
+
+function correr(cmd, args, opts) {
+    return new Promise((resolve) => {
+        execFile(cmd, args, Object.assign({ timeout: 30000, windowsHide: true }, opts || {}), (err, stdout) => {
+            resolve({ ok: !err, salida: String(stdout || '').trim(), error: err ? String(err.message || err) : '' });
+        });
+    });
+}
+
+const REPO_APP = process.env.GITHUB_REPO || 'jpupper/videocomfy';
+let VERSION = { commit: null, corto: null, fecha: null, rama: null, origen: 'desconocido', package: null };
+let REMOTO = null;            // último chequeo contra el repo
+let ULTIMO_CHEQUEO = 0;
+let ACTUALIZANDO = false;
+
+async function leerVersionLocal() {
+    const pkg = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version || null; } catch (e) { return null; } })();
+    const rev = await correr('git', ['rev-parse', 'HEAD'], { cwd: __dirname });
+    if (!rev.ok) {
+        VERSION = { commit: null, corto: null, fecha: null, rama: null, origen: 'sin git (copia zip)', package: pkg };
+        return VERSION;
+    }
+    const corto = await correr('git', ['rev-parse', '--short', 'HEAD'], { cwd: __dirname });
+    const fecha = await correr('git', ['log', '-1', '--format=%cI'], { cwd: __dirname });
+    const asunto = await correr('git', ['log', '-1', '--format=%s'], { cwd: __dirname });
+    const rama = await correr('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: __dirname });
+    VERSION = {
+        commit: rev.salida,
+        corto: corto.salida,
+        fecha: fecha.salida,
+        asunto: asunto.salida,
+        rama: rama.salida,
+        origen: 'git',
+        package: pkg
+    };
+    return VERSION;
+}
+
+// ¿Hay algo nuevo en el repositorio? (no cambia nada: sólo consulta)
+async function chequearVersion() {
+    await leerVersionLocal();
+    ULTIMO_CHEQUEO = Date.now();
+    if (VERSION.origen !== 'git') {
+        REMOTO = null;
+        return { hayNueva: false, motivo: 'esta copia no es un clon de git: actualizá bajando el repo de nuevo' };
+    }
+    // primero intenta con el remoto configurado (funciona con repo privado),
+    // si no, consulta directo a GitHub (repo público)
+    let salida = await correr('git', ['ls-remote', 'origin', 'HEAD'], { cwd: __dirname });
+    if (!salida.ok || !salida.salida) {
+        salida = await correr('git', ['ls-remote', 'https://github.com/' + REPO_APP, 'HEAD'], { cwd: __dirname });
+    }
+    if (!salida.ok || !salida.salida) {
+        REMOTO = null;
+        return { hayNueva: false, motivo: 'no pude consultar el repositorio (¿sin internet?)', error: salida.error };
+    }
+    const commitRemoto = salida.salida.split(/\s+/)[0];
+    const atras = await correr('git', ['rev-list', '--count', 'HEAD..' + commitRemoto], { cwd: __dirname });
+    const adelante = await correr('git', ['rev-list', '--count', commitRemoto + '..HEAD'], { cwd: __dirname });
+    REMOTO = {
+        commit: commitRemoto,
+        corto: commitRemoto.slice(0, 7),
+        atras: atras.ok ? Number(atras.salida) : null,
+        adelante: adelante.ok ? Number(adelante.salida) : null
+    };
+    const hayNueva = (REMOTO.atras || 0) > 0;
+    console.log(hayNueva
+        ? `⬆️  Hay una versión nueva (${REMOTO.atras} commit(s) atrás) — ${VERSION.corto} -> ${REMOTO.corto}`
+        : `✅ Versión al día (${VERSION.corto || '?'})`);
+    return { hayNueva, atras: REMOTO.atras, local: VERSION.corto, remoto: REMOTO.corto };
+}
+
+function estadoVersion() {
+    return {
+        version: VERSION,
+        remoto: REMOTO,
+        hayNueva: !!(REMOTO && (REMOTO.atras || 0) > 0),
+        revisado: ULTIMO_CHEQUEO || null,
+        actualizando: ACTUALIZANDO,
+        repo: REPO_APP
+    };
+}
+
+app.get('/api/version', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (Date.now() - ULTIMO_CHEQUEO > 5 * 60 * 1000) {
+        try { await chequearVersion(); } catch (e) { }
+    }
+    res.json(Object.assign({ success: true }, estadoVersion()));
+});
+
+// Botón ACTUALIZAR: trae la última versión del repositorio y deja todo listo.
+app.post('/api/actualizar', async (req, res) => {
+    if (ACTUALIZANDO) return res.status(409).json({ success: false, message: 'Ya se está actualizando.' });
+    if (VERSION.origen !== 'git') {
+        return res.status(400).json({ success: false, message: 'Esta copia no es un clon de git: bajá el repositorio de nuevo para actualizar.' });
+    }
+    ACTUALIZANDO = true;
+    const antes = VERSION.corto;
+    console.log('⬆️  Actualizando desde el repositorio...');
+    try {
+        await correr('git', ['fetch', 'origin'], { cwd: __dirname });
+        const rama = VERSION.rama || 'main';
+        const pull = await correr('git', ['merge', '--ff-only', 'origin/' + rama], { cwd: __dirname });
+        if (!pull.ok) {
+            const pull2 = await correr('git', ['pull', '--ff-only'], { cwd: __dirname });
+            if (!pull2.ok) throw new Error(pull2.error || pull.error);
+        }
+        await leerVersionLocal();
+        const despues = VERSION.corto;
+
+        // ¿cambiaron las dependencias? entonces hay que instalarlas
+        const diff = await correr('git', ['diff', '--name-only', antes || 'HEAD@{1}', 'HEAD'], { cwd: __dirname });
+        const toco = String(diff.salida || '');
+        let instalo = false;
+        if (/package(-lock)?\.json/.test(toco)) {
+            console.log('📦 Cambiaron las dependencias: npm install...');
+            const npm = await correr(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '--no-audit', '--no-fund'], { cwd: __dirname });
+            instalo = npm.ok;
+        }
+        const backendCambio = /(^|\n)(server\.js|nodo\.js)/.test(toco) || instalo;
+        console.log(`✅ Actualizado: ${antes} -> ${despues}${instalo ? ' (con npm install)' : ''}`);
+        if (backendCambio) console.log('🔁 Hay cambios en el backend: la app se reinicia sola en 2 segundos...');
+
+        ACTUALIZANDO = false;
+        res.json({ success: true, antes, despues, commits: REMOTO ? REMOTO.atras : null, npm: instalo, reiniciar: backendCambio });
+
+        if (backendCambio) {
+            setTimeout(() => {
+                try {
+                    const hijo = require('child_process').spawn(process.execPath,
+                        ['--max-old-space-size=4096', path.join(__dirname, 'server.js')],
+                        { cwd: __dirname, detached: true, stdio: 'ignore' });
+                    hijo.unref();
+                } catch (e) { }
+                process.exit(0);
+            }, 2000);
+        }
+    } catch (e) {
+        ACTUALIZANDO = false;
+        console.log('❌ No pude actualizar:', e.message);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// chequeo automático: al arrancar y cada 30 minutos
+setTimeout(() => { chequearVersion().catch(() => { }); }, 6000);
+setInterval(() => { chequearVersion().catch(() => { }); }, 30 * 60 * 1000);
+
 // ---------------------------------------------------------------------------
 // ÍNDICE DE WORKFLOWS: todo lo que hay en la carpeta workflows/ se lista acá
 // (así se agregan nuevos archivos sin tocar el código).
