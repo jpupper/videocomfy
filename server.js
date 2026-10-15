@@ -14,15 +14,19 @@ const execPromise = util.promisify(exec);
 const multer = require('multer');
 require('dotenv').config();
 
-// Telegram Bot (auto-sends generated media)
-const telegramBot = require('./tools/telegram-bot.js');
-
-// Default Telegram settings
-const TELEGRAM_ENABLED = !!process.env.TELEGRAM_BOT_TOKEN;
+// ---------------------------------------------------------------------------
+// TELEGRAM: DESACTIVADO (a pedido). El módulo ni se carga, no se manda nada y
+// el endpoint responde que está apagado.
+// Para reactivarlo algún día:  TELEGRAM_HABILITADO=true  +  TELEGRAM_BOT_TOKEN=...
+// ---------------------------------------------------------------------------
+const TELEGRAM_HABILITADO = String(process.env.TELEGRAM_HABILITADO || '').toLowerCase() === 'true';
+const TELEGRAM_ENABLED = TELEGRAM_HABILITADO && !!process.env.TELEGRAM_BOT_TOKEN;
+let telegramBot = null;
 if (TELEGRAM_ENABLED) {
-    console.log('🤖 Telegram Bot enabled');
+    telegramBot = require('./tools/telegram-bot.js');
+    console.log('🤖 Telegram: encendido');
 } else {
-    console.log('🤖 Telegram Bot disabled — set TELEGRAM_BOT_TOKEN in .env');
+    console.log('🤖 Telegram: DESACTIVADO (no se envía nada)');
 }
 
 const ipglobal = process.env.COMFYUI_ADDRESS || "127.0.0.1"; // Default to localhost
@@ -1349,6 +1353,9 @@ app.delete('/api/projects/:name', (req, res) => {
 // ============================================
 
 app.post('/api/send-to-telegram', async (req, res) => {
+    if (!TELEGRAM_ENABLED) {
+        return res.status(503).json({ success: false, telegram: false, message: 'Telegram está desactivado.' });
+    }
     try {
         const { filename, type, chatId, caption } = req.body;
 

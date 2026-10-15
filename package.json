@@ -8,9 +8,15 @@
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.8.4",
     "uuid": "^10.0.0",
-    "ws": "^8.17.1"
+    "ws": "^8.17.1",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/lib-storage": "^3.600.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.3"
   },
   "scripts": {
-    "start": "node --max-old-space-size=4096 server.js"
+    "start": "node --max-old-space-size=4096 server.js",
+    "hub": "node hub/server.js"
   }
 }
