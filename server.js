@@ -614,7 +614,7 @@ setTimeout(() => { diagnosticoMemoria('arranque'); limpiarMemoria(); }, 45000);
 
 // Alias de salud: el front lo consulta como /health (antes daba 404).
 app.get(['/health', '/api/health'], (req, res) => {
-    res.json({ status: 'ok', app: 'comfylatam', version: (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''), basePath: BASE_PATH || '', hora: new Date().toISOString() });
+    res.json({ status: 'ok', app: 'comfylatam', version: (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''), basePath: (typeof BASE_PATH !== 'undefined' ? BASE_PATH : ''), hora: new Date().toISOString() });
 });
 
 app.get('/api/salud-memoria', (req, res) => {
