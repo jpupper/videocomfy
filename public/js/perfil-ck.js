@@ -50,6 +50,15 @@
     function usuarioLocal() {
         try { return JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null'); } catch (e) { return null; }
     }
+    // En la app local puede no haber sesión: en ese caso el servidor sabe quién
+    // es el dueño de esta computadora y el perfil se muestra igual.
+    var sinSesionYo = null;
+    function quienSoyLocal() {
+        if (sinSesionYo) return Promise.resolve(sinSesionYo);
+        return fetch(baseApi() + '/api/yo').then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) { sinSesionYo = (d && d.usuario) || null; return sinSesionYo; })
+            .catch(function () { return null; });
+    }
 
     // ---------- el botón del menú: foto + nombre ----------
     function pintarBoton(forzar) {
@@ -173,6 +182,7 @@
 
     function traer() {
         var u = usuarioLocal();
+        if (!u) { quienSoyLocal().then(function (y) { if (y) { sinSesionYo = y; cargar(true); } }); }
         var clave = (u && (u.email || u.username)) || null;
         var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
         var cabeceras = token() ? { Authorization: 'Bearer ' + token() } : {};

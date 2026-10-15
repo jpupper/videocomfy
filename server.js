@@ -262,6 +262,8 @@ const MIME_POR_EXT = {
     '.gif': 'image/gif', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
     '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4'
 };
+let server_logClientes = '';   // última firma de clientes logueada
+
 const r2Estado = { activo: R2_ACTIVO, subidos: 0, bytes: 0, errores: 0, ultimo: null, enCurso: false, faltan: null };
 
 function mimeDe(nombre) {
@@ -394,7 +396,10 @@ async function barrerMediaAR2() {
         r2Estado.faltan = pendientes.length;
         const bytesFaltan = pendientes.reduce((a, x) => a + x.bytes, 0);
         if (pendientes.length) {
-            console.log(`☁️  [R2] faltan ${pendientes.length} archivo(s) (${(bytesFaltan / 1048576).toFixed(0)} MB) — los subo de a uno en segundo plano...`);
+            // Ojo: 'faltan' son los que NO están en la nube, pero sólo se suben los que
+        // se pidieron desde la web o desde otra computadora. Lo generado en local
+        // se queda en el disco de esta PC (por eso puede quedar en 0 subidos).
+        console.log(`☁️  [R2] ${pendientes.length} archivo(s) fuera de la nube (${(bytesFaltan / 1048576).toFixed(0)} MB) — sólo se sube lo pedido desde la web o la red; lo local queda en esta PC`);
         }
         for (const x of pendientes) {
             if (await subirArchivoAR2(x.carpeta, x.f)) hechos++;
@@ -615,6 +620,23 @@ setTimeout(() => { diagnosticoMemoria('arranque'); limpiarMemoria(); }, 45000);
 // Alias de salud: el front lo consulta como /health (antes daba 404).
 app.get(['/health', '/api/health'], (req, res) => {
     res.json({ status: 'ok', app: 'comfylatam', version: (typeof VERSION_APP !== 'undefined' ? VERSION_APP : ''), basePath: (typeof BASE_PATH !== 'undefined' ? BASE_PATH : ''), hora: new Date().toISOString() });
+});
+
+// Quién es el dueño de ESTA computadora: lo usa el perfil cuando la app corre
+// en local sin sesión (así se ve tu foto, tu nombre y tus datos igual).
+app.get(['/api/yo', '/api/quien-soy'], (req, res) => {
+    let pc = {};
+    try { pc = datosDeEstaPC() || {}; } catch (e) { pc = {}; }
+    const guardado = (() => { try { return RED && RED.computadora ? RED.computadora : {}; } catch (e) { return {}; } })();
+    const u = Object.assign({}, guardado, pc);
+    res.json({
+        success: true, local: true,
+        usuario: {
+            username: u.dueno || u.usuario || '', displayName: u.duenoNombre || u.nombre || '',
+            avatar: u.avatar || '', email: u.email || u.emailDueno || '',
+            peerId: u.peerId || '', computadora: u.nombre || ''
+        }
+    });
 });
 
 app.get('/api/salud-memoria', (req, res) => {
@@ -2413,6 +2435,9 @@ app.post('/api/red/clientes', (req, res) => {
     };
     // Sólo se avisa cuando CAMBIA: antes escribía esto cada vez que el hub
     // mandaba los clientes y el log era un chorro continuo de datos iguales.
+    // 'server_logClientes' guardaba la última firma vista para no repetir el
+    // log: estaba usada pero nunca declarada -> reventaba en cada request.
+    if (typeof server_logClientes === 'undefined') global.server_logClientes = '';
     const firma = `${RED.clientes.total}|${RED.clientes.web}|${RED.clientes.local}|${RED.clientes.usuariosTotal}`;
     if (server_logClientes !== firma) {
         server_logClientes = firma;
