@@ -424,6 +424,15 @@ async function ranking(orden) {
                 { $match: { email: { $ne: '' } } }, { $group: { _id: '$email', pidio: { $sum: 1 } } }
             ]);
             const mapaPedidas = Object.fromEntries(pedidas.map((x) => [x._id, x.pidio]));
+            // último latido por cuenta (para saber si tiene un fierro conectado)
+            const comps = await Computadora.find({}, { email: 1, ultimoVisto: 1 }).lean();
+            const mapaUltimo = {};
+            for (const c of comps) {
+                const k = String(c.email || '').toLowerCase();
+                if (!k) continue;
+                const t = new Date(c.ultimoVisto || 0).getTime();
+                if (!mapaUltimo[k] || t > mapaUltimo[k]) mapaUltimo[k] = t;
+            }
             const segundos = await Computadora.aggregate([{ $group: { _id: '$email', segundos: { $sum: '$segundosTotal' } } }]);
             const mapaSeg = Object.fromEntries(segundos.map((x) => [x._id, x.segundos]));
             return {
@@ -431,7 +440,7 @@ async function ranking(orden) {
                 filas: filas.map((f, i) => ({
                     puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
                     generacionesProvistas: f.generaciones, generacionesPedidas: mapaPedidas[f._id] || 0,
-                    enLinea: enLineaDe(f._id, null, vivo),
+                    enLinea: enLineaDe(f._id, mapaUltimo[String(f._id || '').toLowerCase()], vivo),
                     computadoras: f.computadoras.filter(Boolean).length,
                     segundosComputadora: (mapaSeg[f._id] || 0) + (vivo.porEmail[f._id] || 0),
                     enLinea: enLineaDe(f._id, f.ultimoVisto, vivo)
