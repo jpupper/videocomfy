@@ -1095,14 +1095,12 @@ function connectToComfy() {
 
             // Enviar progreso al cliente
             if (message.type === 'progress') {
-                wss.clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: 'progress',
-                            value: message.data.value,
-                            max: message.data.max
-                        }));
-                    }
+                // el progreso es lo que más se repite: si un navegador está atrasado
+                // se saltea (su buffer no crece y no se come la memoria)
+                enviarAlFront({
+                    type: 'progress',
+                    value: message.data.value,
+                    max: message.data.max
                 });
             }
 
