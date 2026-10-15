@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/sidebar-collapse.css?v=1">
     <link rel="stylesheet" href="css/estado.css?v=1">
-    <link rel="stylesheet" href="css/cola-pausa.css?v=1">
+    <link rel="stylesheet" href="css/cola-pausa.css?v=3">
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
@@ -178,10 +178,16 @@
                         <div id="colaComfyAviso" class="cola-comfy-aviso"></div>
                     </div>
 
+                    <!-- PEDIDOS QUE LLEGAN DE LA RED: van SEPARADOS del batch propio -->
+                    <div id="queueRedVuelo" class="red-vuelo hidden">
+                        <h4>📥 PEDIDOS DE LA RED <span id="redVueloCantidad"></span></h4>
+                        <div id="redVueloLista"></div>
+                    </div>
+
                     <div id="globalQueueContainer" class="inline-queue-card hidden">
                         <div class="inline-queue-header">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <span class="inline-queue-title">📋 COLA DE LA APP</span>
+                                <span class="inline-queue-title">🏠 TU BATCH LOCAL</span>
                                 <span class="inline-queue-badge">lo que pediste</span>
                                 <span id="queueCount" class="inline-queue-badge">0</span>
                             </div>
@@ -858,7 +864,8 @@
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
     <script src="js/cola-pausa.js?v=2"></script>
-    <script src="js/cola-comfy.js?v=2"></script>
+    <script src="js/cola-comfy.js?v=3"></script>
+    <script src="js/registro.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/auth-jpi.js?v=6"></script>
     <script src="js/entorno-jpi.js?v=3"></script>

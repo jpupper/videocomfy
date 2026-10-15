@@ -172,7 +172,11 @@ function arrancar(opciones) {
         });
 
         socket.on('connect', async () => {
-            log('✅ conectado a la red COMFYLATAM');
+            log('═'.repeat(62));
+            log('✅ CONECTADO AL VPS (hub de la red COMFYLATAM)');
+            log(`   hub: ${CFG.HUB}${CFG.BASE} · socket.io namespace /agent`);
+            log(`   esta PC: ${identidad.nombre} (${identidad.peerId})`);
+            log('═'.repeat(62));
             ultimoConectado = true;
             await leerIdentidad().catch(() => { });
             socket.emit('agent:hello', {
@@ -194,13 +198,25 @@ function arrancar(opciones) {
             refrescarEncolados();
         });
 
-        socket.on('connect_error', (e) => logErr('⚠️  sin conexión al hub:', e.message));
-        socket.on('disconnect', (m) => { ultimoConectado = false; log('🔌 desconectado del hub:', m); });
+        let intentos = 0;
+        socket.on('connect_error', (e) => {
+            intentos++;
+            if (intentos === 1 || intentos % 6 === 0) logErr(`⚠️  no pude conectar al VPS (intento ${intentos}): ${e.message}`);
+        });
+        socket.io.on('reconnect_attempt', (n) => log(`🔁 reintentando conectar al VPS (${n})...`));
+        socket.on('disconnect', (m) => {
+            ultimoConectado = false;
+            log(`🔌 DESCONECTADO DEL VPS (${m}) — reintento automático en ${Math.round(CFG.RECONEXION_MS / 1000)}s`);
+        });
 
         // trabajo que llega de la red: se encola en la app local
         socket.on('red:job', async (job) => {
             if (!job || !job.jobId) return;
-            log(`🎯 trabajo de ${job.de || '?'}: ${String(job.prompt || '').slice(0, 50)}`);
+            const quien = (job.pedidoPor && (job.pedidoPor.displayName || job.pedidoPor.usuario)) || job.de || '?';
+            log('─'.repeat(62));
+            log(`🎯 EL VPS ME MANDÓ UN TRABAJO de @${quien} (${(job.pedidoPor && job.pedidoPor.tipo) || 'web'})`);
+            log(`   prompt: ${String(job.prompt || '').slice(0, 70)}`);
+            log(`   modelo: ${job.modelo || 'auto'} · jobId ${job.jobId || '?'}`);
             try {
                 const r = await fetch(APP + '/api/red/job', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(job)
@@ -225,6 +241,12 @@ function arrancar(opciones) {
             } catch (e) { }
             identidad.compartir = !!compartir;
             enviarEstado();
+        });
+
+        socket.on('red:clientes', (d = {}) => {
+            fetch(APP + '/api/red/clientes', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d || {})
+            }).catch(() => { });
         });
 
         socket.on('red:peers', (d = {}) => {

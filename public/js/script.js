@@ -252,6 +252,7 @@ function handleWsMessage(event) {
                 }
                 isGeneratingGlobal = false;
                 currentExecutingId = null;
+                window.dispatchEvent(new CustomEvent('jpi-generado', { detail: { tipo: 'video' } }));
                 setTimeout(() => checkGlobalQueue(), 1000);
             }
         }
@@ -298,6 +299,7 @@ function handleWsMessage(event) {
                 if (imgGallery) imgGallery.classList.remove('hidden');
             }
 
+            window.dispatchEvent(new CustomEvent('jpi-generado', { detail: { tipo: 'imagen' } }));
             if (currentExecutingId || message.prompt_id) {
                 const itemIndex = globalGenerationQueue.findIndex(i =>
                     i.status !== 'completed' &&

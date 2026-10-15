@@ -118,6 +118,7 @@
             '<div class="red-elegido" id="redElegidoCaja"></div>',
             '<div class="red-aviso" id="redAviso"></div>',
 
+            '<div class="red-disponibles" id="redDisponibles"></div>',
             '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
             '  <button class="red-ojo" id="redOjo" title="Ver también los que no están transmitiendo y las conexiones pasadas"></button>',
             '</h3>',
@@ -129,6 +130,9 @@
 
             // Esto antes vivía en el panel izquierdo (⚡ COMFYLATAM / Entorno /
             // ComfyUI / Estado): se movió acá, que es donde tiene sentido.
+            // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
+            '<div class="red-clientes" id="redClientes"></div>',
+
             '<div class="red-equipo" id="redEquipo">',
             '  <h3 class="red-titulo">⚡ TU EQUIPO</h3>',
             '  <div class="red-eq-filas">',
@@ -271,6 +275,19 @@
             ojoBtn.title = ESTADO.verPasados
                 ? 'Ocultar los que no transmiten y las conexiones pasadas'
                 : 'Ver también los que no transmiten (' + ocultos.length + ') y las conexiones pasadas';
+        }
+        // "disponible" = conectado Y con el Comfy libre (no alcanza con el socket)
+        var cajaDisp = document.getElementById('redDisponibles');
+        if (cajaDisp) {
+            var conectados = ESTADO.peers.filter(function (p) { return p.conectado; });
+            var libres = conectados.filter(function (p) { return p.comfy && !p.ocupado && !(p.encolados > 0); });
+            var ocupados = conectados.filter(function (p) { return p.ocupado || p.encolados > 0; });
+            var apagados = conectados.filter(function (p) { return !p.comfy; });
+            cajaDisp.innerHTML =
+                '<span class="ok">🟢 ' + libres.length + ' disponible(s) ahora</span>' +
+                '<span class="ojo">🟡 ' + ocupados.length + ' ocupada(s)</span>' +
+                '<span class="off">⚪ ' + apagados.length + ' sin ComfyUI</span>' +
+                '<span class="tot">de ' + conectados.length + ' conectada(s)</span>';
         }
         document.getElementById('redCantidad').textContent =
             '(' + usables.length + ' disponibles' + (ESTADO.verPasados && ocultos.length ? ' + ' + ocultos.length + ' ocultos' : '') + ')';
@@ -467,7 +484,12 @@
             estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
         } else {
             if (p.conectado) {
-                estado = (p.comfy ? 'Comfy listo' : 'Comfy apagado') + (p.encolados ? ' · ' + p.encolados + ' en cola' : ' · libre');
+                var quien = p.usuario ? ' · de @' + p.usuario : '';
+                estado = (p.comfy
+                    ? (p.ocupado || p.encolados > 0
+                        ? '🟡 OCUPADO · ' + (p.encolados || 0) + ' en cola'
+                        : '🟢 LIBRE para generar')
+                    : '⚪ Comfy apagado') + quien;
             } else {
                 var hace = '';
                 if (p.visto) {
@@ -491,6 +513,44 @@
             '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
             '  <div class="red-accion">' + boton + '</div>',
             '</div>'
+        ].join('\n');
+    }
+
+    // --- 👥 clientes conectados: cuántos, usuarios y de qué tipo -------------
+    function pintarClientes() {
+        var caja = document.getElementById('redClientes');
+        if (!caja) return;
+        var c = ESTADO.clientes || {};
+        var total = Number(c.total || 0);
+        var usuarios = c.usuarios || [];
+
+        if (!total && !usuarios.length && !(c.appsLocales || 0)) {
+            caja.innerHTML = '<h3 class="red-titulo">👥 CLIENTES CONECTADOS</h3>' +
+                '<div class="red-sub-chico">Todavía no hay nadie más conectado.</div>';
+            return;
+        }
+
+        var filas = usuarios.map(function (u) {
+            var foto = u.avatar ? '<img class="red-avatar" src="' + esc(u.avatar) + '" alt="">' : '👤 ';
+            var tipos = [];
+            if (u.web) tipos.push(u.web + ' web');
+            if (u.local) tipos.push(u.local + ' local');
+            return '<div class="red-cliente-fila">' + foto +
+                '<b>@' + esc(u.usuario) + '</b>' +
+                '<span class="red-cliente-tipo">' + tipos.join(' · ') + '</span></div>';
+        }).join('');
+
+        caja.innerHTML = [
+            '<h3 class="red-titulo">👥 CLIENTES CONECTADOS <span class="red-badge">' + total + '</span></h3>',
+            '<div class="red-cliente-resumen">',
+            '  <span>🌐 ' + (c.web || 0) + ' en la web</span>',
+            '  <span>💻 ' + ((c.local || 0) + (c.appsLocales || 0)) + ' en local</span>',
+            '  <span>👤 ' + (c.usuariosTotal || 0) + ' usuario(s)</span>',
+            (c.anonimos ? '  <span class="red-cliente-anon">' + c.anonimos + ' sin sesión</span>' : ''),
+            '</div>',
+            filas ? '<div class="red-clientes-lista">' + filas + '</div>' : '',
+            '<div class="red-sub-chico">Un <b>cliente</b> es cada navegador conectado (la web o una app local). ' +
+            'La app local además aparece como nodo, con su Comfy.</div>'
         ].join('\n');
     }
 
@@ -534,14 +594,21 @@
                 };
                 ESTADO.peers = r.datos.nodos || [];
                 ESTADO.pasados = r.datos.pasados || [];
+                ESTADO.clientes = r.datos.clientes || ESTADO.clientes;
+                ESTADO.enVueloDetalle = r.datos.enVueloDetalle || [];
+                ESTADO.computadora = r.datos.computadora || ESTADO.computadora;
             } else {
                 ESTADO.yo = null;
                 ESTADO.peers = r.datos.peers || [];
                 ESTADO.pasados = r.datos.pasados || [];
+                api('/api/red/clientes').then(function (rc) {
+                    if (rc.ok && rc.datos) { ESTADO.clientes = rc.datos; pintarClientes(); }
+                }).catch(function () { });
             }
             if (manual) log('🔄 Red actualizada: ' + ESTADO.peers.length + ' nodo(s)');
             pintar();
             pintarEquipo();
+            pintarClientes();
         }).catch(function (e) { if (manual) log('⚠️ ' + e.message); });
     }
 
@@ -584,6 +651,9 @@
                     try { m = JSON.parse(ev.data); } catch (e) { return; }
                     if (!m) return;
                     if (m.type === 'red_estado' && m.red) {
+                        // Los pedidos que llegan por la red se muestran aparte del batch propio
+                        window.JPI_RED_VUELO = m.red.enVueloDetalle || [];
+                        if (typeof window.jpiPintarVuelo === 'function') { try { window.jpiPintarVuelo(); } catch (e) { } }
                         ESTADO.yo = {
                             peerId: m.red.peerId, nombre: m.red.nombre,
                             compartir: !!m.red.compartir, conectado: !!m.red.conectado,
@@ -603,6 +673,22 @@
         if (typeof io === 'function') {
             try {
                 socket = io(J.ORIGIN, { path: J.BASE + '/socket.io', transports: ['websocket', 'polling'] });
+                // El hub necesita saber quién mira: usuario (token) + si es local o web
+                function identificarme() {
+                    var tok = '';
+                    try { tok = localStorage.getItem('fsc_token_jpi') || ''; } catch (e) { }
+                    var u = null;
+                    try { u = JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null'); } catch (e) { }
+                    socket.emit('cliente:yo', {
+                        token: tok, origen: 'web',
+                        usuario: (u && (u.username || u.displayName)) || '',
+                        displayName: (u && (u.displayName || u.username)) || '',
+                        avatar: (u && u.avatar) || ''
+                    });
+                    if (u) log('👤 conectado como @' + (u.username || u.displayName));
+                }
+                socket.on('connect', identificarme);
+                socket.on('red:clientes', function (d) { ESTADO.clientes = d || ESTADO.clientes; pintarClientes(); });
                 socket.on('red:peers', function (d) {
                     ESTADO.peers = (d && d.peers) || [];
                     pintar();

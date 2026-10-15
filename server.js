@@ -169,6 +169,41 @@ async function leerColaComfy() {
     }
 }
 
+// REGISTRO: qué computadora generó cada cosa, quién la pidió y a quién está
+// registrada esa computadora. Se arma con los metadata.json de uploads/videos.
+app.get('/api/registro', (req, res) => {
+    const leer = (ruta, tipo) => {
+        try {
+            if (!fs.existsSync(ruta)) return [];
+            const d = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+            return Object.keys(d).map((f) => {
+                const m = d[f] || {};
+                const pc = m.computadora || {};
+                const pp = m.pedidoPor || {};
+                return {
+                    archivo: f,
+                    tipo,
+                    fecha: m.timestamp || m.savedAt || m.generationStartTime || null,
+                    prompt: String(m.prompt || '').slice(0, 160),
+                    computadora: pc.nombre || RED.nombre,
+                    peerId: pc.peerId || RED.peerId,
+                    host: pc.host || '',
+                    dueno: pc.dueno || (RED.usuario && (RED.usuario.username || RED.usuario.displayName)) || 'local',
+                    pedidoPor: pp.displayName || pp.usuario || 'desconocido',
+                    pedidoPorUsuario: pp.usuario || '',
+                    avatar: pp.avatar || '',
+                    origen: m.origen || (m.red ? 'red' : 'local'),
+                    modelo: m.modelo || ''
+                };
+            });
+        } catch (e) { return []; }
+    };
+    const todo = leer(IMAGE_META_PATH, 'imagen').concat(leer(VIDEO_META_PATH, 'video'))
+        .sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, total: todo.length, registros: todo.slice(0, Number(req.query.limite) || 60) });
+});
+
 app.get('/api/comfy/cola', async (req, res) => {
     const real = await leerColaComfy();
     res.json({
@@ -442,8 +477,25 @@ function connectToComfy() {
                                 }
                             }
 
-                            // Guardar metadatos asociados al archivo
-                            const metaToSave = details || lastPromptDetails || { prompt: 'Unknown Prompt', params: {} };
+                            // Guardar metadatos asociados al archivo (incluye QUIÉN lo pidió,
+                            // en QUÉ computadora se hizo y a quién está registrada).
+                            const metaToSave = Object.assign(
+                                { prompt: 'Unknown Prompt', params: {} },
+                                lastPromptDetails || {}, details || {}
+                            );
+                            metaToSave.computadora = metaToSave.computadora || datosDeEstaPC();
+                            metaToSave.pedidoPor = metaToSave.pedidoPor || { usuario: 'desconocido', tipo: 'local' };
+                            metaToSave.origen = metaToSave.origen || 'local';
+                            console.log(`🏷️  Registro: ${filenameOnly} | computadora ${metaToSave.computadora.nombre} (dueño ${metaToSave.computadora.dueno}) | pedido por ${metaToSave.pedidoPor.displayName || metaToSave.pedidoPor.usuario} (${metaToSave.pedidoPor.tipo}) | origen ${metaToSave.origen}`);
+
+                            // Si era un pedido de la red, ya terminó: sale del detalle
+                            // de "en vuelo" (antes el contador sólo subía).
+                            if (metaToSave.origen === 'red') {
+                                RED.enVuelo = Math.max(0, (RED.enVuelo || 0) - 1);
+                                RED.enVueloDetalle = (RED.enVueloDetalle || []).filter((j) => j.promptId !== promptId);
+                                console.log(`✅ Pedido de la red terminado — quedan ${RED.enVuelo} en vuelo`);
+                                avisarRedATodos();
+                            }
                             
                             if (assetType === 'video') {
                                 saveVideoMetadata(filenameOnly, {
@@ -453,7 +505,11 @@ function connectToComfy() {
                                     prompt_id: promptId,
                                     batchId: metaToSave.batchId,
                                     batchName: metaToSave.batchName,
-                                    type: metaToSave.type || 'video'
+                                    type: metaToSave.type || 'video',
+                                    computadora: metaToSave.computadora,
+                                    pedidoPor: metaToSave.pedidoPor,
+                                    origen: metaToSave.origen,
+                                    modelo: metaToSave.modelo,
                                 });
                             } else {
                                 saveImageMetadata(filenameOnly, {
@@ -461,6 +517,10 @@ function connectToComfy() {
                                     params: metaToSave.params,
                                     storyboardIndex: metaToSave.storyboardIndex,
                                     batchId: metaToSave.batchId,
+                                    computadora: metaToSave.computadora,
+                                    pedidoPor: metaToSave.pedidoPor,
+                                    origen: metaToSave.origen,
+                                    modelo: metaToSave.modelo,
                                     batchName: metaToSave.batchName,
                                     prompt_id: promptId,
                                     isForWan: metaToSave.isForWan,
@@ -479,7 +539,13 @@ function connectToComfy() {
                                         prompt: metaToSave.prompt,
                                         storyboardIndex: metaToSave.storyboardIndex,
                                         batchId: metaToSave.batchId,
-                                        prompt_id: promptId
+                                        prompt_id: promptId,
+                                        // Registro de la generación: quién la pidió, en qué PC
+                                        // se hizo y a quién está registrada esa computadora.
+                                        origen: metaToSave.origen || 'local',
+                                        pedidoPor: metaToSave.pedidoPor || null,
+                                        computadora: metaToSave.computadora || datosDeEstaPC(),
+                                        modelo: metaToSave.modelo || ''
                                     };
                                     // Include WAN2.2 specific info if applicable
                                     if (metaToSave.isForWan) {
@@ -1282,6 +1348,7 @@ const RED = {
     pasados: [],
     usuario: null,
     nombreManual: false,
+    clientes: null,
     enVuelo: 0,
     hub: RED_HUB + RED_BASE
 };
@@ -1302,6 +1369,9 @@ function estadoRed() {
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
         usuario: RED.usuario,
+        computadora: datosDeEstaPC(),
+        clientes: RED.clientes,
+        enVueloDetalle: RED.enVueloDetalle || [],
         hub: RED.hub,
         // "conectado" = MI nodo aparece publicado en la red (lo dice el hub)
         conectado: RED.nodos.some((p) => p && p.id === RED.peerId),
@@ -1352,6 +1422,24 @@ app.post('/api/red/compartir', async (req, res) => {
 });
 
 // --- el agente nos pasa la lista de nodos ---------------------------------
+// El nodo recibe del hub cuántos clientes/usuarios hay conectados.
+app.post('/api/red/clientes', (req, res) => {
+    const d = req.body || {};
+    RED.clientes = {
+        total: Number(d.total || 0),
+        web: Number(d.web || 0),
+        local: Number(d.local || 0),
+        usuariosTotal: Number(d.usuariosTotal || 0),
+        usuarios: Array.isArray(d.usuarios) ? d.usuarios : [],
+        clientes: Array.isArray(d.clientes) ? d.clientes : [],
+        appsLocales: Number(d.appsLocales || 0),
+        recibido: Date.now()
+    };
+    console.log(`👥 Del hub: ${RED.clientes.total} cliente(s) — ${RED.clientes.web} web · ${RED.clientes.local} local · ${RED.clientes.usuariosTotal} usuario(s)`);
+    avisarRedATodos();
+    res.json({ success: true });
+});
+
 app.post('/api/red/nodos', (req, res) => {
     const b = req.body || {};
     RED.nodos = Array.isArray(b.peers) ? b.peers : (Array.isArray(b) ? b : []);
@@ -1373,6 +1461,19 @@ app.post('/api/red/evento', (req, res) => {
 // --- ENCOLAR UN TRABAJO EN ESTE NODO --------------------------------------
 // Lo usan el agente (trabajos que llegan de la red) y el propio front cuando
 // el nodo elegido es este mismo.
+// Los datos de ESTA computadora: cómo se llama en la red y a qué usuario está
+// registrada (lo que después queda anotado en el registro de generaciones).
+function datosDeEstaPC() {
+    const u = RED.usuario || {};
+    return {
+        peerId: RED.peerId,
+        nombre: RED.nombre,
+        host: os.hostname(),
+        dueno: u.username || u.displayName || 'local',
+        avatar: u.avatar || ''
+    };
+}
+
 async function encolarTrabajoRed(b) {
     const prompt = String((b && b.prompt) || '').trim();
     if (!prompt) throw new Error('El trabajo no trae prompt.');
@@ -1388,19 +1489,39 @@ async function encolarTrabajoRed(b) {
         ? await generarImagenModelo(modelo, prompt, params)
         : await generarVideo(prompt, params, b && b.imagen);
 
+    // Quién lo pidió: si viene de la red, el hub manda pedidoPor; si es local,
+    // es el usuario logueado en esta PC (o "vos").
+    const pedidoPor = (b && b.pedidoPor) || {
+        usuario: (b && b.de) || 'la red', displayName: (b && b.de) || 'la red',
+        avatar: '', tipo: 'web'
+    };
     const details = {
         prompt,
         params,
         type: modelo ? MODELOS_IMAGEN[modelo].tipoSalida : 'video',
         modelo: modelo || 'ltx2',
-        red: { jobId: (b && b.jobId) || null, de: (b && b.de) || 'la red', peerId: RED.peerId },
+        origen: 'red',
+        pedidoPor,
+        computadora: datosDeEstaPC(),
+        red: { jobId: (b && b.jobId) || null, de: pedidoPor.displayName || pedidoPor.usuario, peerId: RED.peerId },
         generationStartTime: Date.now()
     };
     promptDetails[promptId] = details;
     lastPromptDetails = details;
     RED.enVuelo++;
+    // Detalle de los pedidos que están entrando por la red (para poder mostrarlos
+    // SEPARADOS del batch propio en la cola del editor).
+    RED.enVueloDetalle = (RED.enVueloDetalle || []);
+    RED.enVueloDetalle.push({
+        jobId: details.red.jobId, promptId, prompt: prompt.slice(0, 120),
+        modelo: details.modelo, de: pedidoPor.displayName || pedidoPor.usuario,
+        usuario: pedidoPor.usuario, avatar: pedidoPor.avatar || '', tipo: pedidoPor.tipo || 'web',
+        desde: Date.now()
+    });
+    if (RED.enVueloDetalle.length > 20) RED.enVueloDetalle = RED.enVueloDetalle.slice(-20);
     avisarRedATodos({ job: { jobId: details.red.jobId, promptId, modelo: details.modelo, de: details.red.de } });
-    console.log(`🌎 Trabajo de ${details.red.de} encolado (${details.modelo}) — ${prompt.slice(0, 60)}`);
+    console.log(`🌎 [RED] trabajo de ${pedidoPor.displayName} (${pedidoPor.tipo}) recibido del VPS -> encolado acá (${details.modelo})`);
+    console.log(`   prompt: ${prompt.slice(0, 70)}`);
     return { promptId, modelo: details.modelo, jobId: details.red.jobId };
 }
 
@@ -1657,6 +1778,12 @@ wss.on('connection', (ws) => {
                         prompt: message.prompt,
                         params: message.params,
                         imageFilename: message.imageFilename,
+                        // De dónde salió: local (esta PC) o red (un pedido que llegó del VPS)
+                        origen: 'local',
+                        pedidoPor: (RED.usuario && (RED.usuario.username || RED.usuario.displayName))
+                            ? { usuario: RED.usuario.username, displayName: RED.usuario.displayName || RED.usuario.username, avatar: RED.usuario.avatar || '', tipo: 'local' }
+                            : { usuario: 'vos', displayName: 'vos (local)', avatar: '', tipo: 'local' },
+                        computadora: datosDeEstaPC(),
                         // 'storyboard' = imagen (asi el editor la indexa como imagen);
                         // 'video' = video. Lo lee el manejador de 'executed'.
                         type: modeloImagen ? MODELOS_IMAGEN[modeloImagen].tipoSalida : 'video',

@@ -84,6 +84,28 @@
     }
     window.jpiPintarColaComfy = pintar;
 
+    // --- 📥 pedidos que llegan de la RED (van aparte del batch propio) ------
+    function pintarVuelo() {
+        var caja = document.getElementById('queueRedVuelo');
+        if (!caja) return;
+        var lista = window.JPI_RED_VUELO || [];
+        if (typeof window.JPI_RED_VUELO === 'undefined') return;   // todavía no llegó info
+        var cant = document.getElementById('redVueloCantidad');
+        if (cant) cant.textContent = lista.length ? '(' + lista.length + ')' : '';
+        if (!lista.length) { caja.classList.add('hidden'); return; }
+        caja.classList.remove('hidden');
+        var cont = document.getElementById('redVueloLista');
+        if (cont) {
+            cont.innerHTML = lista.map(function (j) {
+                return '<div class="red-vuelo-fila">👤 <b>@' + (j.usuario || j.de || '?') + '</b>' +
+                    ' <span class="rule-origen rule-red">de la red</span> · ' +
+                    '🎛️ ' + (j.modelo || 'auto') + ' · ' +
+                    '“' + String(j.prompt || '').slice(0, 70) + '”</div>';
+            }).join('');
+        }
+    }
+    window.jpiPintarVuelo = pintarVuelo;
+
     function limpiar() {
         var b = document.getElementById('colaComfyLimpiar');
         if (!b) return;

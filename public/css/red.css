@@ -396,3 +396,47 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .red-eq-fila b { font-size: .92em; font-weight: 700; }
 .red-eq-fila b.bien { color: var(--accent); }
 .red-eq-fila b.mal { color: #ff6b6b; }
+
+/* --- 👥 clientes conectados --- */
+.red-clientes {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-input);
+    padding: 14px 16px;
+    margin: 16px 0;
+}
+.red-cliente-resumen { display: flex; gap: 18px; flex-wrap: wrap; font-size: .8em; font-weight: 700; margin-bottom: 10px; }
+.red-cliente-resumen span { color: var(--text-muted); }
+.red-cliente-anon { color: #f59e0b; }
+.red-clientes-lista { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.red-cliente-fila { display: flex; align-items: center; gap: 8px; font-size: .85em; }
+.red-cliente-tipo { color: var(--text-muted); font-size: .82em; }
+.red-sub-chico { color: var(--text-muted); font-size: .74em; line-height: 1.45; }
+
+/* --- disponibles ahora (libre / ocupado) --- */
+.red-disponibles { display: flex; gap: 16px; flex-wrap: wrap; font-size: .8em; font-weight: 700; margin: 14px 0 8px; }
+.red-disponibles .ok { color: var(--accent); }
+.red-disponibles .ojo { color: #f59e0b; }
+.red-disponibles .off { color: var(--text-muted); }
+.red-disponibles .tot { color: var(--text-muted); font-weight: 500; }
+
+/* --- cola: separar TU batch de los pedidos de la red --- */
+.red-vuelo { border: 1px solid var(--border); border-left: 3px solid #a855f7; border-radius: 10px; background: var(--bg-input); padding: 12px 14px; margin: 14px 0; }
+.red-vuelo h4 { margin: 0 0 8px; font-size: .82em; letter-spacing: .4px; }
+.red-vuelo-fila { font-size: .8em; color: var(--text-muted); margin-bottom: 4px; }
+.red-vuelo-fila b { color: var(--foreground); }
+.rule-origen { display: inline-block; font-size: .7em; font-weight: 800; border-radius: 20px; padding: 2px 8px; margin-left: 6px; }
+.rule-local { background: rgba(0,255,213,.12); color: var(--accent); border: 1px solid rgba(0,255,213,.3); }
+.rule-red { background: rgba(168,85,247,.14); color: #c4b5fd; border: 1px solid rgba(168,85,247,.35); }
+
+/* --- STAGE: registro de generaciones --- */
+.reg-card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-input); padding: 14px 16px; margin-bottom: 14px; }
+.reg-card h3 { margin: 0 0 10px; font-size: .85em; letter-spacing: .4px; }
+.reg-ultima { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.reg-quien { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: .88em; }
+.reg-datos { display: flex; flex-direction: column; gap: 3px; font-size: .82em; color: var(--text-muted); }
+.reg-datos b { color: var(--foreground); font-weight: 700; }
+.reg-tabla { width: 100%; border-collapse: collapse; font-size: .78em; }
+.reg-tabla th { text-align: left; color: var(--text-muted); text-transform: uppercase; font-size: .78em; letter-spacing: .5px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.reg-tabla td { padding: 6px 8px; border-bottom: 1px solid rgba(148,163,184,.09); }
+.reg-tabla tr:hover td { background: rgba(0,255,213,.04); }
