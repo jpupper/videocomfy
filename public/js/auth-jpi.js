@@ -30,6 +30,25 @@
         if (typeof t !== 'string' || !t) t = token;
         return typeof t === 'string' && t.length > 40 && t.split('.').length === 3;
     }
+
+    // ¿Hay sesión? Es LA pregunta que gobierna todo lo visible: sin sesión la
+    // app dice LOGIN (nunca "mi cuenta") y el botón lleva a JPCONNECT.
+    // Se mira el localStorage en el momento (no la copia en memoria): si otra
+    // pestaña entró o salió, el botón tiene que reflejarlo.
+    function haySesion() {
+        try {
+            var t = localStorage.getItem(CLAVE) || localStorage.getItem('token') || '';
+            return tokenSano(t);
+        } catch (e) { return false; }
+    }
+    function usuarioGuardado() {
+        try { return JSON.parse(localStorage.getItem(CLAVE_USER) || 'null'); } catch (e) { return null; }
+    }
+
+    // true sólo en el arranque que vuelve del login (lo usa init para abrir el
+    // perfil sin que el usuario tenga que buscarlo).
+    var volviendoDelLogin = false;
+    var abrirPerfilPendiente = false;
     function guardarToken(t) {
         token = t || '';
         try { t ? localStorage.setItem(CLAVE, t) : localStorage.removeItem(CLAVE); } catch (e) { }
@@ -69,6 +88,10 @@
         try { u = new URL(location.href); } catch (e) { return; }
         var t = u.searchParams.get('token');
         if (!t) return;
+        volviendoDelLogin = true;
+        // El flag sobrevive al replace() que limpia la URL (si no, se pierde con
+        // el documento y el perfil no se abre solo al volver del login).
+        try { sessionStorage.setItem('ck_volviendo_login', '1'); } catch (e) { }
         guardarToken(t);
         var nom = u.searchParams.get('username') || u.searchParams.get('user');
         var id = u.searchParams.get('userId');
@@ -82,8 +105,11 @@
         usuario = JSON.parse(localStorage.getItem(CLAVE_USER) || 'null');
     } catch (e) { }
 
-    // --- 2) WEB: sin sesión no se entra --------------------------------------
-    if (!esLocal && !tokenSano()) { irAlLoginUnificado(); return; }
+    // --- 2) sin sesión NO se rebota solo -------------------------------------
+    // La app se abre igual y el botón de arriba del menú dice LOGIN. Al tocarlo
+    // se va al login unificado de JPCONNECT y se vuelve a esta misma pantalla
+    // con el perfil ya cargado. Es igual en la versión local y en la web: antes
+    // la web rebotaba sola al login y nunca se veía el estado sin sesión.
 
     // --- 3) fetch de la API con el token (+ rebote al login si venció) -------
     var fetchOriginal = window.fetch.bind(window);
@@ -158,6 +184,8 @@
 
         btn.addEventListener('click', function (e) {
             e.preventDefault();
+            // Sin sesión, el botón NO abre nada: te lleva al login de JPCONNECT.
+            if (!haySesion()) { yendo = false; irAlLoginUnificado(); return; }
             abrir();
         });
         // el editor capturó sus .tab-content al cargar: al tocar otra pestaña,
@@ -189,18 +217,18 @@
     function pintar() {
         var panel = document.getElementById('tabCuenta');
         if (!panel) return;
-        var u = usuario || {};
-        var logueado = tokenSano() && !!u.username;
+        var u = usuario || usuarioGuardado() || {};
+        var logueado = haySesion();
 
         if (!logueado) {
             panel.innerHTML = [
                 '<div class="cuenta-caja">',
                 '  <h2>👤 PERFIL</h2>',
                 '  <p class="cuenta-sub">' + (esLocal
-                    ? 'En local la sesión es <b>opcional</b>. Si entrás con tu cuenta de fullscreencode, tu nodo publica tu nombre y tu avatar en la red.'
+                    ? 'Todavía no iniciaste sesión en esta computadora. Entrá con tu cuenta de fullscreencode: tu perfil se ve acá y tu nodo publica tu nombre y tu avatar en la red.'
                     : 'Entrá con tu cuenta de fullscreencode para usar COMFYLATAM.') + '</p>',
-                '  <button class="red-btn" id="cuentaEntrar">INICIAR SESIÓN CON FULLSCREENCODE</button>',
-                '  <p class="cuenta-nota">Se abre el login unificado del ecosistema y volvés a esta misma pantalla.</p>',
+                '  <button class="red-btn" id="cuentaEntrar">LOG IN CON JPCONNECT</button>',
+                '  <p class="cuenta-nota">Se abre JPCONNECT (el centro de conexiones del ecosistema) y volvés a esta misma pantalla ya logueado.</p>',
                 '</div>'
             ].join('\n');
             var b = document.getElementById('cuentaEntrar');
@@ -239,10 +267,9 @@
             '</div>'
         ].join('\n');
 
-        document.getElementById('cuentaPerfil').addEventListener('click', function () {
-            window.open(PERFIL_FSC, '_blank');
-        });
         document.getElementById('cuentaRefrescar').addEventListener('click', function () { traerPerfil(true); });
+        var bPerfil = document.getElementById('cuentaPerfil');
+        if (bPerfil) bPerfil.addEventListener('click', function () { window.open(PERFIL_FSC, '_blank'); });
         document.getElementById('cuentaSalir').addEventListener('click', function () {
             guardarToken('');
             guardarUsuario(null);
@@ -252,34 +279,66 @@
         });
     }
 
-    // --- el botón del menú: foto + nombre, siempre ---------------------------
-    // Antes era sólo texto y se pintaba recién cuando contestaba el servidor:
-    // por eso a veces aparecía vacío o con el nombre viejo. Ahora se pinta al
-    // arrancar con lo que ya está guardado y se refresca cuando confirma.
+    // --- el botón del menú: TU FOTO + TU NOMBRE, o LOGIN si no hay sesión ----
+    // Sin sesión dice LOGIN (nunca "mi cuenta") y su click va a JPCONNECT.
     function pintarBoton(u) {
         var btn = document.getElementById('jpiCuentaBtn');
         if (!btn) return;
-        var uu = u || usuario || {};
-        var nom = uu.displayName || uu.username || 'Mi cuenta';
-        var foto = uu.avatar || '';
-        btn.innerHTML = foto
-            ? '<img src="' + foto + '" alt="" class="cuenta-avatar-mini" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'cuenta-avatar-mini cuenta-sin-foto\',textContent:\'👤\'}))">' +
-              '<span class="cuenta-nombre">' + nom + '</span>'
-            : '<span class="cuenta-avatar-mini cuenta-sin-foto">👤</span><span class="cuenta-nombre">' + nom + '</span>';
+        btn.classList.add('ck-perfil-btn');
+
+        if (!haySesion()) {
+            btn.dataset.estado = 'sin-sesion';
+            btn.title = 'Entrá con tu cuenta de fullscreencode (te lleva a JPCONNECT)';
+            btn.innerHTML = '<span class="ck-perfil-foto ck-perfil-inicial ck-login-icono">👤</span>' +
+                '<span class="ck-perfil-nombre">LOGIN</span>';
+            return;
+        }
+
+        btn.dataset.estado = 'con-sesion';
+        var uu = u || usuario || usuarioGuardado() || {};
+        var nom = uu.displayName || uu.username || '…';
+        btn.title = 'Tu perfil de ComfyLatam';
+        btn.innerHTML = '';
+        if (uu.avatar) {
+            var img = document.createElement('img');
+            img.className = 'ck-perfil-foto';
+            img.src = uu.avatar;
+            img.alt = '';
+            img.onerror = function () { img.replaceWith(inicialDe(nom)); };
+            btn.appendChild(img);
+        } else {
+            btn.appendChild(inicialDe(nom));
+        }
+        var sp = document.createElement('span');
+        sp.className = 'ck-perfil-nombre';
+        sp.textContent = nom;
+        btn.appendChild(sp);
+    }
+
+    function inicialDe(nom) {
+        var s = document.createElement('span');
+        s.className = 'ck-perfil-foto ck-perfil-inicial';
+        s.textContent = String(nom || '?').trim().charAt(0).toUpperCase();
+        return s;
     }
 
     // --- 6) traer el perfil del servidor ------------------------------------
     function traerPerfil(manual) {
-        if (!tokenSano()) return;
-        fetch(API + '/api/me', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
+        if (!haySesion()) { pintar(); return; }
+        var t = token;
+        try { t = localStorage.getItem(CLAVE) || localStorage.getItem('token') || t; } catch (e) { }
+        fetch(API + '/api/me', { headers: { Authorization: 'Bearer ' + t }, cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (d) {
-                if (d && d.user) {
-                    usuario = d.user;
-                    try { localStorage.setItem(CLAVE_USER, JSON.stringify(usuario)); } catch (e) { }
+                var per = d && (d.user || d.usuario || null);
+                if (per) {
+                    usuario = per;
+                    guardarUsuario(per);
                     publicarPerfil();
                     pintarBoton(usuario);
                     pintar();
+                    // si veníamos del login, dejo el perfil abierto con los datos ya cargados
+                    if (abrirPerfilPendiente) { abrirPerfilPendiente = false; abrir(); }
                 } else if (manual) {
                     pintar();
                 }
@@ -289,11 +348,69 @@
 
     function init() {
         crearPestana();
-        pintarBoton(usuario);      // pinta ya, con la sesión guardada (sin parpadeo)
-        setTimeout(function () { pintarBoton(usuario); }, 1200);
+        pintarBoton(usuario || usuarioGuardado());   // pinta ya, con la sesión guardada (sin parpadeo)
         pintar();
+        // Si este arranque es el que vuelve de JPCONNECT, abro el perfil:
+        // el usuario entra y ve su ficha sin buscarla.
+        var volvio = false;
+        // OJO: si el token lo acabo de guardar YO en este mismo documento
+        // (volviendoDelLogin), esta página ya va a ser reemplazada por la limpia:
+        // no hay que consumir la marca acá, la consume el documento siguiente.
+        if (!volviendoDelLogin) {
+            try {
+                if (sessionStorage.getItem('ck_volviendo_login') === '1') {
+                    volvio = true;
+                    sessionStorage.removeItem('ck_volviendo_login');
+                }
+            } catch (e) { }
+        }
+        if (volvio && haySesion()) {
+            abrirPerfilPendiente = true;
+            // El editor sigue armándose después del DOMContentLoaded (y varios
+            // caminos hacen .click() en STAGE): abro el perfil y lo sostengo unos
+            // segundos, pero sólo si otro no lo cambió y sólo hasta que el usuario
+            // toque una pestaña (ahí manda él).
+            var restantes = 12;
+            var seg = setInterval(function () {
+                if (--restantes <= 0) { clearInterval(seg); return; }
+                var p = document.getElementById('tabCuenta');
+                if (p && !p.classList.contains('active')) abrir();
+            }, 600);
+            document.querySelectorAll('.tab-button').forEach(function (b) {
+                b.addEventListener('click', function () { restantes = 0; clearInterval(seg); }, true);
+            });
+        }
+        setTimeout(function () { pintarBoton(usuario || usuarioGuardado()); pintar(); }, 1200);
         traerPerfil(false);
     }
+
+    // API pública del módulo: la usa perfil-ck.js para no pintar el botón por
+    // su cuenta (antes los dos módulos lo pisaban y aparecía "Mi cuenta").
+    window.comfyAuth = {
+        haySesion: haySesion,
+        pintarBoton: pintarBoton,
+        pintarPanel: pintar,
+        abrir: abrir,
+        entrar: function () { yendo = false; irAlLoginUnificado(); },
+        salir: function () {
+            guardarToken(''); guardarUsuario(null);
+            try { fetch(FSCAUTH + '/api/auth/logout', { method: 'POST' }).catch(function () { }); } catch (e) { }
+            pintarBoton(); pintar();
+        },
+        usuario: function () { return usuario || usuarioGuardado(); },
+        // diagnóstico rápido (consola): qué estado ve el módulo de sesión
+        debug: function () {
+            return {
+                volviendoDelLogin: volviendoDelLogin,
+                abrirPerfilPendiente: abrirPerfilPendiente,
+                haySesion: haySesion(),
+                usuario: usuario || usuarioGuardado(),
+                cuentaActiva: !!(document.getElementById('tabCuenta') || {}).classList &&
+                    document.getElementById('tabCuenta').classList.contains('active'),
+                boton: (document.getElementById('jpiCuentaBtn') || {}).textContent
+            };
+        }
+    };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();

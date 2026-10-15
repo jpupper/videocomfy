@@ -78,25 +78,29 @@
     function montarUI() {
         if (document.getElementById('panelRed')) return;
 
-        // Botón visible: en la barra de pestañas del proyecto (la del borde
-        // inferior del header). El header recorta su contenido y esa barra
-        // tiene z-index propio, así que un botón dentro del header queda
-        // tapado y el click no llega.
-        var btn = document.createElement('button');
-        btn.className = 'tab-button red-tab-btn';
-        btn.id = 'tabRedBtn';
-        btn.setAttribute('data-target', 'panelRed');
-        btn.textContent = '🌎 RED';
-        btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
-        var barra = document.getElementById('projectTabsNav');
-        var badge = document.getElementById('jpiEstado');
-        if (barra) barra.appendChild(btn);
-        else if (badge && badge.parentNode) badge.parentNode.insertBefore(btn, badge.nextSibling);
-        else {
-            var nav = document.querySelector('.workspace-header .tabs') ||
-                document.querySelector('.workspace-header nav') ||
-                document.querySelector('.workspace-header');
-            if (nav) nav.appendChild(btn);
+        // Botón visible: ya viene en el HTML (#tabRedBtn, en el menú de pestañas).
+        // Antes este módulo creaba OTRO botón con el mismo id y en pantalla
+        // quedaban dos "🌎 RED" (uno en el menú y otro en la fila de sesiones).
+        var btn = document.getElementById('tabRedBtn');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'tab-button red-tab-btn';
+            btn.id = 'tabRedBtn';
+            btn.setAttribute('data-target', 'panelRed');
+            btn.textContent = '🌎 RED';
+            btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
+            var barra = document.getElementById('projectTabsNav');
+            var badge = document.getElementById('jpiEstado');
+            if (barra) barra.appendChild(btn);
+            else if (badge && badge.parentNode) badge.parentNode.insertBefore(btn, badge.nextSibling);
+            else {
+                var nav = document.querySelector('.workspace-header .tabs') ||
+                    document.querySelector('.workspace-header nav') ||
+                    document.querySelector('.workspace-header');
+                if (nav) nav.appendChild(btn);
+            }
+        } else {
+            btn.setAttribute('data-target', 'panelRed');
         }
 
         // panel dentro de .workspace-content (así convive con las otras pestañas)

@@ -159,6 +159,25 @@
         return t ? { Authorization: 'Bearer ' + t } : {};
     }
 
+    function haySesion() {
+        try {
+            var t = localStorage.getItem('fsc_token_jpi') || localStorage.getItem('token') || '';
+            return t.length > 40 && t.split('.').length === 3;
+        } catch (e) { return false; }
+    }
+
+    // Sin sesión NO se muestra "mi cuenta" (ni la del dueño de la PC): se pide
+    // el login y el botón lleva a JPCONNECT.
+    function pintarSinSesion(cont) {
+        cont.innerHTML = '<div class="rank-vacio">Todavía no iniciaste sesión: acá vas a ver tus assets, ' +
+            'tus computadoras y tus generaciones. ' +
+            '<button type="button" class="rank-btn" id="rankLogin">LOGIN</button></div>';
+        var b = document.getElementById('rankLogin');
+        if (b) b.addEventListener('click', function () {
+            if (window.comfyAuth && window.comfyAuth.entrar) window.comfyAuth.entrar();
+        });
+    }
+
     function miClave() {
         try {
             var u = JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null');
@@ -170,6 +189,7 @@
     function pedirMia() {
         var cont = document.getElementById('rankMia');
         if (!cont) return;
+        if (!haySesion()) { pintarSinSesion(cont); return; }
         cont.innerHTML = '<div class="rank-vacio">cargando…</div>';
         var clave = miClave();
         var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
@@ -180,22 +200,7 @@
                 });
             })
             .then(function (d) {
-                if (d && d.success === false && !clave) {
-                    // sin sesión y sin clave: le pedimos la identidad a la app local
-                    fetch('api/red/estado').then(function (r) { return r.json(); }).then(function (e) {
-                        var p = (e && (e.propietario || e.usuario)) || {};
-                        var k = p.email || p.username;
-                        if (!k) { cont.innerHTML = '<div class="rank-vacio">Iniciá sesión (👤 Perfil) para ver tus estadísticas.</div>'; return; }
-                        fetch(baseApi() + '/api/estadisticas/mia?usuario=' + encodeURIComponent(k), { headers: tokenHeaders() })
-                            .then(function (r) {
-                                return r.text().then(function (txt) {
-                                    try { return JSON.parse(txt); } catch (e) { throw new Error('HTTP ' + r.status); }
-                                });
-                            })
-                            .then(pintarMia).catch(function (err) { cont.innerHTML = '<div class="rank-vacio">' + esc(err.message) + '</div>'; });
-                    }).catch(function () { cont.innerHTML = '<div class="rank-vacio">Iniciá sesión (👤 Perfil) para ver tus estadísticas.</div>'; });
-                    return;
-                }
+                if (d && d.success === false && !clave) { pintarSinSesion(cont); return; }
                 pintarMia(d);
             })
             .catch(function (e) { cont.innerHTML = '<div class="rank-vacio">' + esc(e.message) + '</div>'; });

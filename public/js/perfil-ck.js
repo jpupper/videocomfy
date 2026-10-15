@@ -50,61 +50,34 @@
     function usuarioLocal() {
         try { return JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null'); } catch (e) { return null; }
     }
-    // En la app local puede no haber sesión: en ese caso el servidor sabe quién
-    // es el dueño de esta computadora y el perfil se muestra igual.
-    var sinSesionYo = null;
-    function quienSoyLocal() {
-        if (sinSesionYo) return Promise.resolve(sinSesionYo);
-        return fetch(baseApi() + '/api/yo').then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) {
-                sinSesionYo = (d && d.usuario) || null;
-                // La foto no viaja en el registro del nodo: se la pido al
-                // ranking, que es público y ya la tiene.
-                if (sinSesionYo && !sinSesionYo.avatar) {
-                    return fetch(baseApi() + '/api/ranking/fierros').then(function (r) { return r.ok ? r.json() : null; })
-                        .then(function (rk) {
-                            var filas = (rk && (rk.filas || rk.ranking || rk.lista)) || [];
-                            var clave = (sinSesionYo.email || sinSesionYo.username || '').toLowerCase();
-                            for (var i = 0; i < filas.length; i++) {
-                                var f = filas[i] || {};
-                                if (((f.email || f.usuario) || '').toLowerCase() === clave || (f.usuario || '') === sinSesionYo.username) {
-                                    if (f.avatar) { sinSesionYo.avatar = f.avatar; sinSesionYo.displayName = sinSesionYo.displayName || f.usuario; }
-                                    break;
-                                }
-                            }
-                            return sinSesionYo;
-                        }).catch(function () { return sinSesionYo; });
-                }
-                return sinSesionYo;
-            })
-            .catch(function () { return null; });
+    // ¿Hay sesión? Sin sesión esta app NO inventa un perfil (antes mostraba el
+    // "dueño de esta computadora" y el botón decía "Mi cuenta"): ahora el panel
+    // queda en estado LOGIN y el botón del menú dice LOGIN.
+    function haySesion() {
+        if (window.comfyAuth && window.comfyAuth.haySesion) {
+            try { return window.comfyAuth.haySesion(); } catch (e) { }
+        }
+        try {
+            var t = localStorage.getItem('fsc_token_jpi') || localStorage.getItem('token') || '';
+            return t.length > 40 && t.split('.').length === 3;
+        } catch (e) { return false; }
     }
 
-    // ---------- el botón del menú: foto + nombre ----------
-    function pintarBoton(forzar) {
+    // ---------- el botón del menú: foto + nombre, o LOGIN ----------
+    // UN solo módulo pinta el botón (auth-jpi.js): antes lo pintaban los dos y
+    // el que perdía la carrera dejaba "Mi cuenta" a la vista.
+    function pintarBoton() {
+        if (window.comfyAuth && window.comfyAuth.pintarBoton) { window.comfyAuth.pintarBoton(); return; }
         var btn = document.getElementById('jpiCuentaBtn');
         if (!btn) return;
-        if (btn.dataset.ckPerfil && !forzar) return;
-        btn.dataset.ckPerfil = '1';
         btn.classList.add('ck-perfil-btn');
-        var u = usuarioLocal();
-        btn.innerHTML = '';
-        if (u && u.avatar) {
-            var img = document.createElement('img');
-            img.className = 'ck-perfil-foto';
-            img.src = u.avatar;
-            img.alt = '';
-            btn.appendChild(img);
-        } else {
-            var ini = document.createElement('span');
-            ini.className = 'ck-perfil-foto ck-perfil-inicial';
-            ini.textContent = String((u && (u.displayName || u.username)) || '?').trim().charAt(0).toUpperCase();
-            btn.appendChild(ini);
+        if (!haySesion()) {
+            btn.innerHTML = '<span class="ck-perfil-nombre">LOGIN</span>';
+            return;
         }
-        var nom = document.createElement('span');
-        nom.className = 'ck-perfil-nombre';
-        nom.textContent = (u && (u.displayName || u.username)) || 'Mi cuenta';
-        btn.appendChild(nom);
+        var u = usuarioLocal();
+        var nom = (u && (u.displayName || u.username)) || '…';
+        btn.innerHTML = '<span class="ck-perfil-nombre">' + esc(nom) + '</span>';
     }
 
     // ---------- limpieza: duplicados y cartel gigante ----------
@@ -142,7 +115,7 @@
         // la descripción puede venir con distintos nombres según el endpoint
         u.descripcion = u.descripcion || u.description || u.bio || u.about || '';
         var t = (datos && datos.totales) || {};
-        var nombre = u.displayName || u.username || 'Mi cuenta';
+        var nombre = u.displayName || u.username || 'Perfil';
 
         var cab = '<div class="ckp-cabecera">' +
             (u.avatar
@@ -158,7 +131,10 @@
             (u.role ? '<span class="ckp-chip">' + esc(u.role) + '</span>' : '') +
             (t.segundosComputadora ? '<span class="ckp-chip verde">⏱️ ' + tiempo(t.segundosComputadora) + ' aportados</span>' : '') +
             '</div></div>' +
+            '<div class="ckp-acciones">' +
             '<a class="ckp-link" href="https://vps-4455523-x.dattaweb.com/jpconnect/profile.html" target="_blank" rel="noopener">mi cuenta ↗</a>' +
+            '<button type="button" class="ckp-link" id="ckCerrarSesion">cerrar sesión</button>' +
+            '</div>' +
             '</div>';
 
         var metricas = '<div class="rank-metricas">' +
@@ -198,16 +174,21 @@
             '<h4 class="rank-h4">🖥️ Tus computadoras</h4>' + fierros +
             '<h4 class="rank-h4">☁️ Tus assets (' + (t.assets || 0) + ') — servidos por Cloudflare</h4>' +
             '<div class="rank-assets">' + assets + '</div>';
+
+        var salir = document.getElementById('ckCerrarSesion');
+        if (salir) salir.addEventListener('click', function () {
+            if (window.comfyAuth && window.comfyAuth.salir) window.comfyAuth.salir();
+        });
     }
 
     function traer() {
-        var u = usuarioLocal();
-        // Sin sesión: pido al servidor quién es el dueño de esta computadora
-        // (una sola vez; el centinela evita repetir el pedido en loop).
-        if (!u && !sinSesionYo) {
-            quienSoyLocal().then(function (y) { sinSesionYo = y || 'nada'; if (y) traer(); });
+        // Sin sesión no hay perfil que mostrar: el panel queda en estado LOGIN
+        // (lo pinta auth-jpi.js) y el botón del menú dice LOGIN.
+        if (!haySesion()) {
+            if (window.comfyAuth && window.comfyAuth.pintarPanel) window.comfyAuth.pintarPanel();
+            return Promise.resolve(null);
         }
-        if (!u && sinSesionYo && sinSesionYo !== 'nada') u = sinSesionYo;
+        var u = usuarioLocal();
         var clave = (u && (u.email || u.username)) || null;
         var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
         var cabeceras = token() ? { Authorization: 'Bearer ' + token() } : {};
@@ -215,9 +196,8 @@
         fetch(baseApi() + '/api/me', { headers: cabeceras })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
-                perfil = me && (me.usuario || me);
-                // Sin sesión igual se muestra el perfil: el del dueño local.
-                if (!perfil) perfil = usuarioLocal() || (sinSesionYo && sinSesionYo !== 'nada' ? sinSesionYo : null);
+                perfil = (me && (me.user || me.usuario)) || null;
+                if (!perfil) perfil = usuarioLocal();
                 datosFsc = perfil || null;
                 if (perfil) {
                     try {
@@ -227,7 +207,7 @@
                     } catch (e) { }
                     pintar({ usuario: perfil, totales: (perfil.totales || {}) });   // pinta ya con la foto
                 }
-                pintarBoton(true);
+                pintarBoton();
             })
             .catch(function () { });
         return fetch(url, { headers: cabeceras })

@@ -97,7 +97,12 @@
                 b.classList.add('btn-pausar-stage');
                 return;
             }
-            if (id === 'ckVersionChip' || id === 'jpiCuentaBtn' || id === 'tabRedBtn' || id === 'redBtn' ||
+            // el chip de versión va SIEMPRE primero: a la izquierda de PREVIZ
+            if (id === 'ckVersionChip') {
+                if (arriba.firstChild !== b) arriba.insertBefore(b, arriba.firstChild);
+                return;
+            }
+            if (id === 'jpiCuentaBtn' || id === 'tabRedBtn' || id === 'redBtn' ||
                 t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0 || t.indexOf('red') >= 0) {
                 if (b.parentElement !== arriba) arriba.appendChild(b);
             }

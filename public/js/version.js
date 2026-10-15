@@ -23,16 +23,21 @@
     }
 
     function montar() {
+        if (document.getElementById('ckVersionChip')) return;
+        // El chip va PRIMERO en el menú de pestañas: a la izquierda de PREVIZ.
+        // Antes se colgaba al final de la barra y quedaba fuera de la vista
+        // (la fila de pestañas no entra completa).
+        var arriba = document.querySelector('.tabs-container');
         var barra = document.getElementById('projectTabsNav');
-        if (!barra || document.getElementById('ckVersionChip')) return;
+        if (!arriba && !barra) return;
         chip = document.createElement('button');
         chip.id = 'ckVersionChip';
         chip.className = 'ck-version-chip';
         chip.type = 'button';
         chip.textContent = '· verificando versión…';
         chip.title = 'Versión de la aplicación';
-        // queda al lado de los botones de la barra (RED, Perfil)
-        barra.appendChild(chip);
+        if (arriba) arriba.insertBefore(chip, arriba.firstChild);
+        else barra.appendChild(chip);
         chip.addEventListener('click', function () {
             if (info && info.hayNueva) actualizar();
             else verDetalle();

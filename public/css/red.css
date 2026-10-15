@@ -444,7 +444,7 @@ body.red-arrastrando * { cursor: col-resize !important; }
 /* --- chip de versión / botón actualizar --- */
 .ck-version-chip {
     position: relative; z-index: 30;
-    margin-left: 8px;
+    margin: 0 8px 0 0;
     border: 1px solid var(--border);
     background: var(--bg-input);
     color: var(--text-muted);
@@ -452,6 +452,7 @@ body.red-arrastrando * { cursor: col-resize !important; }
     padding: 5px 10px;
     font-size: .74em; font-weight: 700; letter-spacing: .3px;
     cursor: pointer; white-space: nowrap;
+    flex: 0 0 auto;
 }
 .ck-version-chip:hover { color: var(--foreground); border-color: var(--accent); }
 .ck-version-chip.al-dia { color: var(--accent); border-color: rgba(0,255,213,.3); }
@@ -660,7 +661,9 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .ckp-chip { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
     border-radius: 6px; padding: 2px 8px; font-size: .7em; font-weight: 700; text-transform: uppercase; }
 .ckp-chip.verde { color: var(--accent); border-color: rgba(0,255,213,.3); }
-.ckp-link { color: var(--text-muted); font-size: .72em; text-decoration: none; }
+.ckp-acciones { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ckp-link { color: var(--text-muted); font-size: .72em; text-decoration: none; background: none;
+    border: none; padding: 0; cursor: pointer; font-family: inherit; }
 .ckp-link:hover { color: var(--accent); }
 
 /* --- PAUSAR en STAGE: chico y prolijo (estaba gigante) --- */
