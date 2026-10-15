@@ -225,11 +225,14 @@ async function latidoDeComputadora(peer) {
             ultimoVisto: new Date()
         };
         if (peer.hostname) set.hostname = peer.hostname;
+        const nueva = !(await Computadora.findOne({ peerId: peer.id }).lean());
         const comp = await Computadora.findOneAndUpdate(
             { peerId: peer.id },
             { $set: set, $setOnInsert: { primerVisto: new Date() } },
             { upsert: true, new: true }
         );
+        // la cuenta queda registrada (para las listas de usuarios)
+        if (nueva) await anotarUsuario(fuente).catch(() => { });
         // sesión: si no hay una abierta, se abre; si hay, se estira el latido
         const abierta = await Sesion.findOne({ peerId: peer.id, abierta: true });
         const ahora = new Date();
@@ -341,7 +344,17 @@ async function estadisticasDe(emailOUsuario) {
     if (!clave) return null;
     try {
         const usuario = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
-        const yo = usuario ? usuario.email : clave;
+        let yo = usuario ? usuario.email : clave;
+        if (!usuario) {
+            // puede venir por usuario (app local sin login): busco el email real
+            // en sus computadoras o assets y uso ese como cuenta
+            const c = await Computadora.findOne({ username: clave, email: { $ne: '' } }).lean();
+            if (c && c.email) yo = c.email;
+            else {
+                const a = await Asset.findOne({ username: clave, email: { $ne: '' } }).lean();
+                if (a && a.email) yo = a.email;
+            }
+        }
 
         const [assets, computadoras, pidio, sirvio] = await Promise.all([
             Asset.find({ email: yo }).sort({ cuando: -1 }).limit(60).lean(),
