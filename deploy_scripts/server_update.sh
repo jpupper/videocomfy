@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# jpiassets - actualizacion del backend en el VPS (corre DENTRO del VPS)
+# COMFYLATAM - actualizacion del hub en el VPS (corre DENTRO del VPS)
 #   SSH: cd /root/comfylatam && bash deploy_scripts/server_update.sh
 #   (una sola app: el hub vive en hub/ y sirve el public/ de la app)
 # NO toca el .env del VPS (es config del server, no fuente).
@@ -16,7 +16,8 @@ else
 fi
 
 APP_NAME="comfylatam"
-REPO="${GITHUB_REPO:-jpupper/jpiassets}"
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"   # raíz del repo (una sola app)
+REPO="${GITHUB_REPO:-jpupper/videocomfy}"
 TOKEN=$(echo $GITHUB_TOKEN | tr -d '\r')
 REPO_URL="https://$TOKEN@github.com/$REPO"
 
@@ -43,7 +44,7 @@ npm install --no-audit --no-fund
 echo "Reiniciando instancia de PM2 ($APP_NAME)..."
 pm2 delete "$APP_NAME" 2>/dev/null
 pm2 delete jpiassets 2>/dev/null   # nombre viejo (antes del renombre a comfylatam)
-pm2 start hub/server.js --name "$APP_NAME" --update-env
+pm2 start "$APP_DIR/hub/server.js" --name "$APP_NAME" --update-env   # ruta ABSOLUTA (pm2 resuelve relativo a su propio cwd)
 pm2 save
 
 echo "------------------------------------------------"
