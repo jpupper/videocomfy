@@ -129,7 +129,7 @@
             (u.role ? '<span class="ckp-chip">' + esc(u.role) + '</span>' : '') +
             (t.segundosComputadora ? '<span class="ckp-chip verde">⏱️ ' + tiempo(t.segundosComputadora) + ' aportados</span>' : '') +
             '</div></div>' +
-            '<a class="ckp-link" href="https://fullscreencode.com/fscauth/profile.html" target="_blank" rel="noopener">cuenta FSC ↗</a>' +
+            '<a class="ckp-link" href="https://vps-4455523-x.dattaweb.com/jpconnect/profile.html" target="_blank" rel="noopener">mi cuenta ↗</a>' +
             '</div>';
 
         var metricas = '<div class="rank-metricas">' +

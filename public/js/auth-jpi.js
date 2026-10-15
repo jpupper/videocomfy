@@ -33,10 +33,20 @@
     function guardarToken(t) {
         token = t || '';
         try { t ? localStorage.setItem(CLAVE, t) : localStorage.removeItem(CLAVE); } catch (e) { }
+    // El resto del ecosistema (medición, perfil, otras apps) busca la sesión en
+    // 'token': se guarda igual para que el login sirva en todo fullscreencode.
+    try { t ? localStorage.setItem('token', t) : localStorage.removeItem('token'); } catch (e) { }
     }
     function guardarUsuario(u) {
         usuario = u || null;
         try { u ? localStorage.setItem(CLAVE_USER, JSON.stringify(u)) : localStorage.removeItem(CLAVE_USER); } catch (e) { }
+    try {
+        if (u) {
+            localStorage.setItem('username', u.username || '');
+            localStorage.setItem('userId', u.id || u._id || '');
+            localStorage.setItem('role', u.role || 'USER');
+        } else { ['username', 'userId', 'role'].forEach(function (k) { localStorage.removeItem(k); }); }
+    } catch (e) { }
         publicarPerfil();
     }
 
