@@ -65,7 +65,8 @@ function guardarConfigLocal() {
             comfyAddress,
             red: {
                 peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir,
-                nombreManual: RED.nombreManual, usuario: RED.usuario, propietario: RED.propietario
+                nombreManual: RED.nombreManual, usuario: RED.usuario, propietario: RED.propietario,
+                workflowsCompartidos: RED.workflowsCompartidos || {}
             }
         }, null, 2));
     } catch (e) {
@@ -532,6 +533,175 @@ app.post('/api/r2/barrer', async (req, res) => {
 // Momento en que el "quién lo pidió" pasó a viajar con cada trabajo. Antes de
 // esta fecha el registro usaba el usuario logueado de turno (poco confiable).
 const ATRIBUCION_DESDE = 1792071000000;   // 2026-10-15 10:30 (desde acá el pedido viaja con cada trabajo)
+
+
+// ===========================================================================
+// WORKFLOWS QUE SE COMPARTEN + DETECCIÓN DE LO QUE ESTÁ INSTALADO
+// ---------------------------------------------------------------------------
+// 1) Cada persona elige QUÉ workflows comparte con la red (checkboxes).
+// 2) La app le pregunta a ComfyUI (/object_info) qué modelos hay instalados y
+//    avisa cuáles workflows NO se pueden usar acá (faltan modelos).
+// 3) Eso se publica en la red: quien quiera generar en tu PC sólo puede elegir
+//    los workflows que compartís Y que tenés instalados. Si igual llega un
+//    pedido de un workflow que no tenés, se rechaza con el motivo.
+// ===========================================================================
+const COMFY_BASE = () => (process.env.COMFY_URL || 'http://127.0.0.1:8188').replace(/\/+$/, '');
+
+// qué workflow usa cada modelo del front
+const MODELO_A_WORKFLOW = {
+    zimage: 'z_image_turbo_api.json',
+    qwen21: 'qwen_image_21_api.json',
+    flux: 'flux_dev_fp8_api.json',
+    fluxfull: 'flux_dev_full_text_to_image_api.json',
+    ltx2t2v: 'video_ltx2_t2v_api.json',
+    ltx2i2v: 'video_ltx2_i2v_api.json',
+    ltx25i2v: 'video_ltx25_i2v_api.json',
+    wan22: 'video_wan2_2_14B_flf2v_api.json'
+};
+
+// nombres lindos para mostrar
+const NOMBRE_WORKFLOW = {
+    'z_image_turbo_api.json': 'Z-Image Turbo (imagen)',
+    'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
+    'qwen_image_21_api2.json': 'Qwen-Image 2.1 v2 (imagen)',
+    'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
+    'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
+    'video_ltx2_t2v_api.json': 'LTX-2 texto→video',
+    'video_ltx2_i2v_api.json': 'LTX-2 imagen→video',
+    'video_ltx25_i2v_api.json': 'LTX-2.5 imagen→video',
+    'video_wan2_2_14B_flf2v_api.json': 'WAN 2.2 (video)',
+    'video_wan2_2_14B_i2v_api.json': 'WAN 2.2 i2v (video)'
+};
+
+let OBJECT_INFO = null, OBJECT_INFO_TS = 0, WORKFLOWS_ESTADO = null, WORKFLOWS_TS = 0;
+
+async function traerObjectInfo(forzar) {
+    if (!forzar && OBJECT_INFO && (Date.now() - OBJECT_INFO_TS) < 5 * 60 * 1000) return OBJECT_INFO;
+    try {
+        const r = await fetch(COMFY_BASE() + '/object_info', { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        OBJECT_INFO = await r.json();
+        OBJECT_INFO_TS = Date.now();
+    } catch (e) {
+        OBJECT_INFO = null;
+    }
+    return OBJECT_INFO;
+}
+
+// Qué modelos pide un workflow: recorre los nodos y junta los campos de modelo
+// (los que en ComfyUI son listas: unet_name, ckpt_name, vae_name, lora_name...).
+const CAMPOS_DE_MODELO = /^(unet_name|ckpt_name|vae_name|lora_name|clip_name|clip_name1|clip_name2|clip_name3|text_encoder|control_net_name|style_model_name|model_name|gguf_name|filename_prefix_ignore|embedding|ipadapter_file)$/;
+
+async function faltantesDeWorkflow(archivo) {
+    const info = await traerObjectInfo(false);
+    if (!info) return { disponible: null, falta: ['no pude consultar ComfyUI (/object_info)'], nodos: 0 };
+    let wf;
+    try { wf = JSON.parse(fs.readFileSync(path.join(WORKFLOWS_DIR, archivo), 'utf8')); }
+    catch (e) { return { disponible: false, falta: ['el archivo no es un JSON válido'], nodos: 0 }; }
+
+    const falta = new Set();
+    let nodos = 0;
+    for (const id of Object.keys(wf)) {
+        const n = wf[id];
+        if (!n || !n.class_type) continue;
+        nodos++;
+        const def = info[n.class_type];
+        if (!def) { falta.add('falta el nodo "' + n.class_type + '" (no está instalado ese custom node)'); continue; }
+        const req = (def.input && def.input.required) || {};
+        const opt = (def.input && def.input.optional) || {};
+        for (const [campo, valor] of Object.entries(n.inputs || {})) {
+            if (!CAMPOS_DE_MODELO.test(campo)) continue;
+            const lista = (req[campo] || opt[campo] || [])[0];
+            if (!Array.isArray(lista)) continue;
+            const valores = Array.isArray(valor) ? valor : [valor];
+            for (const v of valores) {
+                if (typeof v !== 'string' || !v) continue;
+                if (!lista.includes(v)) falta.add(`${campo}: ${v}`);
+            }
+        }
+    }
+    return { disponible: falta.size === 0, falta: [...falta].slice(0, 8), nodos };
+}
+
+// Estado de todos los workflows: si se comparten y si están instalados.
+async function estadoDeWorkflows(forzar) {
+    if (!forzar && WORKFLOWS_ESTADO && (Date.now() - WORKFLOWS_TS) < 2 * 60 * 1000) return WORKFLOWS_ESTADO;
+    const lista = indiceDeWorkflows();
+    const salida = [];
+    for (const w of lista) {
+        const r = await faltantesDeWorkflow(w.archivo);
+        salida.push({
+            archivo: w.archivo,
+            nombre: NOMBRE_WORKFLOW[w.archivo] || w.archivo.replace(/_(api)?\.json$/i, ''),
+            kb: w.kb, nodos: r.nodos || w.nodos, valido: w.valido,
+            enUso: w.enUso,
+            disponible: r.disponible,
+            falta: r.falta || [],
+            compartido: comparteWorkflow(w.archivo)
+        });
+    }
+    WORKFLOWS_ESTADO = salida;
+    WORKFLOWS_TS = Date.now();
+    return salida;
+}
+
+// ¿Comparte este workflow? (por defecto sí, salvo que lo haya apagado a mano)
+function comparteWorkflow(archivo) {
+    const m = RED.workflowsCompartidos || {};
+    if (Object.prototype.hasOwnProperty.call(m, archivo)) return !!m[archivo];
+    return true;
+}
+
+// Lo que se publica en la red: sólo los que comparte Y tiene instalados.
+async function workflowsPublicables() {
+    try {
+        const todos = await estadoDeWorkflows(false);
+        return todos.filter((w) => w.compartido && w.disponible !== false).map((w) => w.archivo);
+    } catch (e) { return []; }
+}
+
+// se recalcula cada 2 minutos y cuando alguien cambia la selección
+async function refrescarWorkflowsRed() {
+    try {
+        RED.workflowsRed = await workflowsPublicables();
+        avisarRedATodos();
+    } catch (e) { }
+}
+setTimeout(() => { refrescarWorkflowsRed(); }, 12000);
+setInterval(() => { refrescarWorkflowsRed(); }, 2 * 60 * 1000);
+
+app.get('/api/red/workflows', async (req, res) => {
+    try {
+        res.json({ success: true, workflows: await estadoDeWorkflows(!!req.query.forzar), carpeta: 'workflows/' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/red/workflows', async (req, res) => {
+    const b = req.body || {};
+    if (!b.archivo) return res.status(400).json({ success: false, message: 'falta el archivo' });
+    RED.workflowsCompartidos = RED.workflowsCompartidos || {};
+    RED.workflowsCompartidos[b.archivo] = !!b.compartido;
+    guardarConfigLocal();
+    console.log(`🔧 Workflow ${b.archivo}: ${b.compartido ? 'COMPARTIDO' : 'privado (no se ofrece en la red)'}`);
+    const wfs = await estadoDeWorkflows(true);
+    avisarRedATodos();
+    res.json({ success: true, workflows: wfs });
+});
+
+// Valida un pedido que llega DE LA RED: sólo workflows compartidos e instalados.
+async function validarPedidoDeRed(b) {
+    const modelo = (b && b.modelo) || (String((b && b.tipo) || '').toLowerCase() === 'video' ? null : 'zimage');
+    const archivo = modelo ? MODELO_A_WORKFLOW[modelo] : null;
+    if (!archivo) return { ok: true };   // no se pudo determinar: no bloqueo
+    const todos = await estadoDeWorkflows(false);
+    const w = todos.find((x) => x.archivo === archivo);
+    if (!w) return { ok: false, motivo: `este fierro no tiene el workflow "${archivo}"` };
+    if (!w.compartido) return { ok: false, motivo: `el dueño de esta computadora NO comparte el workflow "${w.nombre}"` };
+    if (w.disponible === false) return { ok: false, motivo: `en esta computadora faltan modelos para "${w.nombre}": ${w.falta.join(', ')}` };
+    return { ok: true, workflow: archivo };
+}
 
 // ===========================================================================
 // VERSIÓN Y ACTUALIZACIÓN
@@ -1952,6 +2122,8 @@ const RED = {
     pasados: [],
     usuario: null,
     propietario: null,
+    workflowsCompartidos: {},
+    workflowsRed: [],
     nombreManual: false,
     clientes: null,
     enVuelo: 0,
@@ -1960,11 +2132,26 @@ const RED = {
 
 // Modelos que este nodo puede ofrecer a la red.
 function modelosDeLaRed() {
-    return Object.keys(MODELOS_IMAGEN).map((k) => ({
-        id: k,
-        nombre: MODELOS_IMAGEN[k].etiqueta,
-        tipo: MODELOS_IMAGEN[k].tipoSalida === 'storyboard' ? 'imagen' : 'video'
-    })).concat([{ id: 'ltx2', nombre: 'LTX-2 (video)', tipo: 'video' }]);
+    // Sólo se ofrecen los modelos cuyo workflow este fierro COMPARTE y TIENE
+    // instalado: así nadie puede pedir algo que acá no existe.
+    const ofrecidos = RED.workflowsRed || null;
+    const permitido = (k) => {
+        if (!ofrecidos) return true;               // todavía no se calculó
+        const wf = MODELO_A_WORKFLOW[k];
+        return wf ? ofrecidos.includes(wf) : true;
+    };
+    const base = Object.keys(MODELOS_IMAGEN)
+        .filter(permitido)
+        .map((k) => ({
+            id: k,
+            nombre: MODELOS_IMAGEN[k].etiqueta,
+            tipo: MODELOS_IMAGEN[k].tipoSalida === 'storyboard' ? 'imagen' : 'video'
+        }));
+    // el video LTX-2 (t2v/i2v) usa dos workflows distintos
+    if (permitido('ltx2t2v') || permitido('ltx2i2v') || permitido('ltx25i2v')) {
+        base.push({ id: 'ltx2', nombre: 'LTX-2 (video)', tipo: 'video' });
+    }
+    return base;
 }
 
 function estadoRed() {
@@ -1973,6 +2160,8 @@ function estadoRed() {
         nombre: RED.nombre,
         compartir: RED.compartir,
         modelos: modelosDeLaRed(),
+        // workflows que este fierro ofrece a la red (compartidos Y con modelos instalados)
+        workflows: RED.workflowsRed || [],
         usuario: RED.usuario,
         email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,
@@ -2133,6 +2322,18 @@ function datosDeEstaPC() {
 async function encolarTrabajoRed(b) {
     const prompt = String((b && b.prompt) || '').trim();
     if (!prompt) throw new Error('El trabajo no trae prompt.');
+
+    // Si el pedido viene DE LA RED, sólo se acepta un workflow que este fierro
+    // comparta Y tenga instalado (si no, se rechaza con el motivo).
+    const pp = (b && b.pedidoPor) || {};
+    const deLaRed = pp.tipo === 'web' || pp.tipo === 'app-local' || !!(b && b.de && b.red);
+    if (deLaRed) {
+        const v = await validarPedidoDeRed(b);
+        if (!v.ok) {
+            console.log('⛔ Pedido de la red rechazado: ' + v.motivo);
+            throw new Error(v.motivo);
+        }
+    }
 
     const params = Object.assign({
         videoWidth: 1024, videoHeight: 1024, samplerSteps: 10, seed: -1
@@ -2357,6 +2558,7 @@ function leerIdentidadRedDeConfig() {
             RED.nombreManual = !!c.red.nombreManual;
             RED.usuario = c.red.usuario || null;
             RED.propietario = c.red.propietario || null;
+            RED.workflowsCompartidos = c.red.workflowsCompartidos || {};
             console.log(`🌎 Nodo de la red: ${RED.peerId} (${RED.nombre}) compartir=${RED.compartir}${RED.nombreManual ? ' [nombre propio]' : ''}`);
         }
     } catch (e) {

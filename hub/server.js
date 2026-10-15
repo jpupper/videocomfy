@@ -490,6 +490,27 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     if (!destino.compartir) {
         return res.status(403).json({ success: false, message: `El nodo ${destino.nombre} no está compartiendo su Comfy.` });
     }
+
+    // ¿Ese fierro tiene y comparte el workflow que se pide? Si no, se corta acá:
+    // nunca se le manda a la PC un trabajo que no puede hacer.
+    const MODELO_A_WORKFLOW_HUB = {
+        zimage: 'z_image_turbo_api.json', qwen21: 'qwen_image_21_api.json',
+        flux: 'flux_dev_fp8_api.json', fluxfull: 'flux_dev_full_text_to_image_api.json',
+        ltx2t2v: 'video_ltx2_t2v_api.json', ltx2i2v: 'video_ltx2_i2v_api.json',
+        ltx2: 'video_ltx2_t2v_api.json', ltx25i2v: 'video_ltx25_i2v_api.json',
+        wan22: 'video_wan2_2_14B_flf2v_api.json'
+    };
+    const wfPedido = MODELO_A_WORKFLOW_HUB[b.modelo];
+    const ofrece = (destino.estado && Array.isArray(destino.estado.workflows)) ? destino.estado.workflows : null;
+    if (wfPedido && ofrece && !ofrece.includes(wfPedido)) {
+        return res.status(409).json({
+            success: false,
+            message: `La computadora "${destino.nombre}" no tiene disponible ese workflow (${wfPedido}). ` +
+                `Ahí no está instalado o su dueño no lo comparte: elegí otro modelo o pedilo en otra PC.`,
+            workflows: ofrece
+        });
+    }
+
     const jobId = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     // Si quien pide está logueado, le completamos el nombre con su perfil
     const quienEs = quien.usuario

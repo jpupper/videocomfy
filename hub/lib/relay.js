@@ -79,6 +79,8 @@ function publico(p) {
         ejecutando: (p.estado && p.estado.ejecutando) ? 1 : 0,
         ocupado: !!(p.estado && p.estado.comfy && ((p.estado.encolados || 0) > 0 || p.estado.ejecutando)),
         dueno: p.usuario || '',
+        // workflows que ese fierro ofrece (compartidos y con modelos instalados)
+        workflows: (p.estado && Array.isArray(p.estado.workflows)) ? p.estado.workflows : [],
         ultimoVisto: p.ultimoLatido
     };
 }
