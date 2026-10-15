@@ -44,13 +44,13 @@
 
         document.body.classList.toggle('jpi-cola-pausada', enPausa);
 
+        btn.classList.add('jpi-pausa');
+        btn.classList.toggle('pausado', enPausa);
         if (enPausa) {
-            btn.className = 'jpi-pausa pausado';
             btn.textContent = '▶ REANUDAR' + (n ? ' (' + n + ')' : '');
             btn.title = 'Cola en pausa: ' + n + ' item(s) listos (ready) esperando.\n' +
                 'Lo que estaba generando termina solo; el resto NO se borró.';
         } else {
-            btn.className = 'jpi-pausa';
             btn.textContent = (n ? '⏸ PAUSAR (' + n + ')' : '⏸ PAUSAR');
             btn.title = 'Termina lo que está generando y deja el resto del batch en ready (no borra nada).';
         }

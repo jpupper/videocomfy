@@ -598,8 +598,12 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .crear-acciones .new-project-btn-nav, .crear-acciones .save-project-btn-nav { position: static; }
 
 /* --- PAUSAR vive en STAGE --- */
-#tabOutput .btn-pausar-stage { align-self: flex-start; margin-bottom: 14px; }
-#tabOutput > .btn-pausar-stage { order: -1; }
+#tabOutput .btn-pausar-stage,
+#tabOutput .jpi-pausa,
+#tabOutput #jpiPausaBtn { align-self: flex-start !important; width: auto !important; max-width: fit-content !important; margin-bottom: 14px !important; }
+#tabOutput > .btn-pausar-stage,
+#tabOutput > .jpi-pausa,
+#tabOutput > #jpiPausaBtn { order: -1 !important; }
 .project-tabs-nav { background: transparent; border: none; padding: 0; }
 
 /* === SUBMENUS: mismo diseño que el menu principal, pegados abajo sin margen === */
@@ -658,3 +662,30 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .ckp-chip.verde { color: var(--accent); border-color: rgba(0,255,213,.3); }
 .ckp-link { color: var(--text-muted); font-size: .72em; text-decoration: none; }
 .ckp-link:hover { color: var(--accent); }
+
+/* --- PAUSAR en STAGE: chico y prolijo (estaba gigante) --- */
+#tabOutput .btn-pausar-stage, #tabOutput > .btn-pausar-stage {
+    height: 30px !important; min-height: 30px !important; max-height: 32px !important;
+    width: auto !important; padding: 0 14px !important; margin: 0 0 12px 0 !important;
+    font-size: .62em !important; font-weight: 800 !important; letter-spacing: .5px !important;
+    border-radius: 8px !important; background: var(--bg-input) !important;
+    border: 1px solid var(--border) !important; color: var(--text-muted) !important;
+    display: inline-flex !important; align-items: center !important; align-self: flex-start !important;
+    position: static !important; order: -1;
+}
+#tabOutput .btn-pausar-stage:hover { color: var(--accent) !important; border-color: var(--accent) !important; }
+
+/* --- BATCH con el mismo diseño que COMMUNITY --- */
+#stageBatch > div, #stageBatch .inline-queue, #stageBatch .queue-inline-container {
+    background: var(--bg-card, var(--bg-input)) !important; border: 1px solid var(--border) !important;
+    border-radius: 12px !important; padding: 14px 16px !important; margin-bottom: 12px !important;
+}
+#stageBatch .inline-queue-title, #stageCommunity h3 {
+    font-size: .68em !important; font-weight: 800 !important; text-transform: uppercase !important;
+    letter-spacing: .5px !important; color: var(--text-muted) !important; margin: 0 0 10px 0 !important;
+    display: flex !important; align-items: center !important; gap: 8px !important;
+}
+#stageCommunity > div {
+    background: var(--bg-card, var(--bg-input)) !important; border: 1px solid var(--border) !important;
+    border-radius: 12px !important; padding: 14px 16px !important; margin-bottom: 12px !important;
+}

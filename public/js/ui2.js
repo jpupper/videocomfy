@@ -72,7 +72,7 @@
         // Los busco por ID en TODO el documento: el usuario (#jpiCuentaBtn) y RED
         // (#redBtn) los cuelga cada módulo donde quiere, no siempre en la misma fila.
         var botones = [];
-        ['jpiCuentaBtn', 'redBtn', 'ckVersionChip', 'newProjectBtn', 'saveProjectBtn'].forEach(function (id) {
+        ['jpiCuentaBtn', 'tabRedBtn', 'redBtn', 'ckVersionChip', 'newProjectBtn', 'saveProjectBtn', 'jpiPausaBtn'].forEach(function (id) {
             var b = document.getElementById(id);
             if (b) botones.push(b);
         });
@@ -88,7 +88,7 @@
             var t = texto(b).toLowerCase();
             var id = b.id || '';
             if (id === 'newProjectBtn' || id === 'saveProjectBtn') return;   // ya van a CREATE
-            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0) {
+            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0 || id === 'jpiPausaBtn') {
                 // se mueve UNA sola vez y se marca: antes el bucle cada 3 s lo
                 // volvía a mover, se duplicaba y titilaba.
                 if (b.dataset.ckPausar) return;
@@ -97,7 +97,8 @@
                 b.classList.add('btn-pausar-stage');
                 return;
             }
-            if (id === 'ckVersionChip' || t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0 || t.indexOf('red') >= 0) {
+            if (id === 'ckVersionChip' || id === 'jpiCuentaBtn' || id === 'tabRedBtn' || id === 'redBtn' ||
+                t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0 || t.indexOf('red') >= 0) {
                 if (b.parentElement !== arriba) arriba.appendChild(b);
             }
         });

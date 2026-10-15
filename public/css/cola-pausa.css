@@ -2,32 +2,45 @@
    COMFYLATAM - boton PAUSA de la cola y cartel de "ready"
    ============================================================ */
 
-.jpi-pausa {
-    margin-left: 8px;
-    padding: 6px 12px;
+.jpi-pausa,
+#jpiPausaBtn,
+.btn-pausar-stage {
+    margin: 0 0 12px 0;
+    padding: 6px 14px !important;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(255, 255, 255, 0.05);
     color: #e2e8f0;
     font-family: inherit;
-    font-size: 11px;
+    font-size: 11px !important;
     font-weight: 700;
     letter-spacing: 0.3px;
     cursor: pointer;
     white-space: nowrap;
+    width: auto !important;
+    max-width: fit-content !important;
+    align-self: flex-start !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    height: auto !important;
+    line-height: normal !important;
+    flex-shrink: 0 !important;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.jpi-pausa:hover {
+.jpi-pausa:hover,
+#jpiPausaBtn:hover {
     background: rgba(255, 255, 255, 0.11);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Cola pausada: el boton queda en ambar bien visible */
-.jpi-pausa.pausado {
-    color: #0b0b0b;
-    background: #fbbf24;
-    border-color: #fbbf24;
+.jpi-pausa.pausado,
+#jpiPausaBtn.pausado {
+    color: #0b0b0b !important;
+    background: #fbbf24 !important;
+    border-color: #fbbf24 !important;
     animation: jpi-pulso 2s ease-in-out infinite;
 }
 

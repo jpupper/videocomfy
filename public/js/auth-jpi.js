@@ -116,34 +116,35 @@
 
     // --- 5) la pestaña PERFIL (como las otras, no un modal) ------------------
     function crearPestana() {
-        if (document.getElementById('jpiCuentaBtn')) return;
-
-        var btn = document.createElement('button');
-        btn.id = 'jpiCuentaBtn';
-        // Va en la barra de herramientas del editor (al lado de RED): la fila de
-        // pestañas se desborda y ahí el título H2 tapa el botón (el click no llega).
-        btn.className = 'tab-button cuenta-tab-btn';
-        btn.setAttribute('data-target', 'tabCuenta');
-        btn.textContent = '👤 Perfil';
-        btn.title = 'Tu perfil de fullscreencode';
-        var barra = document.getElementById('projectTabsNav');
-        var red = document.getElementById('tabRedBtn');
-        if (barra) {
-            if (red && red.parentNode === barra) barra.insertBefore(btn, red.nextSibling);
-            else barra.appendChild(btn);
-        } else if (red && red.parentNode) {
-            red.parentNode.insertBefore(btn, red.nextSibling);
-        } else {
-            var ref = document.getElementById('tabEditorBtn') || document.getElementById('tabSettingsBtn');
-            if (ref && ref.parentNode) ref.parentNode.insertBefore(btn, ref);
-            else (document.querySelector('.workspace-header .tabs') || document.body).appendChild(btn);
+        var btn = document.getElementById('jpiCuentaBtn');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'jpiCuentaBtn';
+            btn.className = 'tab-button tab-button-std cuenta-tab-btn ck-perfil-btn';
+            btn.setAttribute('data-target', 'tabCuenta');
+            btn.textContent = '👤 Perfil';
+            btn.title = 'Tu perfil de fullscreencode';
+            var arriba = document.querySelector('.tabs-container');
+            if (arriba) {
+                arriba.appendChild(btn);
+            } else {
+                var barra = document.getElementById('projectTabsNav');
+                var red = document.getElementById('tabRedBtn');
+                if (barra) {
+                    if (red && red.parentNode === barra) barra.insertBefore(btn, red.nextSibling);
+                    else barra.appendChild(btn);
+                } else document.body.appendChild(btn);
+            }
         }
 
-        var cont = document.querySelector('.workspace-content') || document.querySelector('main') || document.body;
-        var panel = document.createElement('div');
-        panel.className = 'tab-content cuenta-panel';
-        panel.id = 'tabCuenta';
-        cont.appendChild(panel);
+        var panel = document.getElementById('tabCuenta');
+        if (!panel) {
+            var cont = document.querySelector('.workspace-content') || document.querySelector('main') || document.body;
+            panel = document.createElement('div');
+            panel.className = 'tab-content cuenta-panel';
+            panel.id = 'tabCuenta';
+            cont.appendChild(panel);
+        }
 
         btn.addEventListener('click', function (e) {
             e.preventDefault();

@@ -10,7 +10,14 @@
     'use strict';
 
     var J = window.JPI || {};
-    var API = J.API_BASE || '';
+    // La URL del hub se resuelve EN EL MOMENTO (y con respaldo): si el front
+    // carga antes de config-jpi.js venía vacía y las llamadas daban 404.
+    function baseApi() {
+        var j = window.JPI || {};
+        return (j.API_BASE && j.API_BASE.indexOf('/comfylatam') >= 0)
+            ? j.API_BASE
+            : 'https://vps-4455523-x.dattaweb.com/comfylatam';
+    }
     var orden = 'tiempo';
     var cargando = false;
 
@@ -51,8 +58,16 @@
         cargando = true;
         var cont = document.getElementById('rankTabla');
         if (cont) cont.innerHTML = '<div class="rank-vacio">cargando…</div>';
-        fetch(API + '/api/ranking/fierros?orden=' + encodeURIComponent(cual), { headers: tokenHeaders() })
-            .then(function (r) { return r.json(); })
+        fetch(baseApi() + '/api/ranking/fierros?orden=' + encodeURIComponent(cual), { headers: tokenHeaders() })
+            .then(function (r) {
+                return r.text().then(function (txt) {
+                    try {
+                        return JSON.parse(txt);
+                    } catch (err) {
+                        throw new Error('El servidor respondió sin datos válidos (HTTP ' + r.status + ')');
+                    }
+                });
+            })
             .then(function (d) {
                 cargando = false;
                 if (!d || !d.success) { pintarError(d && d.message); return; }
@@ -140,9 +155,13 @@
         if (!cont) return;
         cont.innerHTML = '<div class="rank-vacio">cargando…</div>';
         var clave = miClave();
-        var url = API + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
+        var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
         fetch(url, { headers: tokenHeaders() })
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                return r.text().then(function (txt) {
+                    try { return JSON.parse(txt); } catch (e) { throw new Error('HTTP ' + r.status); }
+                });
+            })
             .then(function (d) {
                 if (d && d.success === false && !clave) {
                     // sin sesión y sin clave: le pedimos la identidad a la app local
@@ -150,8 +169,13 @@
                         var p = (e && (e.propietario || e.usuario)) || {};
                         var k = p.email || p.username;
                         if (!k) { cont.innerHTML = '<div class="rank-vacio">Iniciá sesión (👤 Perfil) para ver tus estadísticas.</div>'; return; }
-                        fetch(API + '/api/estadisticas/mia?usuario=' + encodeURIComponent(k), { headers: tokenHeaders() })
-                            .then(function (r) { return r.json(); }).then(pintarMia).catch(function (err) { cont.innerHTML = '<div class="rank-vacio">' + esc(err.message) + '</div>'; });
+                        fetch(baseApi() + '/api/estadisticas/mia?usuario=' + encodeURIComponent(k), { headers: tokenHeaders() })
+                            .then(function (r) {
+                                return r.text().then(function (txt) {
+                                    try { return JSON.parse(txt); } catch (e) { throw new Error('HTTP ' + r.status); }
+                                });
+                            })
+                            .then(pintarMia).catch(function (err) { cont.innerHTML = '<div class="rank-vacio">' + esc(err.message) + '</div>'; });
                     }).catch(function () { cont.innerHTML = '<div class="rank-vacio">Iniciá sesión (👤 Perfil) para ver tus estadísticas.</div>'; });
                     return;
                 }

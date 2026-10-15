@@ -2790,6 +2790,24 @@ app.get('/api/me', async (req, res) => {
     }
 });
 
+// --- proxy al hub para ranking y estadísticas (en local) -------------------
+app.use(['/api/ranking', '/api/estadisticas'], async (req, res) => {
+    try {
+        const host = (process.env.RED_HUB || 'https://vps-4455523-x.dattaweb.com').replace(/\/+$/, '');
+        const base = (process.env.RED_BASE || '/comfylatam').replace(/\/+$/, '');
+        const url = host + base + req.originalUrl;
+        const cabeceras = { Accept: 'application/json' };
+        if (req.headers.authorization) cabeceras.Authorization = req.headers.authorization;
+        const agentToken = process.env.AGENT_TOKEN || 'comfylatam-nodo-2026';
+        cabeceras['x-agent-token'] = agentToken;
+        const r = await fetch(url, { headers: cabeceras, signal: AbortSignal.timeout(8000) });
+        const texto = await r.text();
+        res.status(r.status).type('application/json').send(texto);
+    } catch (e) {
+        res.status(502).json({ success: false, message: 'Hub no disponible: ' + e.message });
+    }
+});
+
 
 wss.on('connection', (ws) => {
     console.log('🔌 Cliente conectado');

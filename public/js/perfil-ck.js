@@ -13,7 +13,14 @@
     'use strict';
 
     var J = window.JPI || {};
-    var API = J.API_BASE || '';
+    // La URL del hub se resuelve EN EL MOMENTO (y con respaldo): si el front
+    // carga antes de config-jpi.js venía vacía y las llamadas daban 404.
+    function baseApi() {
+        var j = window.JPI || {};
+        return (j.API_BASE && j.API_BASE.indexOf('/comfylatam') >= 0)
+            ? j.API_BASE
+            : 'https://vps-4455523-x.dattaweb.com/comfylatam';
+    }
     var perfil = null;
 
     function esc(s) {
@@ -44,9 +51,10 @@
     }
 
     // ---------- el botón del menú: foto + nombre ----------
-    function pintarBoton() {
+    function pintarBoton(forzar) {
         var btn = document.getElementById('jpiCuentaBtn');
-        if (!btn || btn.dataset.ckPerfil) return;
+        if (!btn) return;
+        if (btn.dataset.ckPerfil && !forzar) return;
         btn.dataset.ckPerfil = '1';
         btn.classList.add('ck-perfil-btn');
         var u = usuarioLocal();
@@ -154,15 +162,15 @@
     function traer() {
         var u = usuarioLocal();
         var clave = (u && (u.email || u.username)) || null;
-        var url = API + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
+        var url = baseApi() + '/api/estadisticas/mia' + (clave ? '?usuario=' + encodeURIComponent(clave) : '');
         var cabeceras = token() ? { Authorization: 'Bearer ' + token() } : {};
         // primero el perfil que da fscauth (foto, descripción, datos)
-        fetch(API + '/api/me', { headers: cabeceras })
+        fetch(baseApi() + '/api/me', { headers: cabeceras })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
                 perfil = me && (me.usuario || me);
                 if (perfil && perfil.avatar) { try { localStorage.setItem('fsc_user_jpi', JSON.stringify(perfil)); } catch (e) { } }
-                pintarBoton();
+                pintarBoton(true);
             })
             .catch(function () { });
         return fetch(url, { headers: cabeceras })
