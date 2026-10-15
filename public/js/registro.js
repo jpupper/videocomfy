@@ -56,7 +56,12 @@
         var yo = usuarioLocal();
         var elegido = '';
         try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
-        if (!elegido || elegido === (window.JPI && window.JPI.PEER_ID)) {
+        // OJO: el id propio hay que pedírselo a la app. Antes se comparaba con un
+        // window.JPI.PEER_ID que no existía, así que si elegías tu propia PC en
+        // RED te decía "el nodo elegido no está conectado" y no te dejaba generar.
+        var esEstaPc = !elegido || elegido === 'esta-pc' || elegido === (window.JPI && window.JPI.PEER_ID)
+            || !/^nodo-/.test(elegido) || !/^[0-9a-f]{6,}$/i.test(elegido);
+        if (esEstaPc) {
             caja.innerHTML = '<h3>🎯 A DÓNDE VA ESTA GENERACIÓN</h3>' +
                 '<div class="reg-datos"><span>🖥️ <b>esta PC</b> (genera tu propio ComfyUI)</span>' +
                 (yo ? '<span>👤 pedido por <b>@' + esc(yo.username || yo.displayName) + '</b></span>' : '') +
