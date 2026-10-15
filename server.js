@@ -3311,9 +3311,12 @@ const MODELOS_IMAGEN = {
         aplicar(wf, prompt, params) {
             wf['6'].inputs.text = prompt;
             wf['7'].inputs.text = params.negativePrompt || '';
-            const w = parseInt(params.videoWidth) || 1024;
-            const h = parseInt(params.videoHeight) || 1024;
-            const steps = Math.min(parseInt(params.samplerSteps) || 10, 30);
+            // TOPE_ZIMAGE: z-image con este modelo int8 se lleva un pico de VRAM
+            // que puede tumbar ComfyUI. Probado: hasta 512 px anda; 1024 lo mata.
+            const TOPE_ZIMAGE = 512;
+            const w = Math.min(parseInt(params.videoWidth) || TOPE_ZIMAGE, TOPE_ZIMAGE);
+            const h = Math.min(parseInt(params.videoHeight) || TOPE_ZIMAGE, TOPE_ZIMAGE);
+            const steps = Math.min(parseInt(params.samplerSteps) || 8, 12);
             wf['13'].inputs.width = w;
             wf['13'].inputs.height = h;
             wf['3'].inputs.steps = steps;
