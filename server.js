@@ -299,17 +299,21 @@ async function chequearVersion() {
         REMOTO = null;
         return { hayNueva: false, motivo: 'esta copia no es un clon de git: actualizá bajando el repo de nuevo' };
     }
-    // primero intenta con el remoto configurado (funciona con repo privado),
-    // si no, consulta directo a GitHub (repo público)
-    let salida = await correr('git', ['ls-remote', 'origin', 'HEAD'], { cwd: __dirname });
-    if (!salida.ok || !salida.salida) {
-        salida = await correr('git', ['ls-remote', 'https://github.com/' + REPO_APP, 'HEAD'], { cwd: __dirname });
+    const rama = VERSION.rama || 'main';
+    // hay que traer las referencias del repo para poder comparar
+    const trae = await correr('git', ['fetch', '--quiet', 'origin'], { cwd: __dirname });
+    let commitRemoto = null;
+    const ref = await correr('git', ['rev-parse', 'origin/' + rama], { cwd: __dirname });
+    if (ref.ok && ref.salida) commitRemoto = ref.salida;
+    if (!commitRemoto) {
+        // sin remoto configurado (copia suelta): se consulta el repo público
+        const ls = await correr('git', ['ls-remote', 'https://github.com/' + REPO_APP, 'refs/heads/' + rama], { cwd: __dirname });
+        if (ls.ok && ls.salida) commitRemoto = ls.salida.split(/\s+/)[0];
     }
-    if (!salida.ok || !salida.salida) {
+    if (!commitRemoto) {
         REMOTO = null;
-        return { hayNueva: false, motivo: 'no pude consultar el repositorio (¿sin internet?)', error: salida.error };
+        return { hayNueva: false, motivo: trae.ok ? 'no pude comparar con el repositorio' : 'no pude consultar el repositorio (¿sin internet?)' };
     }
-    const commitRemoto = salida.salida.split(/\s+/)[0];
     const atras = await correr('git', ['rev-list', '--count', 'HEAD..' + commitRemoto], { cwd: __dirname });
     const adelante = await correr('git', ['rev-list', '--count', commitRemoto + '..HEAD'], { cwd: __dirname });
     REMOTO = {
@@ -338,7 +342,8 @@ function estadoVersion() {
 
 app.get('/api/version', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (Date.now() - ULTIMO_CHEQUEO > 5 * 60 * 1000) {
+    // ?forzar=1 vuelve a consultar el repositorio ya mismo (lo usa el boton)
+    if (req.query.forzar || Date.now() - ULTIMO_CHEQUEO > 5 * 60 * 1000) {
         try { await chequearVersion(); } catch (e) { }
     }
     res.json(Object.assign({ success: true }, estadoVersion()));
@@ -356,10 +361,32 @@ app.post('/api/actualizar', async (req, res) => {
     try {
         await correr('git', ['fetch', 'origin'], { cwd: __dirname });
         const rama = VERSION.rama || 'main';
+
+        // Si hay cambios locales sin commitear (alguien tocó algún archivo de la
+        // app), se guardan aparte, se actualiza y se vuelven a poner. Así el
+        // botón nunca se traba por eso.
+        const sucio = await correr('git', ['status', '--porcelain'], { cwd: __dirname });
+        let guardado = false;
+        if (String(sucio.salida || '').trim()) {
+            const st = await correr('git', ['stash', 'push', '-u', '-m', 'comfylatam-actualizar'], { cwd: __dirname });
+            guardado = st.ok && !/No local changes/.test(st.salida);
+            if (guardado) console.log('📦 Cambios locales guardados aparte (stash) para poder actualizar...');
+        }
+
         const pull = await correr('git', ['merge', '--ff-only', 'origin/' + rama], { cwd: __dirname });
         if (!pull.ok) {
             const pull2 = await correr('git', ['pull', '--ff-only'], { cwd: __dirname });
-            if (!pull2.ok) throw new Error(pull2.error || pull.error);
+            if (!pull2.ok) {
+                if (guardado) await correr('git', ['stash', 'pop'], { cwd: __dirname });
+                throw new Error(pull2.error || pull.error);
+            }
+        }
+
+        let conflicto = false;
+        if (guardado) {
+            const pop = await correr('git', ['stash', 'pop'], { cwd: __dirname });
+            conflicto = !pop.ok;
+            if (conflicto) console.log('⚠️  Algunos cambios locales chocaron con la actualización (quedaron en el stash):', pop.error);
         }
         await leerVersionLocal();
         const despues = VERSION.corto;
@@ -378,7 +405,12 @@ app.post('/api/actualizar', async (req, res) => {
         if (backendCambio) console.log('🔁 Hay cambios en el backend: la app se reinicia sola en 2 segundos...');
 
         ACTUALIZANDO = false;
-        res.json({ success: true, antes, despues, commits: REMOTO ? REMOTO.atras : null, npm: instalo, reiniciar: backendCambio });
+        res.json({
+            success: true, antes, despues,
+            commits: REMOTO ? REMOTO.atras : null,
+            npm: instalo, reiniciar: backendCambio,
+            cambiosLocalesGuardados: guardado, conflicto
+        });
 
         if (backendCambio) {
             setTimeout(() => {
