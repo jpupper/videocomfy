@@ -26,8 +26,6 @@ public/uploads/
 public/uploads/**/*
 
 # Auto-generated API workflow files
-video_ltx2_t2v_api.json
-video_ltx2_i2v_api.json
 
 # Environment variables
 .env
