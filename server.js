@@ -516,6 +516,20 @@ async function anunciarMapaCompleto() {
 }
 setTimeout(() => anunciarMapaCompleto().catch(() => { }), 8000);
 
+// Estado de memoria del proceso (para ver si algo se está inflando)
+app.get('/api/salud-memoria', (req, res) => {
+    const m = process.memoryUsage();
+    res.json({
+        success: true,
+        rssMB: Math.round(m.rss / 1048576),
+        heapUsadoMB: Math.round(m.heapUsed / 1048576),
+        heapTotalMB: Math.round(m.heapTotal / 1048576),
+        limiteMB: Math.round((require('v8').getHeapStatistics().heap_size_limit) / 1048576),
+        uptimeMin: Math.round(process.uptime() / 60),
+        clientesFront: (typeof wss !== 'undefined' && wss.clients) ? wss.clients.size : null
+    });
+});
+
 app.get('/api/r2/estado', (req, res) => {
     res.json(Object.assign({ success: true }, r2Estado, {
         mapeados: mediaMap.cantidad(),
@@ -1059,12 +1073,19 @@ function connectToComfy() {
 
     wsComfy.on('message', async (data) => {
         try {
-            // Manejar posibles datos binarios (imágenes de preview)
-            if (data instanceof Buffer === false && typeof data !== 'string') {
+            // ComfyUI manda los PREVIEWS en binario/base64 (cientos de KB por frame)
+            // mientras genera. Antes eso se convertía a texto y se parseaba: con un
+            // video largo, miles de esos strings hacían volar el heap de 4 GB.
+            // Los previews no se usan (la app manda su propio progreso), así que se
+            // descartan sin convertirlos.
+            if (Buffer.isBuffer(data) || typeof data !== 'string') {
                 return;
             }
-
             const messageString = data.toString();
+            if (messageString.length > 200000) {
+                // mensaje gigante (preview / frame en base64): no lo tocamos
+                return;
+            }
             // Log solo si no es binario y no es demasiado ruidoso
             if (messageString.length < 1000) {
                 console.log('📩 Mensaje de ComfyUI:', messageString);
