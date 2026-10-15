@@ -187,7 +187,8 @@ async function anotarAsset(a) {
             { publicId: a.publicId },
             {
                 $set: {
-                    email: d.email || '', username: d.username, publicId: a.publicId,
+                    // la cuenta del asset es el email o, si no hay sesión, el usuario
+                    email: d.email || d.username || '', username: d.username, publicId: a.publicId,
                     url: a.url, key: a.key || '', mimetype: a.mimetype || '',
                     bytes: a.bytes || 0, tipo: a.tipo || 'image',
                     computadoraPeerId: a.computadoraPeerId || '', computadoraNombre: a.computadoraNombre || '',
