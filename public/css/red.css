@@ -578,3 +578,21 @@ body.red-arrastrando * { cursor: col-resize !important; }
 /* --- sub-pestañas dentro de CREATE --- */
 #tabPrompts .sub-tabs-container { margin-bottom: 16px; }
 #crearWorkflows, #crearEditor, #crearStoryboard { width: 100%; }
+
+/* --- SUBMENUS UNIFICADOS (mismo estilo en CREATE, STAGE, RANKING y ASSETS) --- */
+.sub-tabs-container { display: flex; gap: 4px; background: rgba(15,23,42,.6); padding: 4px;
+    border-radius: 12px; margin-bottom: 18px; width: fit-content; max-width: 100%; flex-wrap: wrap;
+    border: 1px solid var(--border); }
+.sub-tabs-container .sub-tab-btn { background: transparent; color: var(--text-muted); font-size: .62em;
+    font-weight: 800; padding: 10px 14px; border-radius: 9px; text-transform: uppercase;
+    letter-spacing: .5px; transition: all .3s ease; white-space: nowrap; cursor: pointer; border: none; }
+.sub-tabs-container .sub-tab-btn:hover { color: var(--foreground); background: rgba(255,255,255,.04); }
+.sub-tabs-container .sub-tab-btn.active { background: var(--accent); color: #04121a;
+    box-shadow: 0 5px 15px rgba(0,255,213,.28); }
+
+/* --- en CREATE y STAGE se ve UNO SOLO (nada superpuesto) --- */
+#tabPrompts > .sub-tab-content, #tabOutput > .sub-tab-content { display: none !important; }
+#tabPrompts > .sub-tab-content.active, #tabOutput > .sub-tab-content.active { display: flex !important; flex-direction: column; }
+#tabPrompts > #crearAcciones { margin-bottom: 12px; }
+.crear-acciones { display: flex; gap: 8px; align-items: center; }
+.crear-acciones .new-project-btn-nav, .crear-acciones .save-project-btn-nav { position: static; }
