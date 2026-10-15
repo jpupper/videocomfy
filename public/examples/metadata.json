@@ -1,0 +1,37 @@
+{
+  "surreal-world-ahestetic.mp4": {
+    "prompt": "A surreal cinematic scene: the camera slowly approaches, like a drone in flight, while the figure on the floating island moves slowly, looking off to the side.",
+    "params": {
+      "videoWidth": 544,
+      "videoHeight": 960,
+      "videoLength": 121,
+      "samplerSteps": 8,
+      "cfgScale": 1,
+      "refStrength": 1,
+      "seed": -1,
+      "ltx25Enhance": false,
+      "ltx25Upscale": false,
+      "ltx25Audio": true
+    },
+    "imageFilename": "input_image_1792075207747.png",
+    "prompt_id": "5ed3be7d-fca8-4f81-a9fb-9648d85408f0",
+    "batchName": null,
+    "type": "video",
+    "computadora": {
+      "peerId": "nodo-3c66c142",
+      "nombre": "rodny · ComfyLatam",
+      "dueno": "local",
+      "avatar": ""
+    },
+    "pedidoPor": {
+      "usuario": "vos",
+      "displayName": "vos (local)",
+      "avatar": "",
+      "tipo": "local"
+    },
+    "origen": "local",
+    "modelo": "ltx2",
+    "timestamp": 1792075553343,
+    "model": "LTX 2.5 distilled"
+  }
+}

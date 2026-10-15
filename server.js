@@ -1486,7 +1486,7 @@ app.get('/api/images', (req, res) => {
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
-                    metadata: meta.params || {}
+                    metadata: { ...(meta.params || {}), imageFilename: meta.imageFilename || null, model: meta.model || null }
                 };
             })
             .sort((a, b) => b.timestamp - a.timestamp);
@@ -1692,11 +1692,46 @@ app.get('/api/videos', (req, res) => {
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
-                    metadata: meta.params || {}
+                    metadata: { ...(meta.params || {}), imageFilename: meta.imageFilename || null, model: meta.model || null }
                 };
             })
             .sort((a, b) => b.timestamp - a.timestamp);
         res.json(videoFiles);
+    });
+});
+
+app.get('/api/examples', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const dir = path.join(__dirname, 'public', 'examples');
+    if (!fs.existsSync(dir)) return res.json([]);
+
+    fs.readdir(dir, (err, files) => {
+        if (err) return res.json([]);
+        let allMetadata = {};
+        try {
+            const metaPath = path.join(dir, 'metadata.json');
+            if (fs.existsSync(metaPath)) allMetadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        } catch (e) {}
+
+        const list = files
+            .filter(file => /\.(webm|mp4|gif)$/i.test(file))
+            .map(file => {
+                const stats = fs.statSync(path.join(dir, file));
+                const meta = allMetadata[file] || {};
+                return {
+                    filename: file,
+                    url: `/examples/${file}`,
+                    mtime: stats.mtime.getTime(),
+                    timestamp: meta.timestamp || stats.mtime.getTime(),
+                    prompt: meta.prompt || '',
+                    metadata: { ...(meta.params || {}), imageFilename: meta.imageFilename || null, model: meta.model || null }
+                };
+            })
+            .sort((a, b) => b.timestamp - a.timestamp);
+        res.json(list);
     });
 });
 

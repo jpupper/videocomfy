@@ -2637,6 +2637,58 @@ async function loadExistingVideos() {
     } catch (e) { console.error(e); }
 }
 
+async function loadExistingExamples() {
+    try {
+        const response = await fetch(window.JPI.API_BASE + '/api/examples?t=' + Date.now());
+        const examples = await response.json();
+        const gallery = document.getElementById('exampleGallery');
+        if (!gallery) return;
+        gallery.innerHTML = '';
+
+        examples.forEach((ex) => {
+            const techInfo = ex.metadata || {};
+            const promptStr = ex.prompt || '';
+            const dateStr = new Date(ex.timestamp).toLocaleString();
+            const badgeLabel = `${techInfo.videoWidth || '?'}x${techInfo.videoHeight || '?'} • REFERENCIA`;
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            item.innerHTML = `
+                <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+                    <div style="position: absolute; font-size: 40px; opacity: 0.15; filter: grayscale(1); pointer-events: none; z-index: 1;">🎬</div>
+                    <video src="${ex.url}" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;" controls preload="none"></video>
+                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: #f59e0b; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0; z-index: 10;">👁️</button>
+                    <div style="position: absolute; top: 10px; left: 10px; background: #f59e0b; color: #0f172a; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 800; text-transform: uppercase; z-index: 10;">EJEMPLO</div>
+                    <div style="position: absolute; top: 30px; left: 10px; background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 700; z-index: 10;">${techInfo.model || 'REFERENCIA'}</div>
+                    <div style="position: absolute; top: 52px; left: 8px; background: rgba(15, 23, 42, 0.7); padding: 2px 6px; border-radius: 4px; font-size: 8px; color: #94a3b8; pointer-events: none; z-index: 10;">${dateStr}</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; z-index: 10;">${badgeLabel}</div>
+                </div>
+                <div style="padding: 4px;">
+                    <div style="font-size: 11px; color: #f59e0b; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Prompt de referencia</div>
+                    <div style="font-size: 10px; color: #e2e8f0; line-height: 1.4; max-height: 4.2em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">${promptStr || '<span style="opacity: 0.5; font-style: italic;">Sin prompt registrado</span>'}</div>
+                </div>
+            `;
+
+            item.draggable = true;
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('videoSrc', ex.url);
+                e.dataTransfer.setData('videoPrompt', promptStr);
+                e.dataTransfer.setData('videoMetadata', JSON.stringify(techInfo));
+                item.style.opacity = '0.5';
+            });
+            item.addEventListener('dragend', () => item.style.opacity = '1');
+
+            item.querySelector('.previz-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                loadVideoToPreviz(ex.url);
+                const tabPrevizBtn = document.getElementById('tabPrevizBtn');
+                if (tabPrevizBtn) tabPrevizBtn.click();
+            });
+
+            gallery.appendChild(item);
+        });
+    } catch (e) { console.error(e); }
+}
+
 async function loadExistingImages() {
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/images?t=' + Date.now());
@@ -2804,12 +2856,16 @@ document.querySelectorAll('.asset-tab-btn').forEach(btn => {
         });
         btn.classList.add('active');
 
+        document.getElementById('exampleGallery')?.classList.add('hidden');
         document.getElementById('videoGallery')?.classList.add('hidden');
         document.getElementById('imageGallery')?.classList.add('hidden');
         document.getElementById('audioGallery')?.classList.add('hidden');
         document.getElementById('projectGallery')?.classList.add('hidden');
 
-        if (type === 'videos') {
+        if (type === 'examples') {
+            document.getElementById('exampleGallery')?.classList.remove('hidden');
+            loadExistingExamples();
+        } else if (type === 'videos') {
             document.getElementById('videoGallery')?.classList.remove('hidden');
         } else if (type === 'images') {
             document.getElementById('imageGallery')?.classList.remove('hidden');
@@ -3591,10 +3647,12 @@ function loadVideoToPreviz(src) {
 
     if (metaContainer) {
         metaContainer.innerHTML = '<p style="opacity:0.5; text-align:center;">Loading metadata...</p>';
-        fetch(window.JPI.API_BASE + '/api/videos?t=' + Date.now())
-            .then(res => res.json())
-            .then(videos => {
-                const videoData = videos.find(v => v.filename === filename);
+        Promise.all([
+            fetch(window.JPI.API_BASE + '/api/videos?t=' + Date.now()).then(r => r.json()).catch(() => []),
+            fetch(window.JPI.API_BASE + '/api/examples?t=' + Date.now()).then(r => r.json()).catch(() => [])
+        ])
+            .then(([videos, examples]) => {
+                const videoData = videos.find(v => v.filename === filename) || examples.find(v => v.filename === filename);
                 if (videoData && videoData.prompt) {
                     const tech = videoData.metadata || {};
                     const creationDate = videoData.timestamp ? new Date(videoData.timestamp).toLocaleString() : 'N/A';
@@ -3623,6 +3681,10 @@ function loadVideoToPreviz(src) {
                             <div class="meta-item">
                                 <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Method</div>
                                 <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.imageFilename ? 'I2V (Image to Video)' : 'T2V (Text to Video)'}</div>
+                            </div>
+                            <div class="meta-item">
+                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Model</div>
+                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${tech.model || '—'}</div>
                             </div>
                         </div>
                         <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #334155; font-size: 0.8em; color: #64748b;">
@@ -4009,6 +4071,7 @@ function assembleBatchInTimeline(batchItems) {
 }
 
 // Initial Load
+loadExistingExamples();
 loadExistingVideos();
 calculateTimelineOverlaps();
 
@@ -5473,6 +5536,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    loadExistingExamples();
     loadExistingVideos();
     loadExistingImages();
     loadExistingAudio();
