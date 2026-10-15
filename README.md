@@ -164,3 +164,30 @@ ComfyUI local y la red en el VPS.
 - En **SETTINGS** cambias la direccion de ComfyUI (local o RunPod) y en la pestana
   **PERFIL** inicias sesion con fullscreencode (opcional en local) para publicar
   tu nombre y avatar en la red.
+
+## Cómo aparece mi PC en la red (si cloné el repo)
+
+**No hay que configurar nada.** El nodo va dentro de la app: al correrla se
+conecta sola al hub público con el *token público de nodo* que ya viene en el
+código (`comfylatam-nodo-2026`).
+
+Pasos:
+
+1. Tener **Node 18 o superior** (`node -v`). Con Node viejo la app avisa y no conecta.
+2. `npm install` (una vez).
+3. `npm start` — o el `.bat` que uses para levantarla.
+4. Abrir `http://127.0.0.1:5634` — en el panel dice *publicado en la red*.
+5. En la pestaña **🌎 RED**, prender **Transmitir mi Comfy** si querés que otros
+   puedan generar en tu máquina (es opt-in: apagado, igual aparecés, pero marcada
+   como *transmisión apagada*).
+
+Si no aparece, el panel RED (modo local) lo dice:
+
+| Síntoma | Causa |
+|---|---|
+| `⚠️ no pude conectar al VPS: token de agente invalido` | tu `.env` tiene un `AGENT_TOKEN` que no es el público — borralo o poné `comfylatam-nodo-2026` |
+| `ENOTFOUND` / `ETIMEDOUT` | no hay internet o un firewall bloquea `wss:` (la app sale a buscar el hub: no hay que abrir puertos) |
+| dice *publicado* pero la web no la ve | recargá la web con Ctrl+Shift+R; el hub muestra la lista cada pocos segundos |
+
+> El **dueño del hub** (el VPS) sí usa el `AGENT_TOKEN` privado en su `.env`: así su
+> máquina entra con el token privado y las instalaciones nuevas con el público.

@@ -35,6 +35,14 @@ function leerEnv(clave, porDefecto) {
 function arrancar(opciones) {
     const op = opciones || {};
 
+    // Esta app usa fetch/Blob/FormData nativos: necesita Node 18 o más.
+    const mayor = Number(String(process.versions.node).split('.')[0]);
+    if (mayor < 18) {
+        console.log('❌ NODE_VIEJO: tenés Node ' + process.versions.node + ' y se necesita 18 o superior.');
+        console.log('   Instalá Node LTS desde nodejs.org y volvé a correr la app.');
+        return null;
+    }
+
     const { io } = (() => { try { return require('socket.io-client'); } catch (e) { return {}; } })();
     if (!io) {
         console.log('⚠️  Nodo: falta socket.io-client (npm i socket.io-client) — no me conecto a la red.');
@@ -201,7 +209,17 @@ function arrancar(opciones) {
         let intentos = 0;
         socket.on('connect_error', (e) => {
             intentos++;
-            if (intentos === 1 || intentos % 6 === 0) logErr(`⚠️  no pude conectar al VPS (intento ${intentos}): ${e.message}`);
+            const msg = String((e && e.message) || '');
+            if (intentos === 1 || intentos % 6 === 0) {
+                logErr(`⚠️  no pude conectar al VPS (intento ${intentos}): ${msg}`);
+                if (/token/i.test(msg)) {
+                    logErr('   ↳ El token del nodo no coincide con el del hub.');
+                    logErr('     · Si clonaste el repo: revisá que AGENT_TOKEN en .env sea el público (comfylatam-nodo-2026) o no definas .env.');
+                    logErr('     · Si sos el dueño: poné el AGENT_TOKEN privado del VPS en el .env de la app.');
+                } else if (/ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network/i.test(msg)) {
+                    logErr('   ↳ No hay salida a internet (o un firewall bloquea wss). Sin internet la PC no se publica: la app sale a buscar el hub.');
+                }
+            }
         });
         socket.io.on('reconnect_attempt', (n) => log(`🔁 reintentando conectar al VPS (${n})...`));
         socket.on('disconnect', (m) => {
