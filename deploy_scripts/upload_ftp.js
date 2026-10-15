@@ -17,7 +17,10 @@ const crypto = require('crypto');
 //   node deploy_scripts/upload_ftp.js             (solo lo que cambio)
 //   node deploy_scripts/upload_ftp.js --forzar    (sube TODO el front)
 const FORZAR = process.argv.includes('--forzar');
-const EXCLUDED = ['node_modules', '.git', '.env', '.env.example', 'agent', 'deploy_scripts', '.vscode', 'README.md', 'package.json', 'package-lock.json'];
+const EXCLUDED = ['node_modules', '.git', '.env', '.env.example', 'agent', 'deploy_scripts', '.vscode', 'README.md', 'package.json', 'package-lock.json',
+    // Media: NO se sube a la web. Se sirve desde la PC que la generó (a través
+    // del hub). Subir 1.7 GB de videos al FTP fue un legado de la versión vieja.
+    'uploads', 'videos', 'audio', 'presets', 'projects', 'backup', 'temp'];
 const RUTA_MANIFIESTO = path.join(__dirname, '.deploy-manifest.json');
 
 function sha1(archivo) {
