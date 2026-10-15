@@ -128,10 +128,14 @@
                 });
                 var activo = document.getElementById(destino);
                 if (activo) activo.classList.add('active');
-                if (destino === 'crearEditor' || destino === 'stageCommunity') {
+                // OJO: el modo editor (con el timeline abajo) es SÓLO del editor.
+                // Antes estaba también en stageCommunity y el timeline aparecía en
+                // STAGE, que no tiene nada que ver.
+                if (destino === 'crearEditor') {
                     document.body.classList.add('tab-editor-active');
                 } else {
                     document.body.classList.remove('tab-editor-active');
+                    if (typeof stopTimelinePlayback === 'function') { try { stopTimelinePlayback(); } catch (e) { } }
                 }
                 setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 100);
             });
@@ -155,6 +159,16 @@
     function refrescar() {
         moverBotones();
         engancharTodos();
+        // si estás en STAGE (y no en el editor), el timeline no tiene por qué estar
+        var stage = document.getElementById('tabOutput');
+        var crear = document.getElementById('tabPrompts');
+        var enEditor = crear && crear.classList.contains('active')
+            && document.getElementById('crearEditor') && document.getElementById('crearEditor').classList.contains('active');
+        if (stage && stage.classList.contains('active') && !enEditor) {
+            document.body.classList.remove('tab-editor-active');
+            var tl = document.querySelector('.timeline-container, #timeline, .timeline');
+            if (tl && stage.contains(tl) === false) { /* el timeline vive fuera del tab: lo oculta la clase */ }
+        }
     }
 
     function arrancar() {
