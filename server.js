@@ -3,7 +3,7 @@ const http = require('http');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const FormData = require('form-data');
+// OJO: NO usar el 'form-data' de npm con fetch nativo (rompe el multipart). Se usa el FormData global.
 const { v4: uuidv4 } = require('uuid');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -1697,10 +1697,19 @@ wss.on('connection', (ws) => {
 // ============================================
 
 async function uploadImageToComfy(filePath, filename) {
+    // OJO: acá estaba el bug. El paquete `form-data` de npm NO funciona como
+    // body del fetch nativo (undici): lo manda como stream opaco y ComfyUI
+    // (aiohttp) responde 500 "Could not find starting boundary" porque el
+    // cuerpo no arranca con el boundary que declara el Content-Type.
+    // Con el FormData nativo (+ Blob) undici arma el multipart bien:
+    // probado 200 contra /upload/image, igual que con http.request clásico.
+    const buf = await fs.promises.readFile(filePath);
+    const ext = (path.extname(filename || filePath) || '.png').toLowerCase();
+    const tipo = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] || 'application/octet-stream';
     const formData = new FormData();
-    formData.append('image', fs.createReadStream(filePath), { filename });
+    formData.append('image', new Blob([buf], { type: tipo }), filename || path.basename(filePath));
     // fetch en vez de http.request: soporta local, red y RunPod (https) por igual
-    const res = await fetch(comfyBase() + '/upload/image', { method: 'POST', body: formData, headers: formData.getHeaders() });
+    const res = await fetch(comfyBase() + '/upload/image', { method: 'POST', body: formData });
     const texto = await res.text();
     if (!res.ok) throw new Error(`ComfyUI /upload/image respondió ${res.status}: ${texto.slice(0, 200)}`);
     try { return JSON.parse(texto); } catch (e) { return {}; }
