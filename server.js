@@ -230,7 +230,7 @@ app.get('/api/registro', (req, res) => {
                     // Desde este momento el pedido viaja CON cada trabajo. Todo lo
                     // anterior se anotó con el usuario global de la app (bug), así
                     // que su atribución no es confiable y se marca con ≈.
-                    certero: Number(m.timestamp || 0) >= ATRIBUCION_DESDE,
+                    certero: (Number(m.timestamp || 0) >= ATRIBUCION_DESDE) || !!(pp && pp.marca === 'trabajo'),
                     modelo: m.modelo || ''
                 };
             });
@@ -244,7 +244,7 @@ app.get('/api/registro', (req, res) => {
 
 // Momento en que el "quién lo pidió" pasó a viajar con cada trabajo. Antes de
 // esta fecha el registro usaba el usuario logueado de turno (poco confiable).
-const ATRIBUCION_DESDE = 1792071280753;   // 2026-10-15 10:34
+const ATRIBUCION_DESDE = 1792071000000;   // 2026-10-15 10:30 (desde acá el pedido viaja con cada trabajo)
 
 // ---------------------------------------------------------------------------
 // ÍNDICE DE WORKFLOWS: todo lo que hay en la carpeta workflows/ se lista acá
