@@ -549,8 +549,8 @@ function limpiarMemoria() {
             ids.sort((a, b) => ((promptDetails[a] || {}).generationStartTime || 0) - ((promptDetails[b] || {}).generationStartTime || 0));
             ids.slice(0, ids.length - 200).forEach((k) => { delete promptDetails[k]; });
         }
-        if (Array.isArray(completedJobs) && completedJobs.length > 300) {
-            completedJobs.splice(0, completedJobs.length - 200);
+        if (typeof historial !== 'undefined' && Array.isArray(historial) && historial.length > 300) {
+            historial.splice(0, historial.length - 200);
         }
     } catch (e) { }
 }
@@ -585,7 +585,7 @@ app.get('/api/salud-memoria', (req, res) => {
         uptimeMin: Math.round(process.uptime() / 60),
         clientesFront: (typeof wss !== 'undefined' && wss.clients) ? wss.clients.size : null,
         generacionesEnMemoria: Object.keys(promptDetails || {}).length,
-        historial: (completedJobs || []).length,
+        historial: (typeof historial !== 'undefined' && historial && (historial.length || Object.keys(historial).length)) || 0,
         mediaEnCola: (colaMapa ? colaMapa.size : 0),
         usoPorciento: Math.round((m.heapUsed / require('v8').getHeapStatistics().heap_size_limit) * 100)
     });
