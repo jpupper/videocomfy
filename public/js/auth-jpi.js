@@ -124,7 +124,10 @@
             opciones.headers = h;
         }
         return fetchOriginal(url, opciones).then(function (r) {
-            if (r.status === 401 && !esLocal && esDeLaApi(url)) {
+            // 401 = "tu sesión venció" SÓLO si había sesión. Sin sesión, la app
+            // sigue a la vista con su botón LOGIN (antes rebotaba sola al login
+            // con el primer 401 de cualquier endpoint protegido).
+            if (r.status === 401 && !esLocal && esDeLaApi(url) && haySesion()) {
                 r.clone().json().then(function (d) {
                     if (d && (d.requiereLogin || d.success === false)) { guardarToken(''); irAlLoginUnificado('vencida'); }
                 }).catch(function () { });
