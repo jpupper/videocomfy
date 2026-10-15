@@ -84,6 +84,19 @@
         if (cont) cont.innerHTML = '<div class="rank-vacio">No pude leer el ranking' + (msg ? ': ' + esc(msg) : '') + '</div>';
     }
 
+    // El tiempo "prendida seguido" avanza solo: se guarda el valor que vino del
+    // servidor y se le suman los segundos que pasan, sin volver a pedir todo.
+    var seguidos = {};
+    var ultimaLectura = 0;
+    setInterval(function () {
+        if (!ultimaLectura) return;
+        var delta = Math.floor((Date.now() - ultimaLectura) / 1000);
+        Object.keys(seguidos).forEach(function (k) {
+            var celda = document.querySelector('[data-seguido="' + k + '"]');
+            if (celda && seguidos[k] > 0) celda.innerHTML = '🔥 ' + tiempo(seguidos[k] + delta);
+        });
+    }, 1000);
+
     function pintarRanking(d) {
         var cont = document.getElementById('rankTabla');
         if (!cont) return;
@@ -103,14 +116,14 @@
             cabecera = '<th>#</th><th>Usuario</th><th>Fierros en la red</th><th>Tiempo total</th><th>Prendida seguido</th><th>Generaciones provistas</th><th>Última vez</th>';
             celda = function (f) {
                 return '<td><b>' + (f.computadoras || 0) + '</b></td><td>' + tiempo(f.segundosComputadora) + '</td>' +
-                    '<td>' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
+                    '<td data-seguido="' + esc(f.email || '') + '">' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
                     '<td>' + (f.generacionesProvistas || 0) + '</td><td>' + fecha(f.ultimoVisto) + '</td>';
             };
         } else {
             cabecera = '<th>#</th><th>Usuario</th><th>Tiempo total</th><th>Prendida seguido</th><th>Fierros</th><th>Sesiones</th><th>Generaciones provistas</th><th>Pidió</th>';
             celda = function (f) {
                 return '<td><b>' + tiempo(f.segundosComputadora) + '</b></td>' +
-                    '<td>' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
+                    '<td data-seguido="' + esc(f.email || '') + '">' + (f.seguido ? '🔥 ' + tiempo(f.seguido) : '—') + '</td>' +
                     '<td>' + (f.computadoras || 0) + '</td>' +
                     '<td>' + (f.sesiones || 0) + '</td><td>' + (f.generacionesProvistas || 0) + '</td><td>' + (f.generacionesPedidas || 0) + '</td>';
             };
@@ -127,6 +140,10 @@
                 '</span></td>' +
                 celda(f) + '</tr>';
         }).join('');
+        // guardo los "seguido" y marco la hora de lectura para que el reloj sume
+        seguidos = {};
+        (d.filas || []).forEach(function (f) { if (f.seguido) seguidos[f.email || ''] = f.seguido; });
+        ultimaLectura = Date.now();
         cont.innerHTML = '<table class="rank-tabla"><thead><tr>' + cabecera + '</tr></thead><tbody>' + filas + '</tbody></table>';
     }
 

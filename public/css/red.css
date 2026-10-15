@@ -689,3 +689,6 @@ body.red-arrastrando * { cursor: col-resize !important; }
     background: var(--bg-card, var(--bg-input)) !important; border: 1px solid var(--border) !important;
     border-radius: 12px !important; padding: 14px 16px !important; margin-bottom: 12px !important;
 }
+
+/* el cartel viejo del perfil no debe verse ni un instante */
+#cuentaPerfil { display: none !important; }

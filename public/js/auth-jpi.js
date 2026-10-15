@@ -223,7 +223,6 @@
             '    </div>',
             '  </div>',
             '  <div class="cuenta-acciones">',
-            '    <button class="red-btn" id="cuentaPerfil">VER MI PERFIL EN FULLSCREENCODE</button>',
             '    <button class="red-btn secundario" id="cuentaRefrescar">Actualizar datos</button>',
             '    <button class="red-btn secundario" id="cuentaSalir">CERRAR SESIÓN</button>',
             '  </div>',

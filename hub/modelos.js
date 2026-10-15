@@ -456,7 +456,7 @@ async function ranking(orden) {
             return {
                 orden: cual,
                 filas: filas.map((f, i) => ({
-                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
+                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '', avatar: f.avatar || '',
                     generacionesProvistas: f.generaciones, generacionesPedidas: mapaPedidas[f._id] || 0,
                     enLinea: enLineaDe(f._id, mapaUltimo[String(f._id || '').toLowerCase()], vivo),
                     computadoras: f.computadoras.filter(Boolean).length,
@@ -482,7 +482,7 @@ async function ranking(orden) {
             return {
                 orden: cual,
                 filas: filas.map((f, i) => ({
-                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
+                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '', avatar: f.avatar || '',
                     computadoras: f.computadoras, segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
                     enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
                     seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
@@ -498,7 +498,7 @@ async function ranking(orden) {
                 $group: {
                     _id: '$email', segundos: { $sum: '$segundosTotal' },
                     computadoras: { $sum: 1 }, sesiones: { $sum: '$sesiones' },
-                    usuario: { $last: '$nombre' }, ultimoVisto: { $max: '$ultimoVisto' }
+                    usuario: { $last: '$nombre' }, avatar: { $last: '$avatar' }, ultimoVisto: { $max: '$ultimoVisto' }
                 }
             },
             { $sort: { segundos: -1 } }, { $limit: 25 }
@@ -510,7 +510,7 @@ async function ranking(orden) {
         return {
             orden: cual,
             filas: filas.map((f, i) => ({
-                puesto: i + 1, email: f._id, usuario: f.usuario || f._id,
+                puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '',
                 segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
                 seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
                 computadoras: f.computadoras, sesiones: f.sesiones,
