@@ -55,3 +55,8 @@ tg_token.txt
 pruebas/logs/
 config-local*.json
 temp/
+
+# mapa de media (estado de la app, no va al repo: se sincroniza por el hub)
+hub/data/media-map.json
+public/uploads/metadata.json
+public/videos/metadata.json
