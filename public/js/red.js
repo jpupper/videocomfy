@@ -78,22 +78,25 @@
     function montarUI() {
         if (document.getElementById('panelRed')) return;
 
-        // Botón visible: en la barra superior junto con Previz, Stage, CREATE, etc.
-        var btn = document.getElementById('tabRedBtn');
-        if (!btn) {
-            btn = document.createElement('button');
-            btn.className = 'tab-button tab-button-std red-tab-btn';
-            btn.id = 'tabRedBtn';
-            btn.setAttribute('data-target', 'panelRed');
-            btn.textContent = '🌎 RED';
-            btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
-            var arriba = document.querySelector('.tabs-container');
-            if (arriba) arriba.appendChild(btn);
-            else {
-                var barra = document.getElementById('projectTabsNav');
-                if (barra) barra.appendChild(btn);
-                else document.body.appendChild(btn);
-            }
+        // Botón visible: en la barra de pestañas del proyecto (la del borde
+        // inferior del header). El header recorta su contenido y esa barra
+        // tiene z-index propio, así que un botón dentro del header queda
+        // tapado y el click no llega.
+        var btn = document.createElement('button');
+        btn.className = 'tab-button red-tab-btn';
+        btn.id = 'tabRedBtn';
+        btn.setAttribute('data-target', 'panelRed');
+        btn.textContent = '🌎 RED';
+        btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
+        var barra = document.getElementById('projectTabsNav');
+        var badge = document.getElementById('jpiEstado');
+        if (barra) barra.appendChild(btn);
+        else if (badge && badge.parentNode) badge.parentNode.insertBefore(btn, badge.nextSibling);
+        else {
+            var nav = document.querySelector('.workspace-header .tabs') ||
+                document.querySelector('.workspace-header nav') ||
+                document.querySelector('.workspace-header');
+            if (nav) nav.appendChild(btn);
         }
 
         // panel dentro de .workspace-content (así convive con las otras pestañas)
@@ -140,7 +143,389 @@
             '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
             '</div>',
 
-            '<div class="red-gen">'<h3 class="red-titulo">👥 CLIENTES CONECTADOS</h3>' +
+            '<div class="red-gen">',
+            '  <h3>🎯 GENERAR EN LA RED</h3>',
+            '  <textarea id="redPrompt" placeholder="Escribí el prompt... el trabajo va al nodo elegido"></textarea>',
+            '  <div class="red-fila">',
+            '    <label class="red-etiqueta">Nodo</label>',
+            '    <select id="redDestino"></select>',
+            '    <label class="red-etiqueta">Modelo</label>',
+            '    <select id="redModelo">',
+            '      <option value="zimage">Z-Image Turbo (imagen, rápido)</option>',
+            '      <option value="qwen21">Qwen-Image 2.1 (imagen, mejor calidad)</option>',
+            '      <option value="ltx2">LTX-2 (video)</option>',
+            '    </select>',
+            '    <input type="number" id="redSteps" value="10" min="1" max="40" style="width:78px" title="steps">',
+            '    <input type="number" id="redAncho" value="1024" min="256" max="2048" step="64" style="width:88px" title="ancho">',
+            '    <button class="red-btn" id="redGenerar">GENERAR EN LA RED</button>',
+            '  </div>',
+            '  <div class="red-log" id="redLog">Todavía no hay movimientos.</div>',
+            '</div>'
+        ].join('\n');
+        if (contenedor) contenedor.appendChild(panel);
+
+        // Botón gemelo en el panel izquierdo (la fila de pestañas se recorta
+        // en ventanas angostas) y en la barra mobile.
+        var izq = document.querySelector('.ck-panel-izq');
+        if (izq && !document.getElementById('ckPiRed')) {
+            var bi = document.createElement('button');
+            bi.id = 'ckPiRed';
+            bi.textContent = '🌎 Red ComfyLatam';
+            bi.style.marginTop = '6px';
+            bi.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
+            izq.appendChild(bi);
+        }
+        var barra = document.querySelector('.mobile-bar, #mobileBar');
+        if (barra && !document.getElementById('mobRed')) {
+            var mb = document.createElement('button');
+            mb.type = 'button';
+            mb.id = 'mobRed';
+            mb.className = 'mobile-tab';
+            mb.textContent = '🌎 RED';
+            barra.appendChild(mb);
+            mb.addEventListener('click', function () { abrir(); });
+        }
+
+        btn.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
+
+        // Al tocar cualquier OTRA pestaña del editor, escondo la mía (el editor
+        // capturó sus .tab-content al cargar y no conoce este panel).
+        document.querySelectorAll('.workspace-header .tab-button').forEach(function (b) {
+            if (b.id === 'tabRedBtn') return;
+            b.addEventListener('click', function () {
+                var p = document.getElementById('panelRed');
+                if (p) p.classList.remove('active');
+            });
+        });
+
+        document.getElementById('redRefrescar').addEventListener('click', function () { refrescar(true); });
+        document.getElementById('redOjo').addEventListener('click', function () {
+            ESTADO.verPasados = !ESTADO.verPasados;
+            try { localStorage.setItem(CLAVE_PASADOS, ESTADO.verPasados ? '1' : '0'); } catch (e) { }
+            log(ESTADO.verPasados ? '👁 Mostrando también los que no transmiten' : '👁 Mostrando sólo los disponibles');
+            pintar();
+        });
+        document.getElementById('redGenerar').addEventListener('click', generar);
+        document.getElementById('redModelo').addEventListener('change', actualizarModelos);
+        document.getElementById('redDestino').addEventListener('change', function (e) {
+            guardarElegido(e.target.value);
+            pintar();
+        });
+        document.getElementById('redNodos').addEventListener('click', function (e) {
+            var b = e.target.closest('[data-usar]');
+            if (!b) return;
+            var id = b.getAttribute('data-usar');
+            if (b.disabled) return;
+            guardarElegido(id);
+            log('🎯 Nodo elegido: ' + nombreDe(id));
+            pintar();
+        });
+    }
+
+    function nombreDe(id) {
+        if (esLocal && ESTADO.yo && ESTADO.yo.peerId === id) return 'esta PC (mi Comfy)';
+        var p = ESTADO.peers.filter(function (x) { return x.id === id; })[0];
+        return p ? p.nombre : id;
+    }
+
+    function abrir() {
+        var panel = document.getElementById('panelRed');
+        if (!panel) return;
+        // misma mecánica que las pestañas del editor, pero en vivo
+        document.querySelectorAll('.tab-button').forEach(function (b) {
+            b.classList.toggle('active', b.id === 'tabRedBtn');
+        });
+        document.querySelectorAll('.tab-content').forEach(function (c) {
+            c.classList.toggle('active', c === panel);
+        });
+        document.body.classList.remove('tab-editor-active');
+        if (typeof window.cerrarCajonesMobile === 'function') { try { window.cerrarCajonesMobile(); } catch (e) { } }
+        refrescar(false);
+    }
+    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir };
+
+    // ---------- pintado ----------
+    function pintar() {
+        var cont = document.getElementById('redNodos');
+        if (!cont) return;
+
+        var peers = ESTADO.peers.slice();
+        // mi propio nodo (en local): no lo repito en la grilla si ya viene en la lista
+        var yoId = (esLocal && ESTADO.yo) ? ESTADO.yo.peerId : null;
+        var todos = peers.filter(function (p) { return p.id !== yoId; });
+        // Por defecto SÓLO se indexan los que están conectados Y transmitiendo.
+        // El ojito revela el resto + las conexiones pasadas.
+        var usables = todos.filter(function (p) { return p.conectado && p.compartir; });
+        var ocultos = todos.filter(function (p) { return !(p.conectado && p.compartir); });
+        if (ESTADO.verPasados) {
+            ocultos = ocultos.concat((ESTADO.pasados || []).filter(function (h) {
+                return !todos.some(function (p) { return p.id === h.id; });
+            }));
+        }
+        var otros = ESTADO.verPasados ? usables.concat(ocultos) : usables;
+
+        document.getElementById('redModo').textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
+        var compartiendo = peers.filter(function (p) { return p.compartir && p.conectado; }).length;
+        document.getElementById('redResumen').textContent =
+            compartiendo + ' dando Comfy · ' + peers.length + ' en la red';
+        var ojoBtn = document.getElementById('redOjo');
+        if (ojoBtn) {
+            ojoBtn.textContent = ESTADO.verPasados ? '👁 ▾' : '👁 ▸';
+            ojoBtn.classList.toggle('activo', ESTADO.verPasados);
+            ojoBtn.title = ESTADO.verPasados
+                ? 'Ocultar los que no transmiten y las conexiones pasadas'
+                : 'Ver también los que no transmiten (' + ocultos.length + ') y las conexiones pasadas';
+        }
+        // "disponible" = conectado Y con el Comfy libre (no alcanza con el socket)
+        var cajaDisp = document.getElementById('redDisponibles');
+        if (cajaDisp) {
+            var conectados = ESTADO.peers.filter(function (p) { return p.conectado; });
+            var libres = conectados.filter(function (p) { return p.comfy && !p.ocupado && !(p.encolados > 0); });
+            var ocupados = conectados.filter(function (p) { return p.ocupado || p.encolados > 0; });
+            var apagados = conectados.filter(function (p) { return !p.comfy; });
+            cajaDisp.innerHTML =
+                '<span class="ok">🟢 ' + libres.length + ' disponible(s) ahora</span>' +
+                '<span class="ojo">🟡 ' + ocupados.length + ' ocupada(s)</span>' +
+                '<span class="off">⚪ ' + apagados.length + ' sin ComfyUI</span>' +
+                '<span class="tot">de ' + conectados.length + ' conectada(s)</span>';
+        }
+        document.getElementById('redCantidad').textContent =
+            '(' + usables.length + ' disponibles' + (ESTADO.verPasados && ocultos.length ? ' + ' + ocultos.length + ' ocultos' : '') + ')';
+
+        // aviso de permiso (web sin sesión)
+        var aviso = document.getElementById('redAviso');
+        if (!esLocal && !tokenActual()) {
+            aviso.style.display = 'block';
+            aviso.textContent = 'Para ver y usar los nodos de la red entrá con tu cuenta de fullscreencode.';
+        } else {
+            aviso.style.display = 'none';
+        }
+
+        // ¿a quién le voy a mandar? (banner grande, también en la web)
+        var caja = document.getElementById('redElegidoCaja');
+        var elegido = ESTADO.elegido;
+        var existeElegido = elegido && (elegido === yoId || peers.some(function (p) { return p.id === elegido; }));
+        if (!existeElegido) { guardarElegido(''); elegido = ''; }
+        if (!elegido) {
+            // default: mi Comfy si estoy en local, si no el primer nodo que comparte
+            if (yoId) { guardarElegido(yoId); elegido = yoId; }
+            else {
+                var libre = peers.filter(function (p) { return p.compartir; })[0];
+                if (libre) { guardarElegido(libre.id); elegido = libre.id; }
+            }
+        }
+        if (elegido) {
+            var esMio = (elegido === yoId);
+            var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
+            caja.innerHTML = '🎯 Vas a generar en: <b>' + esc(nombreDe(elegido)) + '</b>' +
+                (esMio ? ' <span class="red-badge comparto">tu Comfy</span>'
+                    : (p2 ? ' <span class="red-badge">' + (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') + '</span>' : ''));
+        } else {
+            caja.innerHTML = '🎯 No hay ningún nodo para generar. Prendé compartir en tu app (o esperá que alguien entre a la red).';
+        }
+        caja.className = 'red-elegido' + (elegido ? '' : ' vacio');
+
+        // grilla de nodos
+        var tarjetas = [];
+        if (esLocal && ESTADO.yo) {
+            tarjetas.push(tarjeta({
+                id: yoId,
+                nombre: ESTADO.yo.nombre,
+                host: 'esta PC',
+                gpu: '',
+                modelos: ESTADO.yo.modelos || [],
+                compartir: !!ESTADO.yo.compartir,
+                comfy: true,
+                encolados: 0,
+                propio: true,          // "tu nodo": siempre usable desde acá
+                conectado: !!ESTADO.yo.conectado
+            }));
+        }
+        otros.forEach(function (p) { tarjetas.push(tarjeta(p)); });
+
+        cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
+            : '<div class="red-nodo vacio"><div class="nombre">😴 No hay otros nodos conectados</div>' +
+              '<div class="linea">Cuando otra persona abra la app y habilite "compartir", aparece acá para que la uses.</div></div>';
+
+        // selector del generador (espejo de la grilla)
+        var sel = document.getElementById('redDestino');
+        if (sel) {
+            var ops = [];
+            if (esLocal && ESTADO.yo) ops.push(opcion(yoId, '💻 ' + ESTADO.yo.nombre + ' (esta PC)'));
+            otros.forEach(function (p) {
+                if (!p.compartir) return;
+                ops.push(opcion(p.id, (p.principal ? '⭐ ' : '') + p.nombre + (p.encolados ? ' (' + p.encolados + ' en cola)' : '')));
+            });
+            sel.innerHTML = ops.join('') || '<option value="">sin nodos</option>';
+            sel.value = elegido || '';
+            sel.disabled = !ops.length;
+        }
+
+        actualizarModelos();
+
+        // mi nodo (switch de compartir + nombre), solo en local.
+        // OJO: si el usuario está escribiendo el nombre, NO se vuelve a pintar
+        // (antes el repintado cada 7 s le borraba lo que escribía).
+        var cajaMio = document.getElementById('redMio');
+        var activo = document.activeElement;
+        var escribiendoNombre = !!(activo && activo.id === 'redNombre');
+        var firmaYo = (esLocal && ESTADO.yo)
+            ? [ESTADO.yo.peerId, ESTADO.yo.nombre, ESTADO.yo.compartir, ESTADO.yo.conectado].join('|')
+            : '';
+        if (esLocal && ESTADO.yo && !escribiendoNombre && firmaYo !== ultimaFirmaYo) {
+            ultimaFirmaYo = firmaYo;
+            var conectadoRed = !!ESTADO.yo.conectado;
+            cajaMio.innerHTML = [
+                '<div class="red-mio">',
+                '  <div class="datos">',
+                '    <span class="titulo">💻 ' + esc(ESTADO.yo.nombre) + ' <span class="red-badge">tu nodo</span></span>',
+                '    <span class="meta">' + (conectadoRed
+                    ? 'publicado en la red · id ' + esc(ESTADO.yo.peerId)
+                    : 'sin publicar todavía — corré <b>conectar-comfylatam.bat</b> para entrar a la red') + '</span>',
+                (!conectadoRed
+                    ? '    <span class="red-nombre-fila"><button class="red-btn chico" id="redConectar">🔌 Conectar a la red</button></span>'
+                    : '') +
+                '    <span class="red-nombre-fila">',
+                '      <input type="text" id="redNombre" maxlength="40" placeholder="nombre con el que te ve la red" value="' + esc(ESTADO.yo.nombre) + '">',
+                '      <button class="red-btn secundario chico" id="redGuardarNombre">Guardar nombre</button>',
+                '    </span>',
+                '  </div>',
+                '  <label class="red-switch"><input type="checkbox" id="redCompartir"' + (ESTADO.yo.compartir ? ' checked' : '') + '>',
+                '    <span class="pista"></span><span>🌐 Transmitir mi Comfy a la red (que otros generen en esta PC)</span></label>',
+                '</div>'
+            ].join('\n');
+            var bc = document.getElementById('redConectar');
+            if (bc) {
+                bc.addEventListener('click', function () {
+                    bc.disabled = true;
+                    bc.textContent = '⏳ Conectando...';
+                    log('🔌 Arrancando el agente del nodo...');
+                    api('/api/red/agente', { json: {} }).then(function (r) {
+                        if (r.ok) log(r.datos.ya ? '✅ Ya estabas publicado' : '✅ Agente lanzado, en unos segundos aparecés en la red');
+                        else log('⚠️ ' + (r.datos.message || 'No pude arrancarlo'));
+                        setTimeout(function () { refrescar(true); }, 6000);
+                    });
+                });
+            }
+            var ec = document.getElementById('redEqConfig');
+            if (ec) ec.addEventListener('click', function () {
+                var b = document.getElementById('tabSettingsBtn');
+                if (b) b.click();
+            });
+            var gb = document.getElementById('redGuardarNombre');
+            if (gb) {
+                gb.addEventListener('click', function () {
+                    var nuevo = (document.getElementById('redNombre').value || '').trim();
+                    if (!nuevo) { log('⚠️ Poné un nombre'); return; }
+                    api('/api/red/compartir', { json: { nombre: nuevo } }).then(function (r) {
+                        if (r.ok) log('✏️ Listo, en la red te ven como "' + nuevo + '"');
+                        else log('⚠️ No pude guardar el nombre');
+                        refrescar(true);
+                    });
+                });
+            }
+            var chk = document.getElementById('redCompartir');
+            if (chk) {
+                chk.addEventListener('change', function () {
+                    log(chk.checked ? '⏳ Compartiendo mi Comfy...' : '⏳ Dejando de compartir...');
+                    api('/api/red/compartir', { json: { compartir: chk.checked } }).then(function (r) {
+                        log(chk.checked ? '✅ Compartiendo mi Comfy con la red' : '🔒 Ya no comparto mi Comfy');
+                        if (r.datos && r.datos.hub && r.datos.hub.ok === false) {
+                            log('⚠️ Al hub:' + (r.datos.hub.motivo || 'no pude avisarle') + ' → corré conectar-comfylatam.bat');
+                        }
+                        refrescar(true);
+                    });
+                });
+            }
+        } else if (!esLocal || !ESTADO.yo) {
+            cajaMio.innerHTML = '';
+        }
+    }
+
+    function opcion(id, texto) {
+        return '<option value="' + esc(id) + '">' + esc(texto) + '</option>';
+    }
+
+    function tokenActual() {
+        var t = J.TOKEN;
+        try { t = localStorage.getItem('fsc_token_jpi') || t; } catch (e) { }
+        return t;
+    }
+
+    // El modelo que el nodo elegido puede correr (si no sé, muestro todos).
+    function actualizarModelos() {
+        var sel = document.getElementById('redModelo');
+        if (!sel) return;
+        var p = ESTADO.peers.filter(function (x) { return x.id === ESTADO.elegido; })[0];
+        var ids = (p && p.modelos && p.modelos.length) ? p.modelos.map(function (m) { return m.id; }) : null;
+        Array.prototype.forEach.call(sel.options, function (o) {
+            var sirve = !ids || ids.indexOf(o.value) !== -1 || o.value === 'ltx2';
+            o.disabled = !sirve;
+            o.hidden = !sirve;
+        });
+        if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) {
+            var primera = Array.prototype.filter.call(sel.options, function (o) { return !o.disabled; })[0];
+            if (primera) sel.value = primera.value;
+        }
+    }
+
+    function tarjeta(p) {
+        var mio = !!p.propio;
+        var elegido = ESTADO.elegido === p.id;
+        var punto = !p.conectado ? 'off' : (p.encolados > 0 ? 'ocupado' : (p.comfy ? 'ok' : 'off'));
+        var modelos = (p.modelos || []).map(function (m) { return m.nombre || m.id; }).join(' · ') || '—';
+        var puede = mio || (p.compartir && p.conectado);
+        var boton = elegido
+            ? '<button class="red-btn chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>✅ ELEGIDO</button>'
+            : '<button class="red-btn secundario chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>' +
+              (puede ? 'Usar este Comfy' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
+        var estado;
+        if (mio) {
+            estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
+        } else {
+            if (p.conectado) {
+                var quien = p.usuario ? ' · de @' + p.usuario : '';
+                estado = (p.comfy
+                    ? (p.ocupado || p.encolados > 0
+                        ? '🟡 OCUPADO · ' + (p.encolados || 0) + ' en cola'
+                        : '🟢 LIBRE para generar')
+                    : '⚪ Comfy apagado') + quien;
+            } else {
+                var hace = '';
+                if (p.visto) {
+                    var min = Math.round((Date.now() - Number(p.visto)) / 60000);
+                    hace = min < 1 ? ' · hace instantes' : (min < 60 ? ' · hace ' + min + ' min' : ' · hace ' + Math.round(min / 60) + ' h');
+                }
+                estado = (p.visto ? 'conexión pasada' : 'sin conexión') + hace;
+            }
+        }
+        return [
+            '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
+            '  <div class="nombre">' + (p.avatar
+                ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">'
+                : (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ '))) + esc(p.nombre),
+            mio ? '<span class="red-badge comparto">tu nodo</span>'
+                : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
+            (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
+            '  </div>',
+            '  <div class="linea">' + (p.gpu ? esc(p.gpu) : 'sin GPU') + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</div>',
+            '  <div class="linea">' + esc(modelos) + '</div>',
+            '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
+            '  <div class="red-accion">' + boton + '</div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    // --- 👥 clientes conectados: cuántos, usuarios y de qué tipo -------------
+    function pintarClientes() {
+        var caja = document.getElementById('redClientes');
+        if (!caja) return;
+        var c = ESTADO.clientes || {};
+        var total = Number(c.total || 0);
+        var usuarios = c.usuarios || [];
+
+        if (!total && !usuarios.length && !(c.appsLocales || 0)) {
+            caja.innerHTML = '<h3 class="red-titulo">👥 CLIENTES CONECTADOS</h3>' +
                 '<div class="red-sub-chico">Todavía no hay nadie más conectado.</div>';
             return;
         }
