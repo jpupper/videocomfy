@@ -56,7 +56,27 @@
     function quienSoyLocal() {
         if (sinSesionYo) return Promise.resolve(sinSesionYo);
         return fetch(baseApi() + '/api/yo').then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) { sinSesionYo = (d && d.usuario) || null; return sinSesionYo; })
+            .then(function (d) {
+                sinSesionYo = (d && d.usuario) || null;
+                // La foto no viaja en el registro del nodo: se la pido al
+                // ranking, que es público y ya la tiene.
+                if (sinSesionYo && !sinSesionYo.avatar) {
+                    return fetch(baseApi() + '/api/ranking/fierros').then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (rk) {
+                            var filas = (rk && (rk.filas || rk.ranking || rk.lista)) || [];
+                            var clave = (sinSesionYo.email || sinSesionYo.username || '').toLowerCase();
+                            for (var i = 0; i < filas.length; i++) {
+                                var f = filas[i] || {};
+                                if (((f.email || f.usuario) || '').toLowerCase() === clave || (f.usuario || '') === sinSesionYo.username) {
+                                    if (f.avatar) { sinSesionYo.avatar = f.avatar; sinSesionYo.displayName = sinSesionYo.displayName || f.usuario; }
+                                    break;
+                                }
+                            }
+                            return sinSesionYo;
+                        }).catch(function () { return sinSesionYo; });
+                }
+                return sinSesionYo;
+            })
             .catch(function () { return null; });
     }
 
