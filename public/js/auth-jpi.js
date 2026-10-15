@@ -252,6 +252,22 @@
         });
     }
 
+    // --- el botón del menú: foto + nombre, siempre ---------------------------
+    // Antes era sólo texto y se pintaba recién cuando contestaba el servidor:
+    // por eso a veces aparecía vacío o con el nombre viejo. Ahora se pinta al
+    // arrancar con lo que ya está guardado y se refresca cuando confirma.
+    function pintarBoton(u) {
+        var btn = document.getElementById('jpiCuentaBtn');
+        if (!btn) return;
+        var uu = u || usuario || {};
+        var nom = uu.displayName || uu.username || 'Mi cuenta';
+        var foto = uu.avatar || '';
+        btn.innerHTML = foto
+            ? '<img src="' + foto + '" alt="" class="cuenta-avatar-mini" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'cuenta-avatar-mini cuenta-sin-foto\',textContent:\'👤\'}))">' +
+              '<span class="cuenta-nombre">' + nom + '</span>'
+            : '<span class="cuenta-avatar-mini cuenta-sin-foto">👤</span><span class="cuenta-nombre">' + nom + '</span>';
+    }
+
     // --- 6) traer el perfil del servidor ------------------------------------
     function traerPerfil(manual) {
         if (!tokenSano()) return;
@@ -262,8 +278,7 @@
                     usuario = d.user;
                     try { localStorage.setItem(CLAVE_USER, JSON.stringify(usuario)); } catch (e) { }
                     publicarPerfil();
-                    var btn = document.getElementById('jpiCuentaBtn');
-                    if (btn) btn.textContent = '👤 ' + (usuario.displayName || usuario.username || 'Perfil');
+                    pintarBoton(usuario);
                     pintar();
                 } else if (manual) {
                     pintar();
@@ -274,6 +289,8 @@
 
     function init() {
         crearPestana();
+        pintarBoton(usuario);      // pinta ya, con la sesión guardada (sin parpadeo)
+        setTimeout(function () { pintarBoton(usuario); }, 1200);
         pintar();
         traerPerfil(false);
     }

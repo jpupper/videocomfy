@@ -53,7 +53,7 @@
         var enEjec = c.enEjecucion || [];
         var detalle = '';
         if (enEjec.length) {
-            var j = enEj[0];
+            var j = enEjec[0];
             detalle = j.conocido
                 ? '🎯 es tu trabajo: “' + String(j.prompt || '').slice(0, 60) + '” · pedido por @' + (j.de || 'vos') +
                   (j.origen === 'red' ? ' (de la red)' : ' (local)')

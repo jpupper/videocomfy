@@ -5586,7 +5586,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadExistingImages();
     loadExistingAudio();
     loadProjectsList();
-    
+
+    // Aviso que la app ya está armada: recién ahí se muestra (evita el cuadro
+    // con paneles viejos que se veía al recargar).
+    if (typeof window.ckListo === 'function') setTimeout(window.ckListo, 60);
+
     // Start WebSocket connection
     connectWebSocket();
 });

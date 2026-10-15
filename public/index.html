@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
-    <link rel="stylesheet" href="css/red.css?v=21">
+    <link rel="stylesheet" href="css/red.css?v=22">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,24 @@
         rel="stylesheet">
     <title>COMFYLATAM — ComfyUI Studio</title>
     <meta name="description"
-        content="Generate stunning AI videos with LTX-2. Text-to-Video and Image-to-Video generation powered by ComfyUI."></head>
+        content="Generate stunning AI videos with LTX-2. Text-to-Video and Image-to-Video generation powered by ComfyUI."><style>
+  /* Mientras la app se arma no se muestra nada: antes se veía un cuadro con
+     paneles viejos (storyboard, perfil) y después se acomodaba. */
+  body:not(.ck-listo) > *:not(script):not(style) { visibility: hidden !important; }
+  body.ck-listo { animation: ckAparece .18s ease-out; }
+  @keyframes ckAparece { from { opacity: .4 } to { opacity: 1 } }
+</style>
+<script>
+  // La app avisa cuando está lista; igual hay un tope de 2,5s para que nunca
+  // quede una pantalla en blanco si algo falla al arrancar.
+  (function () {
+    function listo() { document.body.classList.add('ck-listo'); }
+    window.ckListo = listo;
+    setTimeout(listo, 2500);
+    window.addEventListener('load', function () { setTimeout(listo, 350); });
+  })();
+</script>
+</head>
 <body>
     <div class="container">
         <!-- LEFT SIDEBAR: WORKFLOWS & MODES -->
@@ -1007,7 +1024,7 @@
     </div>
 
     <script src="config-jpi.js?v=1"></script>
-    <script src="js/script.js?v=100"></script>
+    <script src="js/script.js?v=101"></script>
     <script src="js/mobile.js?v=1"></script>
     <script src="js/estado.js?v=3"></script>
     <script src="js/scroll-guard.js?v=1"></script>
@@ -1024,7 +1041,7 @@
     <script src="js/perfil-ck.js?v=4"></script>
     <script src="js/admin-panel.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
-    <script src="js/auth-jpi.js?v=6"></script>
+    <script src="js/auth-jpi.js?v=7"></script>
     <script src="js/entorno-jpi.js?v=3"></script>
     <script src="vendor/socket.io.min.js"></script>
     <script src="js/red.js?v=21"></script>

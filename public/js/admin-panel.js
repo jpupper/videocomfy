@@ -9,7 +9,12 @@
     'use strict';
 
     var J = window.JPI || {};
-    if (!J.esServidor) return;               // ← sólo web
+    // Sólo en la versión WEB (dominio real). En la app local no existe:
+    // esServidor también es true en localhost, así que no sirve como filtro.
+    var h = location.hostname;
+    var esWebDeVerdad = h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1;
+    if (!esWebDeVerdad) return;
+    if (!token()) return;                    // sin sesión no se muestra ni pregunta
 
     function token() { try { return localStorage.getItem('fsc_token_jpi') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
     function baseApi() {
