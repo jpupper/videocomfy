@@ -21,7 +21,8 @@
             ? j.API_BASE
             : 'https://vps-4455523-x.dattaweb.com/comfylatam';
     }
-    var perfil = null;
+    var perfil = null;          // datos de fscauth (foto, descripción, rol)
+    var datosFsc = null;
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -107,7 +108,10 @@
     function pintar(datos) {
         var p = panel();
         if (!p) return;
-        var u = (datos && datos.usuario) || usuarioLocal() || {};
+        datosFsc = datosFsc || (window.JPI && window.JPI.USUARIO) || null;
+        var u = Object.assign({}, (datos && datos.usuario) || {}, usuarioLocal() || {}, datosFsc || {});
+        // la descripción puede venir con distintos nombres según el endpoint
+        u.descripcion = u.descripcion || u.description || u.bio || u.about || '';
         var t = (datos && datos.totales) || {};
         var nombre = u.displayName || u.username || 'Mi cuenta';
 
@@ -169,7 +173,15 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (me) {
                 perfil = me && (me.usuario || me);
-                if (perfil && perfil.avatar) { try { localStorage.setItem('fsc_user_jpi', JSON.stringify(perfil)); } catch (e) { } }
+                datosFsc = perfil || null;
+                if (perfil) {
+                    try {
+                        localStorage.setItem('fsc_user_jpi', JSON.stringify(perfil));
+                        window.JPI = window.JPI || {};
+                        window.JPI.USUARIO = perfil;
+                    } catch (e) { }
+                    pintar({ usuario: perfil, totales: (perfil.totales || {}) });   // pinta ya con la foto
+                }
                 pintarBoton(true);
             })
             .catch(function () { });
