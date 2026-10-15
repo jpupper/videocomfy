@@ -395,12 +395,22 @@ if (R2_ACTIVO) {
     console.log('ℹ️  SUBIR_A_R2=false: la media se sirve por el túnel del hub (puede cargar el VPS)');
 }
 
+// URL completa del hub: el .env trae RED_HUB (el dominio pelado) y RED_BASE
+// (/comfylatam). Antes se usaba sólo RED_HUB y los avisos caían en el dominio
+// raíz (otra app). Siempre por acá.
+function urlDelHub(ruta) {
+    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
+    const prefijo = String(process.env.RED_BASE || process.env.BASE_PATH || '/comfylatam').replace(/\/+$/, '');
+    if (!base) return null;
+    return base + prefijo + ruta;
+}
+
 // Avisa al hub cada generación terminada: así queda en la base IACOMFY (quién
 // la pidió, en qué computadora se hizo y a quién pertenece esa computadora).
 const colaGeneraciones = [];
 function avisarGeneracionAlHub(archivo, meta) {
-    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
-    if (!base || !archivo) return;
+    const destino = urlDelHub('/api/red/generacion');
+    if (!destino || !archivo) return;
     const ext = String(path.extname(archivo)).toLowerCase();
     const cuerpo = {
         archivo,
@@ -417,13 +427,13 @@ function avisarGeneracionAlHub(archivo, meta) {
 }
 function enviarGeneracionesAlHub() {
     if (!colaGeneraciones.length) return;
-    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
-    if (!base) return;
+    const destino = urlDelHub('/api/red/generacion');
+    if (!destino) return;
     const lote = colaGeneraciones.splice(0, colaGeneraciones.length);
     (async () => {
         for (const g of lote) {
             try {
-                const r = await fetch(base + '/api/red/generacion', {
+                const r = await fetch(destino, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
                     body: JSON.stringify(g)
@@ -447,9 +457,9 @@ function avisarMapaAlHub() {
         nombre, url: v.url, bytes: v.bytes, key: v.key, tipo: v.tipo, mimetype: v.mimetype
     }));
     colaMapa.clear();
-    const base = String(process.env.RED_HUB || '').replace(/\/+$/, '');
-    if (!base) return;
-    fetch(base + '/api/red/media-mapa', {
+    const destino = urlDelHub('/api/red/media-mapa');
+    if (!destino) return;
+    fetch(destino, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
         body: JSON.stringify({
