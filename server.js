@@ -1765,6 +1765,37 @@ function asegurarIdentidadRed() {
 }
 asegurarIdentidadRed();
 
+// ---------------------------------------------------------------------------
+// Salud del proceso: la app tiene que quedar VIVA (si se cae, la PC desaparece
+// de la red y el usuario ve "no aparece mi máquina").
+// ---------------------------------------------------------------------------
+function vigilarMemoria() {
+    const mb = (n) => Math.round(n / 1048576);
+    setInterval(() => {
+        const m = process.memoryUsage();
+        const pct = Math.round((m.heapUsed / m.heapTotal) * 100);
+        if (pct >= 80) {
+            console.log(`⚠️  Memoria alta: heap ${mb(m.heapUsed)}/${mb(m.heapTotal)} MB (${pct}%). Si se cae, subí con --max-old-space-size=4096`);
+            if (global.gc) { try { global.gc(); } catch (e) { } }
+        }
+    }, 120000);
+    const cada = 30 * 60 * 1000;
+    setInterval(() => {
+        const m = process.memoryUsage();
+        console.log(`🩺 memoria: heap ${mb(m.heapUsed)} MB · rss ${mb(m.rss)} MB · uptime ${Math.round(process.uptime() / 60)} min`);
+    }, cada);
+}
+vigilarMemoria();
+
+// Una promesa rechazada no manejada NO debe tumbar la app (mataba el nodo y la
+// PC desaparecía de la red sin explicación).
+process.on('unhandledRejection', (e) => {
+    console.log('⚠️  Promesa rechazada sin manejar (sigo vivo):', (e && e.message) || e);
+});
+process.on('uncaughtException', (e) => {
+    console.log('⚠️  Excepción no capturada (sigo vivo):', (e && e.message) || e);
+});
+
 server.listen(port, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
 
@@ -2027,11 +2058,13 @@ async function queuePrompt(promptWorkflow) {
 }
 
 async function downloadImage(url, targetPath) {
-    // fetch: sirve igual para http local que para https (RunPod)
+    // fetch: sirve igual para http local que para https (RunPod).
+    // Se escribe por STREAM: antes se cargaba todo el archivo en memoria y con
+    // videos grandes (30+ MB) eso infla el heap de la app.
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Status: ${res.status}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    await fs.promises.writeFile(targetPath, buffer);
+    const { pipeline } = require('stream/promises');
+    await pipeline(res.body, fs.createWriteStream(targetPath));
 }
 
 async function generarVideo(promptText, params = {}, imageFilename = null) {
