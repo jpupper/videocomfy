@@ -1332,17 +1332,28 @@ if (resetParamsBtn) {
 // ============================================
 
 // Devuelve el usuario logueado en ESTE navegador (o null si no hay sesión).
+// ¿Es la web? Por hostname (JPI.esServidor vale true también en localhost).
+function esLaWeb() {
+    try { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; }
+    catch (e) { return false; }
+}
+
+// Quién pide este trabajo. La sesión puede estar en cualquiera de las claves del
+// ecosistema: mirando sólo 'fsc_user_jpi', un usuario de la WEB quedaba como
+// anónimo y la generación se registraba a nombre del dueño de la PC.
 function quienPide() {
-    try {
-        var u = JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null');
-        if (u && (u.username || u.displayName)) {
-            return {
-                usuario: u.username || u.displayName,
-                displayName: u.displayName || u.username,
-                avatar: u.avatar || '',
-                tipo: 'local'
-            };
-        }
+    var KEYS = ['fsc_user_jpi', 'fsc_user', 'usuario'];
+    for (var ki = 0; ki < KEYS.length; ki++) {
+        try {
+            var u = JSON.parse(localStorage.getItem(KEYS[ki]) || 'null');
+            if (u && (u.username || u.displayName)) {
+                return { usuario: u.username || u.displayName, displayName: u.displayName || u.username,
+                    avatar: u.avatar || '', email: u.email || '', tipo: esLaWeb() ? 'web' : 'local' };
+            }
+        } catch (e) { }
+    }
+    return { usuario: 'sin sesión', displayName: 'sin sesión (anónimo)', avatar: '', email: '', tipo: esLaWeb() ? 'web' : 'local' };
+}
     } catch (e) { }
     return { usuario: 'sin sesión', displayName: 'sin sesión (anónimo)', avatar: '', tipo: 'local' };
 }
@@ -1692,7 +1703,7 @@ function checkGlobalQueue() {
             // Quién pide ESTE trabajo: la sesión de este navegador (no un usuario
             // global de la app, que se confundía si en la misma PC se logueaba otro).
             pedidoPor: quienPide(),
-            type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
+            type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',            // De dónde salió: si el navegador es la web, el trabajo es 'web'            // (se sube a R2 y lo ve quien lo pidió); si es la app local, queda acá.            origen: esLaWeb() ? 'web' : 'local',
             prompt: nextItem.prompt,
             params: nextItem.params,
             imageFilename: nextItem.imageFilename,

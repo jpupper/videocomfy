@@ -1652,8 +1652,15 @@ app.get('/api/images', (req, res) => {
             .map(file => {
                 const stats = fs.statSync(path.join(uploadsDir, file));
                 const meta = allMetadata[file] || {};
+                const pp = meta.pedidoPor || {};
+                const pc = meta.computadora || {};
+                const pedidoPorNombre = pp.displayName || pp.usuario || (meta.red && meta.red.de) || '';
+                const computadoraNombre = pc.nombre || pc.duenoNombre || pc.dueno || '';
+
                 return { 
-                    filename: file, 
+                    filename: file,
+                    pedidoPor: pedidoPorNombre,
+                    computadora: computadoraNombre, 
                     url: `/uploads/${file}`, 
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
@@ -2968,7 +2975,9 @@ wss.on('connection', (ws) => {
                         params: message.params,
                         imageFilename: message.imageFilename,
                         // De dónde salió: local (esta PC) o red (un pedido que llegó del VPS)
-                        origen: 'local',
+                        // Si el pedido vino de un navegador en la WEB, el trabajo es 'web'
+                        // (así se sube a R2 y lo ve quien lo pidió, no queda local).
+                        origen: (message.origen === 'web' ? 'web' : (message.pedidoPor && message.pedidoPor.tipo === 'web' ? 'web' : 'local')),
                         // Quién pidió: viene en el mensaje del front (su sesión)
                         pedidoPor: datosDelPedido(message),
                         computadora: datosDeEstaPC(),
