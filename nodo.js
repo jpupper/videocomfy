@@ -364,6 +364,8 @@ function arrancar(opciones) {
                 const resp = await fetch(url, {
                     method: r.method || 'GET', headers,
                     body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined)
+                    // Si la app local no contesta, se corta (antes quedaba colgado).
+                    signal: AbortSignal.timeout(12000)
                 });
 
                 const ct = resp.headers.get('content-type') || '';
