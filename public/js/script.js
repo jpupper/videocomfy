@@ -3841,24 +3841,31 @@ function loadImageToPreviz(src) {
                 const imageData = images.find(img => img.filename === filename);
                 if (imageData && imageData.prompt) {
                     const creationDate = imageData.timestamp ? new Date(imageData.timestamp).toLocaleString() : 'N/A';
+                    // GPU del fierro: la publica la red (el nodo la manda en su info).
+                    let gpuFierro = imageData.gpu || '';
+                    try {
+                        const peersRed = (window.comfyRed && window.comfyRed.estado && window.comfyRed.estado.peers) || [];
+                        const pr = peersRed.filter(p => (imageData.nodo && p.id === imageData.nodo) || (imageData.computadora && p.nombre === imageData.computadora))[0];
+                        if (!gpuFierro && pr && pr.gpu) gpuFierro = pr.gpu;
+                    } catch (e) { }
+                    const cuandoTxt = imageData.cuando ? new Date(imageData.cuando).toLocaleString() : creationDate;
+                    const filaMeta = (titulo, valor, color) =>
+                        `<div class="meta-item"><div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">${titulo}</div>` +
+                        `<div style="font-size: 0.85em; color: ${color || '#e2e8f0'}; font-weight: 600; word-break: break-word;">${valor || '—'}</div></div>`;
                     metaContainer.innerHTML = `
                         <div style="background: rgba(30, 41, 59, 0.5); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #a855f7;">
                             <div style="font-size: 0.7em; color: #a855f7; text-transform: uppercase; margin-bottom: 5px;">Generation Prompt</div>
                             <div style="font-size: 1.1em; color: white; font-weight: 500;">${imageData.prompt}</div>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div class="meta-item">
-                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Type</div>
-                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">Flux Image</div>
-                            </div>
-                            <div class="meta-item">
-                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Created</div>
-                                <div style="font-size: 0.8em; color: #e2e8f0; font-weight: 600;">${creationDate}</div>
-                            </div>
-                            <div class="meta-item">
-                                <div style="font-size: 0.7em; color: #64748b; text-transform: uppercase;">Steps</div>
-                                <div style="font-size: 1em; color: #e2e8f0; font-weight: 600;">${imageData.metadata?.storyboardSteps || '20'} steps</div>
-                            </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            ${filaMeta('Modelo', imageData.modelo || (imageData.metadata && imageData.metadata.model))}
+                            ${filaMeta('👤 La pidió', imageData.usuarioPedido || imageData.pedidoPor, '#a855f7')}
+                            ${filaMeta('🖥️ Computadora', imageData.computadora)}
+                            ${filaMeta('🆔 Nodo', imageData.nodo)}
+                            ${filaMeta('🔧 Fierro de', imageData.dueno)}
+                            ${filaMeta('🎛️ GPU', gpuFierro)}
+                            ${filaMeta('Steps', (imageData.metadata && (imageData.metadata.samplerSteps || imageData.metadata.storyboardSteps)) || '—')}
+                            ${filaMeta('🕒 Creada', cuandoTxt)}
                         </div>
                         <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #334155; font-size: 0.8em; color: #64748b;">
                             Filename: ${filename}

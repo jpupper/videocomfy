@@ -489,6 +489,34 @@ function urlDelHub(ruta) {
 
 // Avisa al hub cada generación terminada: así queda en la base IACOMFY (quién
 // la pidió, en qué computadora se hizo y a quién pertenece esa computadora).
+// ---------------------------------------------------------------------------
+// ¿DE QUIÉN ES ESTE ARCHIVO? Se lee de la metadata del trabajo (pedidoPor).
+// Sin esto, al anunciar la media al hub se mandaba SIEMPRE la identidad del
+// dueño de esta PC: las imágenes que pidió otro usuario (ej. vjpuppet) quedaban
+// registradas a nombre de jpupper y NO aparecían en los assets de quien las pidió.
+// ---------------------------------------------------------------------------
+function identidadDeLaMedia(nombre) {
+    const yo = datosDeEstaPC();
+    let pp = null;
+    try {
+        [IMAGE_META_PATH, VIDEO_META_PATH].forEach((f) => {
+            if (pp || !f || !fs.existsSync(f)) return;
+            const m = JSON.parse(fs.readFileSync(f, 'utf8'));
+            const e = m && m[nombre];
+            if (e && e.pedidoPor && (e.pedidoPor.email || e.pedidoPor.usuario)) pp = e.pedidoPor;
+        });
+    } catch (e) { }
+    if (!pp) {
+        return { email: yo.email || '', username: yo.dueno || '', displayName: yo.duenoNombre || '', avatar: yo.avatar || '' };
+    }
+    return {
+        email: pp.email || yo.email || '',
+        username: pp.usuario || pp.displayName || yo.dueno || '',
+        displayName: pp.displayName || pp.usuario || '',
+        avatar: pp.avatar || yo.avatar || ''
+    };
+}
+
 const colaGeneraciones = [];
 function avisarGeneracionAlHub(archivo, meta) {
     const destino = urlDelHub('/api/red/generacion');
@@ -535,9 +563,9 @@ const colaMapa = new Map();
 function avisarMapaAlHub() {
     if (!colaMapa.size) return;
     const yo = datosDeEstaPC();
-    const items = [...colaMapa.entries()].map(([nombre, v]) => ({
+    const items = [...colaMapa.entries()].map(([nombre, v]) => Object.assign({
         nombre, url: v.url, bytes: v.bytes, key: v.key, tipo: v.tipo, mimetype: v.mimetype
-    }));
+    }, identidadDeLaMedia(nombre)));
     colaMapa.clear();
     const destino = urlDelHub('/api/red/media-mapa');
     if (!destino) return;
@@ -574,11 +602,11 @@ async function anunciarMapaCompleto() {
                 const v = mapa[n] || {};
                 const ext = String(path.extname(n)).toLowerCase();
                 const me = MIME_POR_EXT[ext] || '';
-                return {
+                return Object.assign({
                     nombre: n, url: v.url, ubicacion: 'nube', bytes: v.bytes || 0,
                     tipo: me.split('/')[0] === 'video' ? 'video' : me.split('/')[0] === 'audio' ? 'audio' : 'image',
                     mimetype: me
-                };
+                }, identidadDeLaMedia(n));
             });
             try {
                 const r = await fetch(destino, {
@@ -597,6 +625,60 @@ async function anunciarMapaCompleto() {
     } catch (e) { }
 }
 setTimeout(() => anunciarMapaCompleto().catch(() => { }), 8000);
+
+// ---------------------------------------------------------------------------
+// MEDIA QUE VIVE SOLO EN ESTA PC (no se subió a Cloudflare). Se anuncia igual
+// al hub para que el perfil pueda mostrar 'en tu PC' además de 'en la nube'.
+// Es sólo el registro (nombre, tipo, bytes y quién la pidió): el archivo NO se
+// sube. La nube es sólo para lo que se pidió desde la web.
+// ---------------------------------------------------------------------------
+const MIME_POR_EXT_LOCAL = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+    '.gif': 'image/gif', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg' };
+async function anunciarMediaLocal() {
+    try {
+        const destino = urlDelHub('/api/red/media-mapa');
+        if (!destino) return;
+        const mapaR2 = mediaMap.todoElMapa ? mediaMap.todoElMapa() : {};
+        const carpetas = [['uploads', 'image'], ['videos', 'video'], ['audio', 'audio']];
+        const items = [];
+        carpetas.forEach(([dir, tipoBase]) => {
+            const abs = path.join(__dirname, 'public', dir);
+            if (!fs.existsSync(abs)) return;
+            fs.readdirSync(abs).forEach((f) => {
+                if (!MIME_POR_EXT_LOCAL[String(path.extname(f)).toLowerCase()]) return;
+                if (mapaR2[f]) return;                       // ya está en la nube
+                let bytes = 0;
+                try { bytes = fs.statSync(path.join(abs, f)).size; } catch (e) { return; }
+                const id = identidadDeLaMedia(f);
+                items.push(Object.assign({
+                    nombre: f, local: true, ubicacion: 'local', bytes: bytes, tipo: tipoBase,
+                    mimetype: MIME_POR_EXT_LOCAL[String(path.extname(f)).toLowerCase()]
+                }, id));
+            });
+        });
+        if (!items.length) return;
+        const yo = datosDeEstaPC();
+        for (let i = 0; i < items.length; i += 150) {
+            const lote = items.slice(i, i + 150);
+            try {
+                await fetch(destino, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-agent-token': process.env.AGENT_TOKEN || '' },
+                    body: JSON.stringify({
+                        items: lote,
+                        email: yo.email || '', username: yo.dueno || '', displayName: yo.duenoNombre || '',
+                        avatar: yo.avatar || '', peerId: yo.peerId || '', computadora: yo.nombre || '',
+                        ubicacion: 'local'
+                    })
+                });
+            } catch (e) { }
+        }
+        console.log('📁 anuncié ' + items.length + ' archivo(s) que viven sólo en esta PC (perfil: local vs nube)');
+    } catch (e) { }
+}
+setTimeout(() => anunciarMediaLocal().catch(() => { }), 22000);
+setInterval(() => anunciarMediaLocal().catch(() => { }), 10 * 60 * 1000);
 
 // Estado de memoria del proceso (para ver si algo se está inflando)
 
@@ -1707,6 +1789,13 @@ app.get('/api/images', (req, res) => {
                     filename: file,
                     pedidoPor: pedidoPorNombre,
                     computadora: computadoraNombre, 
+                    // Datos para el visor de metadata (el ojito): nodo, dueño del fierro,
+                    // quién la pidió, modelo y cuándo.
+                    nodo: pc.peerId || (meta.red && meta.red.peerId) || '',
+                    dueno: pc.duenoNombre || pc.dueno || '',
+                    usuarioPedido: pp.usuario || '',
+                    modelo: meta.modelo || meta.model || '',
+                    cuando: meta.timestamp || stats.mtime.getTime(),
                     url: urlParaElFront(req, 'uploads', file),
                     urlLocal: urlLocalDe('uploads', file),
                     urlNube: urlEnLaNube(file) || '',

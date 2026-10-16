@@ -658,18 +658,37 @@ app.post(rutasRed('/api/red/media-mapa'), express.json({ limit: '16mb' }), (req,
     const items = (req.body && req.body.items) || [];
     let n = 0;
     for (const it of items) {
+        // El asset es de QUIEN LO PIDIÓ: el nodo manda la identidad por archivo
+        // (it.email/username), no sólo la del dueño de la PC. Si no viene, se usa
+        // la del cuerpo (comportamiento viejo).
+        const quien = {
+            email: it.email || (req.body && req.body.email) || '',
+            username: it.username || (req.body && req.body.username) || '',
+            displayName: it.displayName || (req.body && req.body.displayName) || '',
+            avatar: it.avatar || (req.body && req.body.avatar) || ''
+        };
         if (it && it.nombre && it.url) {
             mediaMap.anotar(it.nombre, it.url, { bytes: it.bytes || null });
-            // y queda en la base, asociado al usuario que lo creó (IACOMFY)
-            db.anotarAsset({
+            db.anotarAsset(Object.assign({
                 publicId: it.nombre, url: it.url, bytes: it.bytes || 0,
                 tipo: it.tipo || 'image', mimetype: it.mimetype || '', key: it.key || '',
-                email: (req.body && req.body.email) || '', username: (req.body && req.body.username) || '',
-                displayName: (req.body && req.body.displayName) || '', avatar: (req.body && req.body.avatar) || '',
+                ubicacion: it.ubicacion || 'nube',
+                computadoraPeerId: it.peerId || (req.body && req.body.peerId) || '',
+                computadoraNombre: it.computadora || (req.body && req.body.computadora) || '',
+                modelo: it.modelo || '', prompt: it.prompt || ''
+            }, quien)).catch(() => { });
+            n++;
+        } else if (it && it.nombre && it.local) {
+            // Archivo que vive SOLO en esa PC: se registra para que el perfil pueda
+            // mostrar 'en tu PC' (no se sube nada: la nube es sólo para lo de la web).
+            db.anotarAsset(Object.assign({
+                publicId: it.nombre, url: '', bytes: it.bytes || 0,
+                tipo: it.tipo || 'image', mimetype: it.mimetype || '',
+                ubicacion: 'local',
                 computadoraPeerId: (req.body && req.body.peerId) || '',
                 computadoraNombre: (req.body && req.body.computadora) || '',
                 modelo: it.modelo || '', prompt: it.prompt || ''
-            }).catch(() => { });
+            }, quien)).catch(() => { });
             n++;
         }
     }

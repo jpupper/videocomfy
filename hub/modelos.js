@@ -49,7 +49,7 @@ const AssetSchema = new mongoose.Schema({
     email: { type: String, required: true, index: true },
     username: { type: String, default: '' },
     publicId: { type: String, required: true, index: true },   // nombre del archivo
-    url: { type: String, required: true },                      // URL pública de R2
+    url: { type: String, default: '' },                         // URL pública de R2 (vacía si vive sólo en la PC)
     key: { type: String, default: '' },                         // clave en el bucket
     tipo: { type: String, default: 'image' },                   // image | video | audio
     mimetype: { type: String, default: '' },
@@ -515,7 +515,7 @@ async function estadisticasDe(emailOUsuario) {
 
         return {
             usuario: usuario || { email: clave, username: clave, displayName: clave },
-            assets: assets.map((x) => ({ publicId: x.publicId, url: x.url, tipo: x.tipo, bytes: x.bytes, cuando: x.cuando, prompt: x.prompt })),
+            assets: assets.map((x) => ({ publicId: x.publicId, url: x.url, tipo: x.tipo, bytes: x.bytes, cuando: x.cuando, prompt: x.prompt, ubicacion: x.ubicacion || (x.url ? 'nube' : 'local'), computadoraNombre: x.computadoraNombre || '', modelo: x.modelo || '' })),
             totales: {
                 assets: await Asset.countDocuments(filtroUsuario),
                 bytes,

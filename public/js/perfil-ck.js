@@ -204,24 +204,57 @@ function ckMezclarPerfil() {
                 (c.gpu ? '<span>🎛️ ' + esc(c.gpu) + '</span>' : '') + '</div></div>';
         }).join('') || '<div class="rank-vacio">todavía no hay computadoras registradas con esta cuenta</div>';
 
-        var assets = (datos && datos.assets || []).slice(0, 40).map(function (a) {
-            var esVideo = a.tipo === 'video';
-            var enNube = (a.ubicacion || (a.url ? 'nube' : 'local')) === 'nube' && a.url;
-            if (!enNube) {
-                return '<span class="rank-asset rank-asset-local" title="' + esc(a.prompt || a.publicId) + '">' +
-                    (esVideo ? '<span class="rank-asset-icono">🎬</span>' : '<span class="rank-asset-icono">🖼️</span>') +
-                    '<span class="rank-asset-pie">📍 en tu PC · ' + esc(mb(a.bytes)) + '</span></span>';
+        // ---- ASSETS: separados en NUBE (Cloudflare) y LOCAL (esta PC), con switch ----
+        var todos = (datos && datos.assets || []);
+        var listaNube = todos.filter(function (a) { return !!a.url; });
+        var listaLocal = todos.filter(function (a) { return !a.url; });
+        var vista = 'nube';
+        try { if (localStorage.getItem('comfylatam_assets_vista') === 'local') vista = 'local'; } catch (e) { }
+
+        function pintarAssets(lista, esNube) {
+            if (!lista.length) {
+                return '<div class="rank-vacio">' + (esNube ? 'todavía no hay assets en la nube' : 'todavía no hay assets guardados en tu PC') + '</div>';
             }
-            return '<a class="rank-asset" href="' + esc(a.url) + '" target="_blank" rel="noopener" title="' + esc(a.prompt || a.publicId) + '">' +
-                (esVideo ? '<video src="' + esc(a.url) + '" muted preload="metadata"></video><span class="rank-asset-tag">🎬</span>'
-                    : '<img src="' + esc(a.url) + '" loading="lazy" alt="">') +
-                '<span class="rank-asset-pie">☁️ ' + esc(mb(a.bytes)) + '</span></a>';
-        }).join('') || '<div class="rank-vacio">' + (token() ? 'todavía no creaste assets' : 'iniciá sesión para ver tus assets') + '</div>';
+            return lista.slice(0, 60).map(function (a) {
+                var esVideo = a.tipo === 'video';
+                if (!esNube) {
+                    return '<span class="rank-asset rank-asset-local" title="' + esc(a.prompt || a.publicId) + '">' +
+                        (esVideo ? '<span class="rank-asset-icono">🎬</span>' : '<span class="rank-asset-icono">🖼️</span>') +
+                        '<span class="rank-asset-pie">📍 ' + esc(mb(a.bytes)) + (a.computadoraNombre ? ' · ' + esc(a.computadoraNombre) : '') + '</span></span>';
+                }
+                return '<a class="rank-asset" href="' + esc(a.url) + '" target="_blank" rel="noopener" title="' + esc(a.prompt || a.publicId) + '">' +
+                    (esVideo ? '<video src="' + esc(a.url) + '" muted preload="metadata"></video><span class="rank-asset-tag">🎬</span>'
+                        : '<img src="' + esc(a.url) + '" loading="lazy" alt="">') +
+                    '<span class="rank-asset-pie">☁️ ' + esc(mb(a.bytes)) + '</span></a>';
+            }).join('');
+        }
+
+        function botonVista(v, etiqueta, cant, activo) {
+            var est = activo
+                ? 'background:#7c3aed;color:#fff;border:1px solid #7c3aed;'
+                : 'background:transparent;color:#cbd5e1;border:1px solid #475569;';
+            return '<button class="ckp-switch-btn" data-vista="' + v + '" style="' + est +
+                'padding:5px 12px;border-radius:999px;font-size:0.75rem;font-weight:700;cursor:pointer;">' +
+                etiqueta + ' (' + cant + ')</button>';
+        }
+        var switchAssets = '<div class="ckp-switch" style="display:flex;gap:8px;margin:6px 0 10px 0;flex-wrap:wrap;">' +
+            botonVista('nube', '☁️ En la nube', listaNube.length, vista === 'nube') +
+            botonVista('local', '💻 En tu PC', listaLocal.length, vista === 'local') +
+            '</div>';
 
         p.innerHTML = cab + metricas +
             '<h4 class="rank-h4">🖥️ Tus computadoras</h4>' + fierros +
-            '<h4 class="rank-h4">☁️ Tus assets (' + (t.assets || 0) + ') — servidos por Cloudflare</h4>' +
-            '<div class="rank-assets">' + assets + '</div>';
+            '<h4 class="rank-h4">' + (vista === 'nube' ? '☁️ Tus assets en Cloudflare' : '💻 Tus assets en tu PC') + '</h4>' +
+            switchAssets +
+            '<div class="rank-assets">' + pintarAssets(vista === 'nube' ? listaNube : listaLocal, vista === 'nube') + '</div>';
+
+        // El botoncito que cambia de una a la otra (queda recordado)
+        Array.prototype.forEach.call(p.querySelectorAll('.ckp-switch-btn'), function (b) {
+            b.addEventListener('click', function () {
+                try { localStorage.setItem('comfylatam_assets_vista', b.getAttribute('data-vista')); } catch (e) { }
+                pintar(datos);
+            });
+        });
 
         var salir = document.getElementById('ckCerrarSesion');
         if (salir) salir.addEventListener('click', function () {
