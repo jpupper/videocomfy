@@ -14,12 +14,14 @@
         t2i2v: ['flux_dev_fp8_api.json', 'video_ltx2_t2v_api.json'],
         i2v: ['video_ltx25_i2v_api.json'],
         chainvideo: ['video_wan2_2_14B_flf2v_api.json'],
-        storyboard: ['flux_dev_full_text_to_image_api.json']
+        storyboard: ['flux_dev_full_text_to_image_api.json'],
+        ideogram4: ['ideogram4_api.json']
     };
     // motores de imagen (el select del pipeline)
     var POR_MOTOR = {
         zimage: 'z_image_turbo_api.json',
         qwen21: 'qwen_image_21_api.json',
+        ideogram4: 'ideogram4_api.json',
         flux: 'flux_dev_fp8_api.json'
     };
 

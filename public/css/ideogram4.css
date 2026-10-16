@@ -1,0 +1,125 @@
+/* ============================================================
+   Ideogram 4 — editor de sectores
+   ============================================================ */
+
+/* Fila de presets de grilla */
+.ideo-grid-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.ideo-preset {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 0.75em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ideo-preset:hover {
+    border-color: var(--primary);
+    color: #e2e8f0;
+}
+.ideo-preset.active {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Grilla de sectores (el canvas lógico) */
+.ideo-grid {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    box-sizing: border-box;
+    /* el aspect-ratio lo setea JS según ancho/alto */
+}
+.ideo-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    background: rgba(15, 23, 42, 0.55);
+    min-height: 70px;
+}
+.ideo-cell-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+.ideo-cell-badge {
+    font-size: 0.62em;
+    font-weight: 800;
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    padding: 1px 7px;
+    letter-spacing: 0.5px;
+}
+.ideo-cell-type {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid var(--border);
+    color: #e2e8f0;
+    border-radius: 5px;
+    font-size: 0.65em;
+    padding: 2px 4px;
+    outline: none;
+}
+.ideo-cell-type option {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+.ideo-cell-prompt {
+    flex: 1;
+    width: 100%;
+    min-height: 48px;
+    resize: vertical;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: white;
+    border-radius: 6px;
+    padding: 7px;
+    font-size: 0.72em;
+    line-height: 1.4;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+.ideo-cell-prompt:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+/* Filas de estilo (advanced) compactas */
+.ideo-style-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+.ideo-style-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: white;
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 0.72em;
+    outline: none;
+}
+.ideo-style-input:focus {
+    border-color: var(--primary);
+}

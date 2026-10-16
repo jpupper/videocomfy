@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
     <link rel="stylesheet" href="css/red.css?v=24">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=1">
+    <link rel="stylesheet" href="css/ideogram4.css?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -375,6 +376,11 @@
                             <span class="wf-card-name">QWEN IMAGE 2.1</span>
                             <span class="wf-card-desc">Text to Image (GGUF Q8)</span>
                         </button>
+                        <button class="wf-card" data-workflow="ideogram4">
+                            <span class="wf-card-icon">🎯</span>
+                            <span class="wf-card-name">IDEOGRAM 4</span>
+                            <span class="wf-card-desc">Text to Image (sectores)</span>
+                        </button>
                     </div>
 
                     <!-- Z-IMAGE TURBO (T2I) -->
@@ -444,6 +450,61 @@
                             </div>
                             <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🧠 Qwen-Image 2.1 (GGUF Q8_0, 25 steps, cfg 1). Modelos: <code>qwen_image_2.1_Q8_0.gguf</code> + <code>qwen3vl_8b_int8_convrot</code> + <code>qwen_image_2.1_vae_bf16</code></div>
                             <button class="wf-gen-btn generate-btn-main" data-workflow="qwen21">🚀 GENERATE IMAGE</button>
+                        </div>
+                    </div>
+
+                    <!-- IDEOGRAM 4 (T2I con sectores) -->
+                    <div class="wf-panel" data-panel="ideogram4">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Descripción general (opcional)</label>
+                                <textarea class="wf-textarea" id="ideoHigh" placeholder="Una frase que resume toda la imagen (se inyecta como high_level_description)..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Background <span class="wf-badge-req">REQUERIDO</span></label>
+                                <textarea class="wf-textarea" id="ideoBackground" placeholder="Descripción del fondo/entorno de toda la escena..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Sectores</label>
+                                <div class="ideo-grid-presets" id="ideoGridPresets"></div>
+                                <div class="ideo-grid" id="ideoGrid"></div>
+                                <div style="font-size:11px; opacity:.65; margin-top:8px;">Cada celda es un sector con su propio prompt. "objeto" = describe lo que va ahí; "texto" = renderiza la cadena exacta.</div>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Estilo (opcional)</label>
+                                <select id="ideoStyle" class="wf-preset-select" style="width:100%;">
+                                    <option value="none">Sin estilo</option>
+                                    <option value="art_style">Art style</option>
+                                    <option value="photo">Fotografía</option>
+                                </select>
+                                <input type="text" id="ideoStyleValue" class="ideo-style-input" style="margin-top:8px;" placeholder="ej. flat vector illustration, bold outlines / 35mm, f/1.4">
+                                <div class="ideo-style-row">
+                                    <input type="text" id="ideoAesthetics" class="ideo-style-input" placeholder="aesthetics (moody, cinematic...)">
+                                    <input type="text" id="ideoLighting" class="ideo-style-input" placeholder="lighting (golden hour...)">
+                                </div>
+                                <input type="text" id="ideoMedium" class="ideo-style-input" style="margin-top:8px;" placeholder="medium (photograph, illustration, 3d_render...)">
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Width <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1536" step="16" value="1024" class="wf-param-slider" data-bind="ideoWidth">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Height <span class="wf-val">1024</span></label>
+                                    <input type="range" min="512" max="1536" step="16" value="1024" class="wf-param-slider" data-bind="ideoHeight">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">28</span></label>
+                                    <input type="range" min="10" max="50" step="1" value="28" class="wf-param-slider" data-bind="ideoSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed <span class="wf-val">-1</span></label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="ideoSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="ideoRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🎯 Ideogram 4 local (nvfp4, ~28 steps). Modelos: <code>ideogram4_nvfp4_mixed</code> + <code>qwen3vl_8b_nvfp4</code> + <code>flux2-vae</code>. CFG 7 + override 3.</div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="ideogram4">🚀 GENERATE IMAGE</button>
                         </div>
                     </div>
 
@@ -1049,6 +1110,7 @@
     <script src="js/perfil-ck.js?v=7"></script>
     <script src="js/admin-panel.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
+    <script src="js/ideogram4.js?v=1"></script>
     <script src="js/auth-jpi.js?v=11"></script>
     <script src="js/entorno-jpi.js?v=3"></script>
     <script src="vendor/socket.io.min.js"></script>

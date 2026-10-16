@@ -52,5 +52,33 @@
     "model": "LTX-2.5 distilled",
     "type": "video",
     "timestamp": 1792109425389
+  },
+  "ideogram_fanta-007_.png": {
+    "prompt": "Vintage 1950s Fanta poster featuring a woman holding the bottle",
+    "params": {
+      "videoWidth": 752,
+      "videoHeight": 1328,
+      "samplerSteps": 28,
+      "seed": 629572452953202,
+      "modelo": "ideogram4",
+      "style": "art_style",
+      "styleValue": "vintage, poster, art",
+      "aesthetics": "",
+      "lighting": "overcast, calm",
+      "medium": "photography",
+      "sectores": [
+        { "type": "obj", "desc": "A smiling woman with a retro aesthetic occupies the center of the poster. She has reddish-brown hair styled in voluminous waves, well-defined eyebrows, and classic makeup. She is wearing a red, open-collared blouse. Her face conveys joy and warmth, with her gaze directed toward the viewer.", "bbox": [201, 57, 443, 953] },
+        { "type": "obj", "desc": "The word “FANTA” appears in large, bold, white capital letters against a reddish-orange band. It is the most striking typographic element and spans a large portion of the poster's lower width.", "bbox": [459, 55, 600, 953] },
+        { "type": "obj", "desc": "Below the brand name, the words “Delicious and Refreshing” appear, arranged over two lines in thick, dark lettering. The text highlights the product's qualities of flavor and freshness.", "bbox": [623, 132, 758, 837] },
+        { "type": "obj", "desc": "The word “DRINK”", "bbox": [44, 403, 188, 595] },
+        { "type": "obj", "desc": "In the opposite hand, he holds a clear, cylindrical glass filled with an orange-colored drink. The glass is positioned at approximately shoulder height and visually complements the bottle, reinforcing the idea of immediate consumption.", "bbox": [298, 702, 442, 957] },
+        { "type": "obj", "desc": "The woman is holding a clear glass bottle containing an orange-colored drink. The bottle features a green and white label with the brand name Fanta. It has a narrow neck and a metal cap. She holds it at chest level, highlighting it as one of the featured products.", "bbox": [299, 50, 443, 305] }
+      ]
+    },
+    "imageFilename": null,
+    "model": "Ideogram 4",
+    "modelo": "ideogram4",
+    "type": "image",
+    "timestamp": 1792115845291
   }
 }

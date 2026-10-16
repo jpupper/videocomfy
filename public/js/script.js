@@ -2708,37 +2708,56 @@ async function loadExistingExamples() {
             const techInfo = ex.metadata || {};
             const promptStr = ex.prompt || '';
             const dateStr = new Date(ex.timestamp).toLocaleString();
+            const esImagen = ex.type === 'image';
+            // Color de etiqueta: ámbar para video, violeta para imagen (así se
+            // distingue el ejemplo de Ideogram de los ejemplos de video).
+            const badgeBg = esImagen ? '#a855f7' : '#f59e0b';
+            const badgeFg = esImagen ? '#ffffff' : '#0f172a';
+            const tagBg = esImagen ? 'rgba(168,85,247,0.18)' : 'rgba(245,158,11,0.18)';
+            const tagColor = esImagen ? '#c084fc' : '#fbbf24';
+            const tagBorder = esImagen ? 'rgba(168,85,247,0.35)' : 'rgba(245,158,11,0.35)';
+            const bottomBg = esImagen ? 'rgba(168,85,247,0.15)' : 'rgba(15,23,42,0.85)';
             const badgeLabel = `${techInfo.videoWidth || '?'}x${techInfo.videoHeight || '?'} • REFERENCIA`;
+            const etiqueta = esImagen ? 'EJEMPLO IMAGEN' : 'EJEMPLO';
+            const media = esImagen
+                ? `<img src="${ex.url}" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;">`
+                : `<video src="${ex.url}" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;" controls preload="none"></video>`;
             const item = document.createElement('div');
             item.className = 'gallery-item';
             item.innerHTML = `
                 <div style="position: relative; width: 100%; height: 160px; overflow: hidden; border-radius: 8px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
-                    <div style="position: absolute; font-size: 40px; opacity: 0.15; filter: grayscale(1); pointer-events: none; z-index: 1;">🎬</div>
-                    <video src="${ex.url}" style="width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 2;" controls preload="none"></video>
-                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: #f59e0b; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; padding: 0; flex-shrink: 0; z-index: 10;">👁️</button>
-                    <div style="position: absolute; top: 10px; left: 10px; background: #f59e0b; color: #0f172a; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 800; text-transform: uppercase; z-index: 10;">EJEMPLO</div>
-                    <div style="position: absolute; top: 30px; left: 10px; background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 700; z-index: 10;">${techInfo.model || 'REFERENCIA'}</div>
+                    <div style="position: absolute; font-size: 40px; opacity: 0.15; filter: grayscale(1); pointer-events: none; z-index: 1;">${esImagen ? '🖼️' : '🎬'}</div>
+                    ${media}
+                    <button class="previz-btn" title="View in Previz" style="position: absolute; top: 10px; right: 10px; background: ${badgeBg}; border-radius: 50%; width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: ${badgeFg}; padding: 0; flex-shrink: 0; z-index: 10;">👁️</button>
+                    <div style="position: absolute; top: 10px; left: 10px; background: ${badgeBg}; color: ${badgeFg}; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 800; text-transform: uppercase; z-index: 10;">${etiqueta}</div>
+                    <div style="position: absolute; top: 30px; left: 10px; background: ${tagBg}; color: ${tagColor}; border: 1px solid ${tagBorder}; font-size: 8px; padding: 2px 6px; border-radius: 4px; font-weight: 700; z-index: 10;">${techInfo.model || 'REFERENCIA'}</div>
                     <div style="position: absolute; top: 52px; left: 8px; background: rgba(15, 23, 42, 0.7); padding: 2px 6px; border-radius: 4px; font-size: 8px; color: #94a3b8; pointer-events: none; z-index: 10;">${dateStr}</div>
-                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(15, 23, 42, 0.85); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; z-index: 10;">${badgeLabel}</div>
+                    <div style="position: absolute; bottom: 8px; left: 8px; background: ${bottomBg}; color: ${tagColor}; border: 1px solid ${tagBorder}; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; z-index: 10;">${badgeLabel}</div>
                 </div>
                 <div style="padding: 4px;">
-                    <div style="font-size: 11px; color: #f59e0b; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Prompt de referencia</div>
+                    <div style="font-size: 11px; color: ${badgeBg}; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.5px;">Prompt de referencia</div>
                     <div style="font-size: 10px; color: #e2e8f0; line-height: 1.4; max-height: 4.2em; overflow-y: auto; background: rgba(15, 23, 42, 0.4); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">${promptStr || '<span style="opacity: 0.5; font-style: italic;">Sin prompt registrado</span>'}</div>
                 </div>
             `;
 
             item.draggable = true;
             item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('videoSrc', ex.url);
-                e.dataTransfer.setData('videoPrompt', promptStr);
-                e.dataTransfer.setData('videoMetadata', JSON.stringify(techInfo));
+                if (esImagen) {
+                    e.dataTransfer.setData('imageSrc', ex.url);
+                    e.dataTransfer.setData('imagePrompt', promptStr);
+                } else {
+                    e.dataTransfer.setData('videoSrc', ex.url);
+                    e.dataTransfer.setData('videoPrompt', promptStr);
+                    e.dataTransfer.setData('videoMetadata', JSON.stringify(techInfo));
+                }
                 item.style.opacity = '0.5';
             });
             item.addEventListener('dragend', () => item.style.opacity = '1');
 
             item.querySelector('.previz-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
-                loadVideoToPreviz(ex.url);
+                if (esImagen) loadImageToPreviz(ex.url);
+                else loadVideoToPreviz(ex.url);
                 const tabPrevizBtn = document.getElementById('tabPrevizBtn');
                 if (tabPrevizBtn) tabPrevizBtn.click();
             });
@@ -5576,6 +5595,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'chainvideo': generateChainVideo(); break;
                 case 'zimage': generateZImage(); break;
                 case 'qwen21': generateQwen21(); break;
+                case 'ideogram4': if (window.generateIdeogram4) generateIdeogram4(); break;
             }
         });
     });

@@ -692,6 +692,7 @@ const COMFY_BASE = () => (process.env.COMFY_URL || 'http://127.0.0.1:8188').repl
 const MODELO_A_WORKFLOW = {
     zimage: 'z_image_turbo_api.json',
     qwen21: 'qwen_image_21_api.json',
+    ideogram4: 'ideogram4_api.json',
     flux: 'flux_dev_fp8_api.json',
     fluxfull: 'flux_dev_full_text_to_image_api.json',
     ltx2t2v: 'video_ltx2_t2v_api.json',
@@ -704,6 +705,7 @@ const MODELO_A_WORKFLOW = {
 const NOMBRE_WORKFLOW = {
     'z_image_turbo_api.json': 'Z-Image Turbo (imagen)',
     'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
+    'ideogram4_api.json': 'Ideogram 4 (imagen con sectores)',
     'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
     'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
     'video_ltx2_t2v_api.json': 'LTX-2.5 texto→video',
@@ -1887,16 +1889,18 @@ app.get('/api/examples', (req, res) => {
         } catch (e) {}
 
         const list = files
-            .filter(file => /\.(webm|mp4|gif)$/i.test(file))
+            .filter(file => /\.(webm|mp4|gif|png|jpe?g|webp)$/i.test(file))
             .map(file => {
                 const stats = fs.statSync(path.join(dir, file));
                 const meta = allMetadata[file] || {};
+                const esImagen = /\.(png|jpe?g|webp)$/i.test(file);
                 return {
                     filename: file,
                     url: `/examples/${file}`,
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
+                    type: meta.type || (esImagen ? 'image' : 'video'),
                     metadata: { ...(meta.params || {}), imageFilename: meta.imageFilename || null, model: meta.model || null }
                 };
             })
@@ -3406,6 +3410,45 @@ async function generarVideoT2VLTX25(promptText, params = {}) {
     return promptId;
 }
 
+// Arma el JSON caption que Ideogram 4 entiende: background + elements con bbox,
+// desc y (si es texto) el texto exacto. El bbox va en la grilla 0-1000 de Ideogram
+// como [ymin, xmin, ymax, xmax]; los sectores llegan del front con x/y/w/h en 0-1.
+function construirCaptionIdeogram(params) {
+    const cap = {};
+    const alto = String(params.highLevel || '').trim();
+    if (alto) cap.high_level_description = alto;
+
+    const estilo = params.style === 'photo' || params.style === 'art_style' ? params.style : 'none';
+    if (estilo !== 'none') {
+        const sd = { aesthetics: String(params.aesthetics || ''), lighting: String(params.lighting || '') };
+        if (estilo === 'photo') {
+            sd.photo = String(params.styleValue || '');
+            sd.medium = String(params.medium || '');
+        } else {
+            sd.medium = String(params.medium || '');
+            sd.art_style = String(params.styleValue || '');
+        }
+        cap.style_description = sd;
+    }
+
+    const elements = [];
+    (Array.isArray(params.sectores) ? params.sectores : []).forEach((s) => {
+        if (!s || !(String(s.desc || '').trim() || String(s.text || '').trim())) return;
+        const tipo = s.type === 'text' ? 'text' : 'obj';
+        const el = { type: tipo };
+        const x = Math.max(0, Math.min(1, Number(s.x) || 0));
+        const y = Math.max(0, Math.min(1, Number(s.y) || 0));
+        const w = Math.max(0, Math.min(1, Number(s.w) || 0));
+        const h = Math.max(0, Math.min(1, Number(s.h) || 0));
+        el.bbox = [Math.round(y * 1000), Math.round(x * 1000), Math.round((y + h) * 1000), Math.round((x + w) * 1000)];
+        if (tipo === 'text') el.text = String(s.text || '').trim();
+        el.desc = String(s.desc || '').trim();
+        elements.push(el);
+    });
+    cap.compositional_deconstruction = { background: String(params.background || '').trim(), elements };
+    return JSON.stringify(cap);
+}
+
 const MODELOS_IMAGEN = {
     zimage: {
         archivo: 'workflows/z_image_turbo_api.json',
@@ -3448,6 +3491,34 @@ const MODELOS_IMAGEN = {
             wf['458'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
                 ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
             if (params.cfgScale) wf['458'].inputs.cfg = parseFloat(params.cfgScale);
+            return { width: w, height: h, steps };
+        }
+    },
+    ideogram4: {
+        archivo: 'workflows/ideogram4_api.json',
+        etiqueta: 'Ideogram 4',
+        tipoSalida: 'storyboard',
+        ayuda: 'Modelos: ideogram4_nvfp4_mixed + ideogram4_unconditional + qwen3vl_8b_nvfp4 + flux2-vae (sectores)',
+        aplicar(wf, prompt, params) {
+            // El prompt "real" es el JSON caption que armamos desde los sectores
+            // (background + elements con bbox). prompt cae como fallback si no hay sectores.
+            const sectores = Array.isArray(params.sectores) ? params.sectores : [];
+            const haySectores = sectores.some((s) => s && (String(s.desc || '').trim() || String(s.text || '').trim()));
+            if (haySectores || (params.background || '').trim()) {
+                wf['4'].inputs.text = construirCaptionIdeogram(params);
+            } else {
+                // Sin sectores ni background: prompt plano como único contenido.
+                wf['4'].inputs.text = JSON.stringify({ compositional_deconstruction: { background: '', elements: [{ type: 'obj', bbox: [0, 0, 1000, 1000], desc: String(prompt || '').trim() }] } });
+            }
+            // múltiplo de 16 (lo pide el EmptyFlux2LatentImage y el propio Ideogram 4)
+            const w = Math.max(256, Math.min(1536, Math.round((parseInt(params.videoWidth) || 1024) / 16) * 16));
+            const h = Math.max(256, Math.min(1536, Math.round((parseInt(params.videoHeight) || 1024) / 16) * 16));
+            const steps = Math.min(parseInt(params.samplerSteps) || 28, 50);
+            wf['12'].inputs.width = w;
+            wf['12'].inputs.height = h;
+            wf['10'].inputs.steps = steps;
+            wf['11'].inputs.noise_seed = (params.seed !== undefined && params.seed !== -1)
+                ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
             return { width: w, height: h, steps };
         }
     }
