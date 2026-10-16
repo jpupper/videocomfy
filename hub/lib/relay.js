@@ -519,7 +519,7 @@ function reescribirTexto(texto, basePath, peerId) {
     });
 }
 
-async function reenviarHttp({ peerId, method, ruta, query, contentType, range, stream, origen, alStream }) {
+async function reenviarHttp({ peerId, method, ruta, query, contentType, range, stream, origen, alStream, authorization, cookie }) {
     const nodo = peer(peerId);
     if (!nodo || !nodo.socket || !nodo.socket.connected) throw new Error('nodo offline');
 
@@ -557,6 +557,8 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
         }
 
         nodo.socket.emit('tunnel:http', {
+            authorization: authorization || '',
+            cookie: cookie || '',
             reqId,
             method,
             ruta,

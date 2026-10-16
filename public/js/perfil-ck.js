@@ -132,7 +132,7 @@
             (t.segundosComputadora ? '<span class="ckp-chip verde">⏱️ ' + tiempo(t.segundosComputadora) + ' aportados</span>' : '') +
             '</div></div>' +
             '<div class="ckp-acciones">' +
-            '<a class="ckp-link" href="https://vps-4455523-x.dattaweb.com/jpconnect/profile.html" target="_blank" rel="noopener">mi cuenta ↗</a>' +
+            '<a class="ckp-link" href="https://fullscreencode.com/jpconnect/profile.html" target="_blank" rel="noopener">mi cuenta ↗</a>' +
             '</div>' +
             '</div>';
 

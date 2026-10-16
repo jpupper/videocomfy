@@ -799,6 +799,10 @@ app.use((req, res, next) => {
         origen: (req.get('x-forwarded-proto') || req.protocol) + '://' + req.get('host'),
         contentType: req.headers['content-type'] || '',
         range: req.headers.range || '',
+        // LA SESIÓN VIAJA: sin esto la app local recibe los pedidos de la web
+        // SIN token, contesta 401 y la web queda vacía (listas y foto incluidos).
+        authorization: req.headers.authorization || '',
+        cookie: req.headers.cookie || '',
         stream: req,
         // MEDIA GRANDE: se escribe al navegador a medida que llega, sin juntarla
         // en memoria. Antes el nodo mandaba el archivo entero en un mensaje y el
