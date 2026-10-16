@@ -1,0 +1,22 @@
+{
+  "comfyAddress": "127.0.0.1",
+  "red": {
+    "peerId": "nodo-81c5eec9",
+    "nombre": "JPIA",
+    "compartir": true,
+    "nombreManual": true,
+    "usuario": {
+      "username": null,
+      "displayName": null,
+      "avatar": null,
+      "email": "julian.d.puppo@gmail.com",
+      "id": "69c02530b2cc8407a1eb07f1"
+    },
+    "propietario": {
+      "usuario": "jpupper",
+      "displayName": "Juli�n Puppo",
+      "avatar": ""
+    },
+    "workflowsCompartidos": {}
+  }
+}

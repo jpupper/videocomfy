@@ -171,11 +171,8 @@
     function pintarSinSesion(cont) {
         cont.innerHTML = '<div class="rank-vacio">Todavía no iniciaste sesión: acá vas a ver tus assets, ' +
             'tus computadoras y tus generaciones. ' +
-            '<button type="button" class="rank-btn" id="rankLogin">LOGIN</button></div>';
-        var b = document.getElementById('rankLogin');
-        if (b) b.addEventListener('click', function () {
-            if (window.comfyAuth && window.comfyAuth.entrar) window.comfyAuth.entrar();
-        });
+            // Un solo login en la app: la pestaña de cuenta (#jpiCuentaBtn). Acá no va botón.
+            '<div class="rank-aviso-login">Entrá con tu cuenta desde la pestaña LOGIN de arriba.</div>';
     }
 
     function miClave() {

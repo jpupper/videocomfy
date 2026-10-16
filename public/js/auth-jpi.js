@@ -263,12 +263,11 @@
                 '  <p class="cuenta-sub">' + (esLocal
                     ? 'Todavía no iniciaste sesión en esta computadora. Entrá con tu cuenta de fullscreencode: tu perfil se ve acá y tu nodo publica tu nombre y tu avatar en la red.'
                     : 'Entrá con tu cuenta de fullscreencode para usar COMFYLATAM.') + '</p>',
-                '  <button class="red-btn" id="cuentaEntrar">LOG IN CON JPCONNECT</button>',
+                '  <p class="ck-aviso-login">Entrá con tu cuenta de fullscreencode desde la pestaña <b>LOGIN</b> de arriba.</p>',
                 '  <p class="cuenta-nota">Se abre JPCONNECT (el centro de conexiones del ecosistema) y volvés a esta misma pantalla ya logueado.</p>',
                 '</div>'
             ].join('\n');
-            var b = document.getElementById('cuentaEntrar');
-            if (b) b.addEventListener('click', function () { yendo = false; irAlLoginUnificado(); });
+            // (el boton de login del panel se sacó: la app tiene UN solo login, la pestaña)
             return;
         }
 
@@ -333,13 +332,13 @@
             return;
         }
 
-        // CON SESIÓN: SIEMPRE la foto Y el nombre de usuario (los dos, siempre).
+        // CON SESIÓN: la FOTO y tu NOMBRE (displayName). Nunca "@usuario", nunca
+        // el mail y nunca el texto "mi cuenta": eso se veía cuando el perfil
+        // local llegaba vacío (displayName/avatar en null) y pisaba al del login.
         btn.dataset.estado = 'con-sesion';
         var uu = u || usuario || usuarioGuardado() || {};
-        var usuarioNombre = String(uu.username || '').trim();
-        var nom = usuarioNombre ? '@' + usuarioNombre
-            : (String(uu.displayName || '').trim() || 'mi cuenta');
-        btn.title = (uu.displayName && usuarioNombre ? uu.displayName + ' \u2014 ' : '') + 'tu perfil de ComfyLatam';
+        var nom = String(uu.displayName || '').trim() || String(uu.username || '').trim();
+        btn.title = (nom ? nom + ' \u2014 ' : '') + 'tu perfil de ComfyLatam';
         btn.innerHTML = '';
         var fotoUrl = normalizarFoto(uu.avatar);
         if (fotoUrl) {
@@ -347,15 +346,17 @@
             img.className = 'ck-perfil-foto';
             img.src = fotoUrl;
             img.alt = '';
-            img.onerror = function () { img.replaceWith(inicialDe(usuarioNombre || nom)); };
+            img.onerror = function () { img.replaceWith(inicialDe(nom)); };
             btn.appendChild(img);
         } else {
-            btn.appendChild(inicialDe(usuarioNombre || nom));
+            btn.appendChild(inicialDe(nom));
         }
-        var sp = document.createElement('span');
-        sp.className = 'ck-perfil-nombre';
-        sp.textContent = nom;
-        btn.appendChild(sp);
+        if (nom) {
+            var sp = document.createElement('span');
+            sp.className = 'ck-perfil-nombre';
+            sp.textContent = nom;
+            btn.appendChild(sp);
+        }
     }
 
     function inicialDe(nom) {
@@ -366,6 +367,30 @@
     }
 
     // --- 6) traer el perfil del servidor ------------------------------------
+    // El perfil de la app puede volver SIN displayName ni foto (el nodo no
+    // conoce al usuario todavía). El del ECOSISTEMA sí los tiene, así que se
+    // COMPLETA lo que falte: lo bueno nunca se pisa con un null.
+    var PERFIL_ECO = 'https://vps-4455523-x.dattaweb.com/jpconnect/api/auth/profile';
+    function completarConEcosistema(u) {
+        u = u || {};
+        var t = '';
+        try { t = localStorage.getItem('token') || localStorage.getItem(CLAVE) || token || ''; } catch (e) { t = t || token || ''; }
+        if (!t) return Promise.resolve(u);
+        return fetch(PERFIL_ECO, { headers: { Authorization: 'Bearer ' + t }, cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                var p = d && (d.user || d.usuario || d.data || null);
+                if (!p) return u;
+                var out = {};
+                ['username', 'displayName', 'avatar', 'email', 'role', 'id', 'bio'].forEach(function (k) { out[k] = u[k]; });
+                ['username', 'displayName', 'avatar', 'email', 'role', 'id', 'bio'].forEach(function (k) {
+                    if (!out[k] && p[k]) out[k] = p[k];   // completa sólo lo que falta
+                });
+                return out;
+            })
+            .catch(function () { return u; });
+    }
+
     function traerPerfil(manual) {
         if (!haySesion()) { pintar(); return; }
         var t = token;
@@ -374,7 +399,10 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (d) {
                 var per = d && (d.user || d.usuario || null);
-                if (per) {
+                return completarConEcosistema(per || usuarioGuardado() || {});
+            })
+            .then(function (per) {
+                if (per && (per.username || per.displayName || per.avatar || per.email)) {
                     usuario = per;
                     guardarUsuario(per);
                     publicarPerfil();
@@ -397,6 +425,23 @@
         crearPestana();
         pintarBoton(usuario || usuarioGuardado());   // pinta ya, con la sesión guardada (sin parpadeo)
         pintar();
+        // Con sesión, traer el perfil: es lo que completa el NOMBRE real y la FOTO
+        // (el login sólo devuelve usuario+id, la foto vive en el perfil del ecosistema).
+        // Se hace ACÁ, directo, sin depender de la respuesta de /api/me (el nodo
+        // puede no conocer al usuario todavía y devolver vacío).
+        if (haySesion()) {
+            completarConEcosistema(usuario || usuarioGuardado() || {}).then(function (per) {
+                if (per && (per.displayName || per.username || per.avatar)) {
+                    usuario = per;
+                    guardarUsuario(per);
+                    pintarBoton(per);
+                    if (window.PERFIL_CK && window.PERFIL_CK.pintar) {
+                        window.PERFIL_CK.pintar({ usuario: per });
+                    }
+                }
+            });
+            traerPerfil(false);
+        }
         // Si este arranque es el que vuelve de JPCONNECT, abro el perfil:
         // el usuario entra y ve su ficha sin buscarla.
         var volvio = false;

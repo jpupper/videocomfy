@@ -1,0 +1,17 @@
+/* ============================================================
+   fsc-web.css — la versión WEB no habla con el motor: no lo muestra.
+
+   La web (vps-.../comfylatam/ y fullscreencode.com/comfylatam/) no puede
+   ver el ComfyUI de la PC: el trabajo lo hace la instalación LOCAL y la web
+   sólo sirve de puente. Mostrar "no conecta al motor" ahí sólo confunde
+   (el estado del motor pertenece a la app local).
+
+   Se activa con la clase `es-web` que pone js/fsc-web.js según el host.
+   ============================================================ */
+.es-web #comfyStatusDot,      /* puntito de estado al lado del título */
+.es-web #jpiEstado,           /* botón "estado de la cadena: PC + videocomfy + ComfyUI" */
+.es-web #piRowComfy,          /* fila "Motor ComfyUI" del panel de servidores */
+.es-web #piEquipoBadge,       /* "🟢 Prendida" (esto es tu PC) */
+.es-web #piVpsAlert {         /* aviso de caída del motor */
+    display: none !important;
+}

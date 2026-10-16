@@ -97,6 +97,13 @@
         }
         var btn = document.getElementById('jpiCuentaBtn');
         if (!btn) return;
+        // UN SOLO PINTOR: el botón lo pinta auth-jpi (foto + displayName). Con dos
+        // módulos pintándolo, el que corría último borraba la FOTO y dejaba sólo
+        // la inicial ("M mi cuenta").
+        if (window.comfyAuth && window.comfyAuth.pintarBoton) {
+            window.comfyAuth.pintarBoton(window.comfyAuth.usuario ? window.comfyAuth.usuario() : null);
+            return;
+        }
         btn.classList.add('ck-perfil-btn');
         if (!haySesion()) {
             btn.innerHTML = '<span class="ck-perfil-nombre">LOGIN</span>';
