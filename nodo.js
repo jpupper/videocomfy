@@ -335,7 +335,10 @@ function arrancar(opciones) {
                 /^\/api\/(mo|entorno|salud-memoria)/i
             ];
             const ruta = String(r.ruta || '/');
-            if (RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
+            // Sólo se bloquean las ESCRITURAS: leer configuración es inofensivo
+            // y el panel de la web lo necesita para mostrar el estado.
+            const esEscritura = !['GET', 'HEAD'].includes(String(r.method || 'GET').toUpperCase());
+            if (esEscritura && RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
                 console.log(`⛔ [túnel] pedido de la web BLOQUEADO por seguridad: ${r.method || 'GET'} ${ruta}`);
                 socket.emit('tunnel:http:result', {
                     reqId: r.reqId, status: 403, contentType: 'application/json',
