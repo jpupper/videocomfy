@@ -124,6 +124,8 @@ function esPublica(ruta) {
         || p.indexOf('/uploads/') === 0
         || p.indexOf('/videos/') === 0
         || p.indexOf('/audio/') === 0
+        || p.indexOf('/examples/') === 0
+        || p === '/api/examples'
         // IACOMFY: el ranking y las estadísticas son públicos (son el
         // programa de incentivos: cualquiera puede ver el podio). El
         // detalle de cada uno lo resuelve el propio endpoint.
@@ -134,7 +136,7 @@ function esPublica(ruta) {
         // que llama el nodo y que ya validan el token de agente adentro.
         || p === '/api/red/generacion'
         || p === '/api/red/media-mapa';
-        }
+}
 
 // ===========================================================================
 // CORS: lista blanca en el SERVIDOR (nunca en nginx) — patrón FSC canónico,
@@ -732,11 +734,21 @@ app.get(rutasRed('/api/ranking/fierros'), async (req, res) => {
 // Mis estadísticas: assets creados, mis fierros con uptime, mis generaciones.
 // Con sesión (web) o con ?usuario=<email|username> (app local sin login).
 app.get(rutasRed('/api/estadisticas/mia'), async (req, res) => {
+    const t = tokenDe(req);
+    const u = (t ? usuarioDe(t) : null) || req.usuario;
     let clave = null;
-    if (req.usuario) clave = req.usuario.email || req.usuario.username;
+    if (u) {
+        clave = u.email || u.username;
+        if (db && typeof db.rolEnElEcosistema === 'function') {
+            try {
+                const ec = await db.rolEnElEcosistema(u.username || u.email || u.id);
+                if (ec) clave = ec.email || ec.username || clave;
+            } catch (e) { }
+        }
+    }
     if (!clave && esAgente(req)) clave = req.query.usuario || null;
     if (!clave && req.query.usuario) {
-        // sin token de agente sólo se permite ver stats públicas
+        // sin token ni sesión: consultar por el usuario pedido
         const pub = await db.estadisticasDe(req.query.usuario);
         return res.json({ success: !!pub, ...(pub || {}), publico: true });
     }

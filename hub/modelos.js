@@ -432,30 +432,67 @@ async function estadisticasDe(emailOUsuario) {
     if (!clave) return null;
     try {
         let usuario = await Usuario.findOne({ $or: [{ email: clave }, { username: clave }] }).lean();
-        if (!usuario) {
-            const ec = await rolEnElEcosistema(clave);
-            if (ec) usuario = { email: ec.email, username: ec.username, displayName: ec.displayName || ec.username, avatar: ec.avatar || '', descripcion: ec.bio || '' };
-        } else {
-            const ec = await rolEnElEcosistema(usuario.email || usuario.username);
-            if (ec) { usuario.avatar = usuario.avatar || ec.avatar || ''; usuario.descripcion = ec.bio || ''; usuario.role = ec.role || ''; }
-        }
-        let yo = usuario ? usuario.email : clave;
-        if (!usuario) {
-            // puede venir por usuario (app local sin login): busco el email real
-            // en sus computadoras o assets y uso ese como cuenta
-            const c = await Computadora.findOne({ username: clave, email: { $ne: '' } }).lean();
-            if (c && c.email) yo = c.email;
-            else {
-                const a = await Asset.findOne({ username: clave, email: { $ne: '' } }).lean();
-                if (a && a.email) yo = a.email;
+        let ec = null;
+        try {
+            ec = await rolEnElEcosistema(clave);
+            if (!ec && usuario) {
+                ec = await rolEnElEcosistema(usuario.email || usuario.username);
+            }
+        } catch (e) { }
+
+        if (ec) {
+            if (!usuario) {
+                usuario = {
+                    email: ec.email || clave,
+                    username: ec.username || clave,
+                    displayName: ec.displayName || ec.username || clave,
+                    avatar: ec.avatar || '',
+                    descripcion: ec.bio || '',
+                    role: ec.role || ''
+                };
+            } else {
+                usuario.email = ec.email || usuario.email;
+                usuario.username = ec.username || usuario.username;
+                usuario.displayName = ec.displayName || ec.username || usuario.displayName || usuario.username;
+                usuario.avatar = ec.avatar || usuario.avatar || '';
+                usuario.descripcion = ec.bio || usuario.descripcion || '';
+                usuario.role = ec.role || usuario.role || '';
             }
         }
 
+        // Claves unificadas: email, username y variantes para matchear en todas las colecciones
+        const clavesUnificadas = Array.from(new Set([
+            clave,
+            usuario && usuario.email,
+            usuario && usuario.username,
+            ec && ec.email,
+            ec && ec.username
+        ].filter(Boolean).map(x => String(x).toLowerCase())));
+
+        const filtroUsuario = {
+            $or: [
+                { email: { $in: clavesUnificadas } },
+                { username: { $in: clavesUnificadas } }
+            ]
+        };
+        const filtroFierros = {
+            $or: [
+                { email: { $in: clavesUnificadas } },
+                { emailDueno: { $in: clavesUnificadas } },
+                { username: { $in: clavesUnificadas } }
+            ]
+        };
+
         const [assets, computadoras, pidio, sirvio] = await Promise.all([
-            Asset.find({ email: yo }).sort({ cuando: -1 }).limit(60).lean(),
-            Computadora.find({ $or: [{ email: yo }, { emailDueno: yo }] }).sort({ segundosTotal: -1 }).lean(),
-            Generacion.countDocuments({ email: yo }),
-            Generacion.countDocuments({ emailDueno: yo })
+            Asset.find(filtroUsuario).sort({ cuando: -1 }).limit(60).lean(),
+            Computadora.find(filtroFierros).sort({ segundosTotal: -1 }).lean(),
+            Generacion.countDocuments(filtroUsuario),
+            Generacion.countDocuments({
+                $or: [
+                    { emailDueno: { $in: clavesUnificadas } },
+                    { duenoNombre: { $in: clavesUnificadas } }
+                ]
+            })
         ]);
 
         const misPeerIds = computadoras.map((c) => c.peerId);
@@ -470,10 +507,10 @@ async function estadisticasDe(emailOUsuario) {
         const bytes = assets.reduce((a, x) => a + (x.bytes || 0), 0);
 
         return {
-            usuario: usuario || { email: yo, username: clave, displayName: clave },
+            usuario: usuario || { email: clave, username: clave, displayName: clave },
             assets: assets.map((x) => ({ publicId: x.publicId, url: x.url, tipo: x.tipo, bytes: x.bytes, cuando: x.cuando, prompt: x.prompt })),
             totales: {
-                assets: await Asset.countDocuments({ email: yo }),
+                assets: await Asset.countDocuments(filtroUsuario),
                 bytes,
                 computadoras: computadoras.length,
                 segundosComputadora: segundos,

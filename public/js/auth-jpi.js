@@ -136,7 +136,15 @@
     // --- 3) fetch de la API con el token (+ rebote al login si venció) -------
     var fetchOriginal = window.fetch.bind(window);
     function esDeLaApi(url) {
-        try { return String(url).indexOf(J.ORIGIN) === 0 || String(url).indexOf(FSCAUTH) === 0; } catch (e) { return false; }
+        try {
+            var s = String(url || '');
+            if (!s) return false;
+            if (s.indexOf('/api/') !== -1 || s.indexOf('/comfylatam/api/') !== -1 || s.indexOf('/jpiassets/api/') !== -1) return true;
+            if (J.ORIGIN && s.indexOf(J.ORIGIN) === 0) return true;
+            if (FSCAUTH && s.indexOf(FSCAUTH) === 0) return true;
+            if (s.indexOf('vps-4455523-x.dattaweb.com') !== -1 || s.indexOf('fullscreencode.com') !== -1) return true;
+            return false;
+        } catch (e) { return false; }
     }
     window.fetch = function (url, opciones) {
         opciones = opciones || {};
@@ -148,10 +156,11 @@
             opciones.headers = h;
         }
         return fetchOriginal(url, opciones).then(function (r) {
-            // 401 = "tu sesión venció" SÓLO si había sesión. Sin sesión, la app
-            // sigue a la vista con su botón LOGIN (antes rebotaba sola al login
-            // con el primer 401 de cualquier endpoint protegido).
-            if (r.status === 401 && !esLocal && esDeLaApi(url) && haySesion()) {
+            // 401 = "tu sesión venció" SÓLO si era un endpoint de autenticación (/api/me, /auth/profile)
+            // y SÓLO si había sesión. Jamás borrar la sesión ni rebotar por un 401 en videos o ejemplos.
+            var sUrl = String(url || '');
+            var esAuthEndpoint = sUrl.indexOf('/api/me') !== -1 || sUrl.indexOf('/auth/profile') !== -1 || sUrl.indexOf('/auth/verify') !== -1;
+            if (r.status === 401 && !esLocal && esAuthEndpoint && haySesion()) {
                 r.clone().json().then(function (d) {
                     if (d && (d.requiereLogin || d.success === false)) { guardarToken(''); irAlLoginUnificado('vencida'); }
                 }).catch(function () { });
