@@ -716,3 +716,12 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .cuenta-sin-foto { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
 .cuenta-nombre { vertical-align: middle; }
 #jpiCuentaBtn { display: inline-flex; align-items: center; white-space: nowrap; }
+
+/* --- usuario del menú: sin sesión = flecha de login · con sesión = foto + @usuario --- */
+.ck-perfil-flecha { margin-left: 5px; font-weight: 700; }
+.ck-perfil-nombre { display: inline-block !important; max-width: 160px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.ck-perfil-foto { width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+    vertical-align: middle; margin-right: 6px; }
+#jpiCuentaBtn[data-estado="con-sesion"] { display: inline-flex !important; align-items: center; }
+#jpiCuentaBtn[data-estado="sin-sesion"] { display: inline-flex !important; align-items: center; }

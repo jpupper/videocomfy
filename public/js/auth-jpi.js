@@ -289,28 +289,32 @@
         if (!btn) return;
         btn.classList.add('ck-perfil-btn');
 
+        // SIN SESIÓN: flecha de login. Nunca puntitos ni un icono suelto.
         if (!haySesion()) {
             btn.dataset.estado = 'sin-sesion';
             btn.title = 'Entrá con tu cuenta de fullscreencode (te lleva a JPCONNECT)';
-            btn.innerHTML = '<span class="ck-perfil-foto ck-perfil-inicial ck-login-icono">👤</span>' +
-                '<span class="ck-perfil-nombre">LOGIN</span>';
+            btn.innerHTML = '<span class="ck-perfil-nombre">LOGIN</span>' +
+                '<span class="ck-perfil-flecha">\u2192</span>';
             return;
         }
 
+        // CON SESIÓN: SIEMPRE la foto Y el nombre de usuario (los dos, siempre).
         btn.dataset.estado = 'con-sesion';
         var uu = u || usuario || usuarioGuardado() || {};
-        var nom = uu.displayName || uu.username || '…';
-        btn.title = 'Tu perfil de ComfyLatam';
+        var usuarioNombre = String(uu.username || '').trim();
+        var nom = usuarioNombre ? '@' + usuarioNombre
+            : (String(uu.displayName || '').trim() || 'mi cuenta');
+        btn.title = (uu.displayName && usuarioNombre ? uu.displayName + ' \u2014 ' : '') + 'tu perfil de ComfyLatam';
         btn.innerHTML = '';
         if (uu.avatar) {
             var img = document.createElement('img');
             img.className = 'ck-perfil-foto';
             img.src = uu.avatar;
             img.alt = '';
-            img.onerror = function () { img.replaceWith(inicialDe(nom)); };
+            img.onerror = function () { img.replaceWith(inicialDe(usuarioNombre || nom)); };
             btn.appendChild(img);
         } else {
-            btn.appendChild(inicialDe(nom));
+            btn.appendChild(inicialDe(usuarioNombre || nom));
         }
         var sp = document.createElement('span');
         sp.className = 'ck-perfil-nombre';
