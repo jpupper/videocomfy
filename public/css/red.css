@@ -322,6 +322,11 @@
 .red-resizer.der::after { left: 4px; }
 body.red-arrastrando { user-select: none; cursor: col-resize; }
 body.red-arrastrando * { cursor: col-resize !important; }
+/* Al arrastrar la manija, el ancho debe saltar a enteros al instante: si el grid
+   sigue animando (transition de sidebar-collapse.css), el ancho pasa por valores
+   fraccionarios y las dos líneas de 1px (el borde del panel + la línea de la
+   manija) se separan ~0.5px, y la línea se ve escalonada / "tildada". */
+body.red-arrastrando .container { transition: none !important; }
 
 /* ============================================================
    Pestaña PERFIL (como las otras, no un modal)
