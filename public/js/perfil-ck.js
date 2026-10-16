@@ -133,7 +133,6 @@
             '</div></div>' +
             '<div class="ckp-acciones">' +
             '<a class="ckp-link" href="https://vps-4455523-x.dattaweb.com/jpconnect/profile.html" target="_blank" rel="noopener">mi cuenta ↗</a>' +
-            '<button type="button" class="ckp-link" id="ckCerrarSesion">cerrar sesión</button>' +
             '</div>' +
             '</div>';
 
