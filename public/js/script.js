@@ -1091,7 +1091,7 @@ async function loadProjectsList() {
     if (!projectGallery) return;
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/projects');
-        const projects = await response.json();
+        const projects = comoLista(await response.json(), 'projects');
         projectGallery.innerHTML = '';
         
         projects.forEach(p => {
@@ -2603,7 +2603,7 @@ function addToQueue(prompt, forcedImage = null, options = {}) {
 async function loadExistingVideos() {
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/videos?t=' + Date.now());
-        const videos = await response.json();
+        const videos = comoLista(await response.json(), 'videos');
         const gallery = document.getElementById('videoGallery');
         if (!gallery) return;
         gallery.innerHTML = '';
@@ -2682,10 +2682,24 @@ async function loadExistingVideos() {
     } catch (e) { console.error(e); }
 }
 
+// Las listas pueden venir como array (app local) o envueltas en un objeto
+// ({examples:[...]}, {data:[...]}) según quién responda. Antes se hacía
+// .forEach directo y en la web explotaba con "is not a function".
+function comoLista(d, clave) {
+    if (Array.isArray(d)) return d;
+    if (d && typeof d === 'object') {
+        if (Array.isArray(d[clave])) return d[clave];
+        if (Array.isArray(d.data)) return d.data;
+        if (Array.isArray(d.items)) return d.items;
+        if (Array.isArray(d.lista)) return d.lista;
+    }
+    return [];
+}
+
 async function loadExistingExamples() {
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/examples?t=' + Date.now());
-        const examples = await response.json();
+        const examples = comoLista(await response.json(), 'examples');
         const gallery = document.getElementById('exampleGallery');
         if (!gallery) return;
         gallery.innerHTML = '';
@@ -2737,7 +2751,7 @@ async function loadExistingExamples() {
 async function loadExistingImages() {
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/images?t=' + Date.now());
-        const images = await response.json();
+        const images = comoLista(await response.json(), 'images');
         const gallery = document.getElementById('imageGallery');
         if (!gallery) return;
         gallery.innerHTML = '';
@@ -2795,7 +2809,7 @@ async function loadExistingImages() {
 async function loadExistingAudio() {
     try {
         const response = await fetch(window.JPI.API_BASE + '/api/audio?t=' + Date.now());
-        const audioFiles = await response.json();
+        const audioFiles = comoLista(await response.json(), 'audio');
         const gallery = document.getElementById('audioGallery');
         if (!gallery) return;
         gallery.innerHTML = '';
@@ -5446,7 +5460,7 @@ async function loadPresetsIntoDropdown(workflow) {
 
     try {
         const res = await fetch(window.JPI.API_BASE + `/api/presets/${workflow}`);
-        const presets = await res.json();
+        const presets = comoLista(await res.json(), 'presets');
 
         // Remember current selection
         const currentVal = select.value;
