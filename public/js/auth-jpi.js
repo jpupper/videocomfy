@@ -35,14 +35,29 @@
     // app dice LOGIN (nunca "mi cuenta") y el botón lleva a JPCONNECT.
     // Se mira el localStorage en el momento (no la copia en memoria): si otra
     // pestaña entró o salió, el botón tiene que reflejarlo.
-    function haySesion() {
+    // La sesión puede vivir en la clave de la app ('fsc_token_jpi'), en la del
+    // login unificado del ecosistema ('fsc_token') o en 'token'. Se miran TODAS:
+    // antes se miraba una sola y en la web la app no veía la sesión.
+    var CLAVES_TOKENS = ['fsc_token_jpi', 'fsc_token', 'token'];
+    var CLAVES_USUARIO = ['fsc_user_jpi', 'fsc_user', 'usuario'];
+    function leerToken() {
         try {
-            var t = localStorage.getItem(CLAVE) || localStorage.getItem('token') || '';
-            return tokenSano(t);
-        } catch (e) { return false; }
+            for (var i = 0; i < CLAVES_TOKENS.length; i++) {
+                var t = localStorage.getItem(CLAVES_TOKENS[i]);
+                if (tokenSano(t)) return t;
+            }
+        } catch (e) { }
+        return '';
     }
+    function haySesion() { return !!leerToken(); }
     function usuarioGuardado() {
-        try { return JSON.parse(localStorage.getItem(CLAVE_USER) || 'null'); } catch (e) { return null; }
+        try {
+            for (var i = 0; i < CLAVES_USUARIO.length; i++) {
+                var u = localStorage.getItem(CLAVES_USUARIO[i]);
+                if (u) { var d = JSON.parse(u); if (d) return d; }
+            }
+        } catch (e) { }
+        return null;
     }
 
     // true sólo en el arranque que vuelve del login (lo usa init para abrir el
@@ -100,10 +115,8 @@
         try { location.replace(u.toString()); } catch (e) { }
     })();
 
-    try {
-        token = localStorage.getItem(CLAVE) || '';
-        usuario = JSON.parse(localStorage.getItem(CLAVE_USER) || 'null');
-    } catch (e) { }
+    token = leerToken();
+    usuario = usuarioGuardado();
 
     // --- 2) sin sesión NO se rebota solo -------------------------------------
     // La app se abre igual y el botón de arriba del menú dice LOGIN. Al tocarlo
@@ -119,8 +132,10 @@
     window.fetch = function (url, opciones) {
         opciones = opciones || {};
         if (esDeLaApi(url)) {
+            var vivo = leerToken() || token;      // siempre el de la sesión real
+            token = vivo;
             var h = new Headers(opciones.headers || {});
-            if (token && !h.has('Authorization')) h.set('Authorization', 'Bearer ' + token);
+            if (vivo && !h.has('Authorization')) h.set('Authorization', 'Bearer ' + vivo);
             opciones.headers = h;
         }
         return fetchOriginal(url, opciones).then(function (r) {
