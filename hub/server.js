@@ -167,7 +167,7 @@ const esOrigenLocal = (o) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|192\.1
 // la web lee de aca la version; antes se quedaba en 'Verificando...' para
 // siempre porque el pedido se iba al tunel y no habia nodo que lo atendiera.
 // ------------------------------------------------------------
-const CK_BASE = (typeof BASE_PATH !== 'undefined' ? BASE_PATH : '');
+const CK_BASE = process.env.BASE_PATH || process.env.RED_BASE || '/comfylatam';
 let CK_VERSION_HUB = '';
 try {
     CK_VERSION_HUB = require('child_process')
