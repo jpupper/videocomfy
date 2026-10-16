@@ -212,7 +212,7 @@
         }
 
         // C) LA COMPUTADORA DEL PANEL: en la web, la que elegiste; en local, esta.
-        if (dom.equipoTitulo) dom.equipoTitulo.textContent = esWeb ? 'Conectado a' : 'Tu Computadora';
+        if (dom.equipoTitulo) dom.equipoTitulo.textContent = esWeb ? 'Nodo conectado' : 'Tu Computadora';
         var hostName = (d && d.host) || (esWeb ? 'Tu PC' : 'Esta máquina');
         if (dom.equipoHost) dom.equipoHost.textContent = hostName;
 
@@ -242,14 +242,14 @@
             if (!elegidoId) {
                 if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box vacio';
                 if (dom.equipoDot) dom.equipoDot.className = 'pi-dot idle';
-                if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge idle'; dom.equipoBadge.textContent = '⚪ Sin equipo'; }
-                if (dom.equipoSub) dom.equipoSub.textContent = 'No estás conectado a ningún equipo';
-                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>Elegí una computadora en <b>RED</b></span><span style="color:#fbbf24">Sin equipo</span>';
+                if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge idle'; dom.equipoBadge.textContent = '⚪ Sin nodo'; }
+                if (dom.equipoSub) dom.equipoSub.textContent = 'No estás conectado a ningún nodo';
+                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>Elegí una computadora en <b>RED</b></span><span style="color:#fbbf24">Sin nodo</span>';
             } else if (selVivo) {
                 if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box online';
                 if (dom.equipoDot) dom.equipoDot.className = 'pi-dot online';
                 if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge online'; dom.equipoBadge.textContent = '🟢 Conectado'; }
-                if (dom.equipoSub) dom.equipoSub.textContent = esMiPc ? 'Esta computadora (la tuya)' : 'Generando en esta computadora';
+                if (dom.equipoSub) dom.equipoSub.textContent = esMiPc ? 'Es tu propia computadora' : 'Generando en esta computadora';
                 if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>🖥️ Equipo de la red</span><span style="color:#34d399">Conectado</span>';
             } else {
                 if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box offline';

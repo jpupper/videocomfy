@@ -1,0 +1,160 @@
+/* ============================================================
+   ck-estado.css — conexión (nodo) y progreso del pipeline
+   ------------------------------------------------------------
+   Reglas pedidas por el usuario:
+     · sin computadora conectada → TODO gris y sin poder tocarlo;
+     · con computadora → en color sólo los workflows que ese fierro tiene;
+     · el progreso muestra el pipeline real (nodo → comfy → nube).
+   ============================================================ */
+
+/* ---------- workflows no disponibles (gris + bloqueado de verdad) ---------- */
+.wf-card.ck-no-disp,
+.wf-gen-btn.ck-no-disp,
+.generate-btn-main.ck-no-disp,
+.ck-no-disp {
+    opacity: .38 !important;
+    filter: grayscale(1) !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;   /* no se puede tocar, no sólo se ve gris */
+}
+
+/* el cartel de conexión arriba de las tarjetas de CREATE */
+.ck-conexion-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 12px 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.35;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+}
+.ck-conexion-banner.ok {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.38);
+    color: #a7f3d0;
+}
+.ck-conexion-banner.ojo {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.38);
+    color: #fde68a;
+}
+.ck-conexion-ir {
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(124, 58, 237, 0.85);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* ---------- barra de progreso: colores por etapa + pasos ---------- */
+.progress-label.ck-prog-normal { color: #cbd5e1; }
+.progress-label.ck-prog-ok { color: #34d399; }
+.progress-label.ck-prog-mal { color: #f87171; }
+.progress-label.ck-prog-ojo { color: #fbbf24; }
+
+.ck-prog-pasos {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: .3px;
+}
+.ck-paso {
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    color: #94a3b8;
+}
+.ck-paso-haciendo { background: rgba(59, 130, 246, 0.18); border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
+.ck-paso-ok { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
+.ck-paso-flecha { color: #475569; }
+@media (max-width: 1024px) { .ck-conexion-banner { font-size: 0.76rem; } }
+
+/* ============================================================================
+   FIXES DE CELULAR (van acá porque este CSS se carga ÚLTIMO, y así gana)
+   ----------------------------------------------------------------------------
+   Medido en un iframe de 390x844: el panel izquierdo quedaba en `position:
+   relative` con height:100vh (lo pisaba panel-izquierdo.css, que se carga
+   después que mobile.css) → ocupaba 844px EN EL FLUJO y empujaba el contenido
+   principal fuera de la pantalla: la app se veía NEGRA en el celular.
+   ============================================================================ */
+@media (max-width: 1024px) {
+
+    /* 1. Los cajones laterales son flotantes: no ocupan lugar en el flujo. */
+    .sidebar-left,
+    .sidebar-right {
+        position: fixed !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        height: 100dvh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        z-index: 70 !important;
+    }
+    .sidebar-left { left: 0 !important; }
+    .sidebar-right { right: 0 !important; left: auto !important; }
+    .container { display: block !important; height: auto !important; }
+    .main-workspace { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+
+    /* 2. El encabezado medía 250px: compacto y con las pestañas desplazables. */
+    .workspace-header {
+        height: auto !important;
+        padding: 6px 8px 0 !important;
+        gap: 6px !important;
+    }
+    .workspace-header h1, .header-title-container h1 { font-size: .95rem !important; margin: 0 !important; line-height: 1.1; }
+    .ck-version-chip, #ckVersionChip, .jpi-estado { font-size: .62rem !important; padding: 2px 8px !important; }
+    .tab-button { min-width: auto !important; min-height: 38px !important; padding: 8px 11px !important; font-size: .68rem !important; }
+    .header-actions, .header-tools { gap: 6px !important; }
+
+    /* 3. Tabla del REGISTRO: se desplaza sola, no estira la hoja a lo ancho. */
+    #regTabla { overflow-x: auto !important; -webkit-overflow-scrolling: touch; max-width: 100% !important; }
+    #regTabla .reg-tabla { min-width: max-content !important; }
+    #regTabla th, #regTabla td { white-space: nowrap !important; font-size: .68rem !important; padding: 6px 8px !important; }
+
+    /* 4. Nada desborda a lo ancho (imágenes, videos, tablas, código). */
+    img, video, canvas, iframe, pre, code, table { max-width: 100% !important; }
+    .workspace-content, .tab-content, .sub-tab-content { max-width: 100% !important; overflow-x: hidden; }
+    .container, body { overflow-x: hidden !important; }
+
+    /* 5. Áreas táctiles cómodas y textos que no se pisan. */
+    .wf-card { min-height: 62px; }
+    .wf-card-name { font-size: .74rem !important; }
+    .wf-card-desc, .wf-card-archivo { font-size: .64rem !important; }
+    .progress-header { flex-wrap: wrap; gap: 4px; }
+    #progressText { font-size: .74rem !important; line-height: 1.25; }
+    .ck-conexion-banner { font-size: .72rem !important; padding: 8px 10px !important; }
+    .ck-conexion-ir { margin-left: 0 !important; }
+}
+
+/* Las pestañas van en UNA fila que se desplaza: envueltas ocupaban 4 filas
+   (~179px medidos) y se comían un cuarto de la pantalla del celular. */
+@media (max-width: 1024px) {
+    .tabs-container {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 6px !important;
+        padding: 2px 2px 6px !important;
+        scroll-behavior: smooth;
+    }
+    .tabs-container::-webkit-scrollbar { display: none; }
+    .tab-button { flex: 0 0 auto !important; min-height: 34px !important; padding: 6px 10px !important; font-size: .64rem !important; }
+    /* que se vea que hay más pestañas a la derecha */
+    .tabs-container::after { content: ''; flex: 0 0 12px; }
+}

@@ -37,19 +37,24 @@
             return;
         }
 
-        // --- versión web: el editor funciona contra los nodos de la red ---
-        if (!d.agente) {
-            btn.className = 'jpi-estado ojo';
-            btn.textContent = '🔴 Tu PC desconectada del VPS';
-        } else if (!d.videocomfy) {
-            btn.className = 'jpi-estado ojo';
-            btn.textContent = '🟡 PC sin videocomfy local';
-        } else if (!d.comfy) {
-            btn.className = 'jpi-estado mal';
-            btn.textContent = '🔴 ComfyUI apagado en tu PC';
-        } else {
+        // --- versión web: lo único que importa es A QUÉ COMPUTADORA estás conectado.
+        // La web NO tiene ComfyUI propio: mostrar "Comfy apagado" ahí confunde
+        // (el estado del motor es de la PC que genera, no de la web).
+        var nodoSel = null;
+        try {
+            var est = (window.comfyRed && window.comfyRed.estado) || null;
+            if (est && est.elegido && est.peers) {
+                nodoSel = est.peers.filter(function (x) { return x.id === est.elegido; })[0] || null;
+            }
+        } catch (e) { }
+        if (nodoSel) {
             btn.className = 'jpi-estado bien';
-            btn.textContent = '🟢 Nodo listo · Comfy OK';
+            btn.textContent = '🟢 ' + (nodoSel.nombre || 'nodo') + (nodoSel.gpu ? ' · ' + nodoSel.gpu : '');
+            btn.title = 'Conectado a ' + (nodoSel.nombre || '') + '. El trabajo lo hace esa computadora.';
+        } else {
+            btn.className = 'jpi-estado ojo';
+            btn.textContent = '🔌 Sin computadora conectada';
+            btn.title = 'Elegí una computadora en la pestaña RED para generar.';
         }
         btn.title = (d.mensaje || '') +
             (d.reporteHaceSegundos != null ? ' (reporte hace ' + d.reporteHaceSegundos + 's)' : '');

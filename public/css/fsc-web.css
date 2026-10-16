@@ -12,6 +12,10 @@
 .es-web #jpiEstado,           /* botón "estado de la cadena: PC + videocomfy + ComfyUI" */
 .es-web #piRowComfy,          /* fila "Motor ComfyUI" del panel de servidores */
 .es-web #piEquipoBadge,       /* "🟢 Prendida" (esto es tu PC) */
+.es-web #piComfyAlert,       /* aviso "el motor ComfyUI no responde" (es de la PC, no de la web) */
+.es-web #piComfyDetail,      /* "127.0.0.1:8188" */
+.es-web #piComfyStatus,      /* "ComfyUI Conectado/Apagado" */
+.es-web .ck-set-comfy,       /* el bloque ⚙️ COMFO de ajustes: la web no cambia el Comfy de otro */
 .es-web #piVpsAlert {         /* aviso de caída del motor */
     display: none !important;
 }

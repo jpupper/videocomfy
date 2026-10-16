@@ -139,6 +139,9 @@ function handleWsOpen() {
 function handleWsMessage(event) {
     try {
         const message = JSON.parse(event.data);
+        // El pipeline (nodo → comfy → nube) lo dibuja js/progreso.js: un solo dueño
+        // de la barra, para que no diga una cosa arriba y otra abajo.
+        if (window.CKProgreso) { try { window.CKProgreso.msg(message); } catch (e) { } }
         // No se registran los mensajes que llegan todo el tiempo (estado de la red,
 // clientes, progreso): antes llenaban la consola con bloques enormes.
       var TIPOS_MUDOS = ['red_estado', 'red_clientes', 'clientes', 'estado', 'progress', 'comfy_cola', 'latido', 'red_vuelo'];
@@ -153,6 +156,7 @@ function handleWsMessage(event) {
         }
 
         if (message.type === 'progress') {
+            if (window.CKProgreso) return;   // lo maneja js/progreso.js
             const percentage = Math.round((message.value / message.max) * 100);
             if (progressFill) {
                 progressFill.style.width = percentage + '%';
@@ -178,6 +182,7 @@ function handleWsMessage(event) {
         }
 
         if (message.type === 'executing' && message.node) {
+            if (window.CKProgreso) return;   // lo maneja js/progreso.js
             if (currentExecutingId && progressText) {
                 const item = globalGenerationQueue.find(i => i.id === currentExecutingId);
                 if (item) {
@@ -1386,15 +1391,20 @@ function updateGlobalQueueUI() {
 
     if (activeItems.length > 0 || isGeneratingGlobal || colaComfy > 0) {
         queueContainer.classList.remove('hidden');
-        if (activeItems.length === 0 && !isGeneratingGlobal && colaComfy > 0 && progressText) {
-            // OJO: acá NO se pone la barra al 100% (decía "listo" mientras el
-            // motor seguía trabajando). La barra refleja la cola de la app.
+        // La barra la dibuja js/progreso.js con el estado REAL (colas de la app y
+        // del motor): antes acá se escribía la barra y quedaba diciendo una cosa
+        // distinta de la lista de abajo (el usuario lo reportó).
+        if (window.CKProgreso) {
+            window.CKProgreso.colas({ app: activeItems.length, comfy: colaComfy });
+        } else if (activeItems.length === 0 && !isGeneratingGlobal && colaComfy > 0 && progressText) {
             progressText.textContent = `⏳ El motor todavía tiene ${colaComfy} en cola (no es de esta lista)`;
             if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '—';
         }
     } else {
         queueContainer.classList.add('hidden');
-        if (progressText) {
+        if (window.CKProgreso) {
+            window.CKProgreso.colas({ app: 0, comfy: colaComfy });
+        } else if (progressText) {
             progressText.textContent = '✨ Nothing to generate, all done';
             if (progressFill) progressFill.style.width = '100%';
             if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '100%';
@@ -2582,6 +2592,13 @@ if (enhancePromptBtn) {
 }
 
 function addToQueue(prompt, forcedImage = null, options = {}) {
+    // En la WEB hay que estar conectado a una computadora para pedir algo: los
+    // botones ya están en gris y bloqueados, esto es la última red.
+    if (window.CKProgreso && !window.CKProgreso.pedido({ prompt: prompt })) {
+        appendConsoleLine('🔌 No estás conectado a ninguna computadora: elegí una en RED para generar.', 'warning');
+        return;
+    }
+
     const params = {
         videoWidth: parseInt(document.getElementById('videoWidth').value),
         videoHeight: parseInt(document.getElementById('videoHeight').value),
@@ -4678,7 +4695,9 @@ document.getElementById('stopQueueBtn')?.addEventListener('click', () => {
         saveQueueState();
         appendConsoleLine('⏹ Queue stopped. All pending items cleared.', 'system');
         
-        if (progressText) {
+        if (window.CKProgreso) {
+            window.CKProgreso.detenido();
+        } else if (progressText) {
             progressText.textContent = '⏹ Queue stopped by user';
             if (progressFill) progressFill.style.width = '0%';
             if (document.getElementById('progressPct')) document.getElementById('progressPct').textContent = '0%';
