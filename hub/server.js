@@ -162,6 +162,24 @@ const ORIGENES_FSC = [
 ];
 const esOrigenLocal = (o) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(String(o));
 
+// ------------------------------------------------------------
+// /health y /api/version los contesta el propio HUB (no el tunel). El front de
+// la web lee de aca la version; antes se quedaba en 'Verificando...' para
+// siempre porque el pedido se iba al tunel y no habia nodo que lo atendiera.
+// ------------------------------------------------------------
+const CK_BASE = (typeof BASE_PATH !== 'undefined' ? BASE_PATH : '');
+let CK_VERSION_HUB = '';
+try {
+    CK_VERSION_HUB = require('child_process')
+        .execSync('git rev-parse --short HEAD', { cwd: require('path').join(__dirname, '..'), timeout: 4000 })
+        .toString().trim();
+} catch (e) { CK_VERSION_HUB = ''; }
+const CK_HEALTH = function (req, res) {
+    let nodos = null;
+    try { if (relay && relay.nodos) nodos = Object.keys(relay.nodos).length; } catch (e) { }
+    res.json({ ok: true, rol: 'hub', version: CK_VERSION_HUB || 'hub', base: CK_BASE, nodos: nodos, fecha: new Date().toISOString() });
+};
+app.get([CK_BASE + '/health', '/health', CK_BASE + '/api/version', '/api/version'], CK_HEALTH);
 app.use(cors({
     origin: (origin, cb) => {
         // Sin Origin (curl, llamadas server → server) no hay nada que habilitar.
