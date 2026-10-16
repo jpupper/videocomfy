@@ -509,11 +509,13 @@ function identidadDeLaMedia(nombre) {
     if (!pp) {
         return { email: yo.email || '', username: yo.dueno || '', displayName: yo.duenoNombre || '', avatar: yo.avatar || '' };
     }
+    // OJO: acá NO se cae al dueño de la PC. Si el trabajo dice que lo pidió
+    // vjpuppet, el asset es de vjpuppet aunque se haya generado en tu fierro.
     return {
-        email: pp.email || yo.email || '',
-        username: pp.usuario || pp.displayName || yo.dueno || '',
+        email: pp.email || '',
+        username: pp.usuario || pp.displayName || '',
         displayName: pp.displayName || pp.usuario || '',
-        avatar: pp.avatar || yo.avatar || ''
+        avatar: pp.avatar || ''
     };
 }
 
@@ -2834,6 +2836,12 @@ setTimeout(refrescarNodosDelHub, 1500);
 // --- el front manda tu perfil (nombre + avatar) para publicarlo en la red ----
 app.post('/api/red/perfil', async (req, res) => {
     const b = req.body || {};
+    // Un pedido que llega por el túnel viene de la WEB: es el usuario de la web,
+    // no el de esta PC. Si lo tomáramos, el dueño de esta máquina terminaría
+    // siendo el último que se logueó en la web (y sus assets quedarían mal).
+    if (esPedidoDeLaWeb(req)) {
+        return res.json({ success: true, ignorado: true, motivo: 'perfil de la web: no cambia el de esta PC' });
+    }
     RED.usuario = {
         username: b.username || null,
         displayName: b.displayName || null,
