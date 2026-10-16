@@ -2437,12 +2437,12 @@ app.post('/api/red/clientes', (req, res) => {
     };
     // Sólo se avisa cuando CAMBIA: antes escribía esto cada vez que el hub
     // mandaba los clientes y el log era un chorro continuo de datos iguales.
-    // 'server_logClientes' guardaba la última firma vista para no repetir el
-    // log: estaba usada pero nunca declarada -> reventaba en cada request.
-    if (typeof server_logClientes === 'undefined') global.server_logClientes = '';
+    // La última firma vista se guarda EN EL PROPIO ESTADO DE LA RED: así no
+    // depende de ninguna variable del módulo (el bug original fue justamente
+    // una variable usada y nunca declarada).
     const firma = `${RED.clientes.total}|${RED.clientes.web}|${RED.clientes.local}|${RED.clientes.usuariosTotal}`;
-    if (server_logClientes !== firma) {
-        server_logClientes = firma;
+    if (RED._firmaClientes !== firma) {
+        RED._firmaClientes = firma;
         console.log(`👥 Del hub: ${RED.clientes.total} cliente(s) — ${RED.clientes.web} web · ${RED.clientes.local} local · ${RED.clientes.usuariosTotal} usuario(s)`);
     }
     avisarRedATodos();
