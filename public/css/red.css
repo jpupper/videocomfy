@@ -660,10 +660,11 @@ body.red-arrastrando * { cursor: col-resize !important; }
 .ckp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .ckp-chip { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
     border-radius: 6px; padding: 2px 8px; font-size: .7em; font-weight: 700; text-transform: uppercase; }
-.ckp-chip.verde { color: var(--accent); border-color: rgba(0,255,213,.3); }
-.ckp-acciones { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.ckp-link { color: var(--text-muted); font-size: .72em; text-decoration: none; background: none;
-    border: none; padding: 0; cursor: pointer; font-family: inherit; }
+.ckp-acciones { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.ck-logout-btn { color: #f87171 !important; border-color: rgba(248, 113, 113, 0.45) !important; }
+.ck-logout-btn:hover { color: #fff !important; border-color: #ef4444 !important; background: rgba(239, 68, 68, 0.2) !important; }
+.ckp-link { color: var(--text-muted); font-size: .75em; text-decoration: none; background: none;
+    border: none; padding: 0; cursor: pointer; font-family: inherit; margin-top: 4px; }
 .ckp-link:hover { color: var(--accent); }
 
 /* --- PAUSAR en STAGE: chico y prolijo (estaba gigante) --- */

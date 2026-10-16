@@ -31,6 +31,15 @@
         return typeof t === 'string' && t.length > 40 && t.split('.').length === 3;
     }
 
+    function normalizarFoto(url) {
+        if (!url || typeof url !== 'string') return '';
+        url = url.trim();
+        if (!url) return '';
+        if (/^https?:\/\//i.test(url)) return url;
+        if (url.startsWith('/')) return 'https://fullscreencode.com' + url;
+        return 'https://fullscreencode.com/' + url;
+    }
+
     // ¿Hay sesión? Es LA pregunta que gobierna todo lo visible: sin sesión la
     // app dice LOGIN (nunca "mi cuenta") y el botón lleva a JPCONNECT.
     // Se mira el localStorage en el momento (no la copia en memoria): si otra
@@ -254,12 +263,14 @@
             return;
         }
 
-        var inicial = String(u.displayName || u.username || '?').trim().charAt(0).toUpperCase();
-        // el avatar puede venir como ruta relativa (/uploads/...) -> la completamos
-        var foto = u.avatar || '';
-        if (foto && !/^https?:\/\//i.test(foto)) {
-            foto = foto.charAt(0) === '/' ? (FSCAUTH + foto) : (FSCAUTH + '/' + foto);
+        // SI ESTÁ LOGUEADO: delegar a PERFIL_CK para tener un solo diseño rico y unificado
+        if (window.PERFIL_CK && typeof window.PERFIL_CK.pintar === 'function') {
+            window.PERFIL_CK.pintar({ usuario: u });
+            return;
         }
+
+        var inicial = String(u.displayName || u.username || '?').trim().charAt(0).toUpperCase();
+        var foto = normalizarFoto(u.avatar || '');
         var avatar = foto
             ? '<img src="' + foto + '" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'cuenta-avatar-inicial\',textContent:\'' + inicial + '\'}))">'
             : '<div class="cuenta-avatar-inicial">' + inicial + '</div>';
@@ -321,10 +332,11 @@
             : (String(uu.displayName || '').trim() || 'mi cuenta');
         btn.title = (uu.displayName && usuarioNombre ? uu.displayName + ' \u2014 ' : '') + 'tu perfil de ComfyLatam';
         btn.innerHTML = '';
-        if (uu.avatar) {
+        var fotoUrl = normalizarFoto(uu.avatar);
+        if (fotoUrl) {
             var img = document.createElement('img');
             img.className = 'ck-perfil-foto';
-            img.src = uu.avatar;
+            img.src = fotoUrl;
             img.alt = '';
             img.onerror = function () { img.replaceWith(inicialDe(usuarioNombre || nom)); };
             btn.appendChild(img);
@@ -358,7 +370,11 @@
                     guardarUsuario(per);
                     publicarPerfil();
                     pintarBoton(usuario);
-                    pintar();
+                    if (window.PERFIL_CK && window.PERFIL_CK.pintar) {
+                        window.PERFIL_CK.pintar({ usuario: per });
+                    } else {
+                        pintar();
+                    }
                     // si veníamos del login, dejo el perfil abierto con los datos ya cargados
                     if (abrirPerfilPendiente) { abrirPerfilPendiente = false; abrir(); }
                 } else if (manual) {
@@ -418,7 +434,9 @@
             guardarToken(''); guardarUsuario(null);
             try { fetch(FSCAUTH + '/api/auth/logout', { method: 'POST' }).catch(function () { }); } catch (e) { }
             pintarBoton(); pintar();
+            if (!esLocal) location.reload();
         },
+        token: function () { return token || leerToken(); },
         usuario: function () { return usuario || usuarioGuardado(); },
         // diagnóstico rápido (consola): qué estado ve el módulo de sesión
         debug: function () {

@@ -50,6 +50,10 @@ function baseDeFscAuth(valor, base) {
     var url = (valor && /^https?:\/\//.test(String(valor).trim()))
         ? String(valor).trim()
         : String(base || '').replace(/\/+$/, '') + '/api';
+    // Si viene configurado con /jpconnect, cambiarlo a la api de auth real /fscauth/api
+    if (url.indexOf('/jpconnect') >= 0) {
+        url = url.replace(/\/jpconnect(\/api)?$/, '/fscauth/api');
+    }
     url = url.replace(/\/+$/, '');
     if (!/\/api$/.test(url)) url += '/api';
     return url;
@@ -76,11 +80,21 @@ function tokenDe(req) {
 async function perfilDe(token) {
     const u = usuarioDe(token);
     if (!u) return null;
-    if (u.username || u.displayName) return u;
+    if (u.avatar && (u.username || u.displayName)) return u;
     try {
+        if (db && typeof db.rolEnElEcosistema === 'function') {
+            const ec = await db.rolEnElEcosistema(u.username || u.id || u.email);
+            if (ec) {
+                return Object.assign({}, u, {
+                    username: ec.username || u.username,
+                    displayName: ec.displayName || ec.username || u.displayName || u.username,
+                    avatar: ec.avatar || u.avatar || ''
+                });
+            }
+        }
         const r = await fetch(FSC_AUTH_API + '/auth/profile', {
             headers: { Authorization: 'Bearer ' + token, 'x-fsc-internal-key': process.env.FSC_INTERNAL_KEY || '' },
-            signal: AbortSignal.timeout(6000)
+            signal: AbortSignal.timeout(3000)
         });
         if (r.ok) {
             const d = await r.json();
@@ -441,29 +455,42 @@ app.get([BASE_PATH + '/api/me', '/api/me'], async (req, res) => {
 
     let perfil = null;
     try {
-        // /auth/profile trae el usuario COMPLETO (incluye avatar); /auth/verify
-        // sólo id/username/rol y por eso la foto de perfil llegaba en null.
         const cab = {
             Authorization: 'Bearer ' + token,
             'x-fsc-internal-key': process.env.FSC_INTERNAL_KEY || ''
         };
-        let r = await fetch(FSC_AUTH_API + '/auth/profile', { headers: cab });
-        if (!r.ok) r = await fetch(FSC_AUTH_API + '/auth/verify', { headers: cab });
+        let r = await fetch(FSC_AUTH_API + '/auth/profile', { headers: cab, signal: AbortSignal.timeout(2500) });
+        if (!r.ok) r = await fetch(FSC_AUTH_API + '/auth/verify', { headers: cab, signal: AbortSignal.timeout(2500) });
         if (r.ok) perfil = await r.json();
-    } catch (e) { /* si fscauth no contesta, alcanza con el token */ }
+    } catch (e) { /* si fscauth no contesta o tarda, caemos a mongo directo */ }
 
     const p = (perfil && (perfil.user || perfil.data || perfil)) || {};
     const u2 = (perfil && perfil.usuario) || {};
+
+    // Si falta avatar o displayName, consultamos directo la base de datos de usuarios del ecosistema (fullscreen_global.users)
+    let ec = null;
+    if ((!p.avatar && !u2.avatar) && db && typeof db.rolEnElEcosistema === 'function') {
+        try {
+            ec = await db.rolEnElEcosistema(u.username || u.id || p.username || u2.username || u.email);
+        } catch (e) { }
+    }
+
+    let rawAvatar = p.avatar || p.avatarUrl || u2.avatar || (ec && ec.avatar) || null;
+    if (rawAvatar && typeof rawAvatar === 'string' && !/^https?:\/\//i.test(rawAvatar)) {
+        rawAvatar = rawAvatar.startsWith('/') ? ('https://fullscreencode.com' + rawAvatar) : ('https://fullscreencode.com/' + rawAvatar);
+    }
+
     res.set('Cache-Control', 'no-store');
     res.json({
         success: true,
         user: {
-            id: u.id || p._id || p.id || null,
-            username: p.username || u2.username || u.username || null,
-            displayName: p.displayName || p.display_name || u2.displayName || u.displayName || p.username || u.username || null,
-            email: p.email || u2.email || u.email || null,
-            role: u.role || p.role || u2.role || 'USER',
-            avatar: p.avatar || p.avatarUrl || u2.avatar || null
+            id: u.id || p._id || p.id || (ec && (ec._id || ec.id)) || null,
+            username: p.username || u2.username || (ec && ec.username) || u.username || null,
+            displayName: p.displayName || p.display_name || u2.displayName || (ec && (ec.displayName || ec.username)) || u.displayName || u.username || null,
+            email: p.email || u2.email || (ec && ec.email) || u.email || null,
+            role: u.role || p.role || u2.role || (ec && ec.role) || 'USER',
+            bio: p.bio || (ec && ec.bio) || null,
+            avatar: rawAvatar
         }
     });
 });

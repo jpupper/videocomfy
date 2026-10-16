@@ -99,8 +99,7 @@
                 if (arriba.firstChild !== b) arriba.insertBefore(b, arriba.firstChild);
                 return;
             }
-            if (id === 'jpiCuentaBtn' || id === 'tabRedBtn' || id === 'redBtn' ||
-                t.indexOf('perfil') >= 0 || t.indexOf('cuenta') >= 0 || t.indexOf('red') >= 0) {
+            if (id === 'jpiCuentaBtn' || id === 'tabRedBtn' || id === 'redBtn') {
                 if (b.parentElement !== arriba) arriba.appendChild(b);
             }
         });
