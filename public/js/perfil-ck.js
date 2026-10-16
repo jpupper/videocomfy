@@ -10,6 +10,25 @@
 (function () {
     'use strict';
 
+// Mezcla de perfiles: COMPLETA, nunca pisa. Un perfil que llega con
+// displayName/avatar en null NO puede borrar el que ya teníamos (ese era el
+// flash: aparecía la foto y el perfil vacío la tapaba con el placeholder).
+function ckMezclarPerfil() {
+    var out = {};
+    for (var i = 0; i < arguments.length; i++) {
+        var f = arguments[i];
+        if (!f || typeof f !== 'object') continue;
+        Object.keys(f).forEach(function (k) {
+            var v = f[k];
+            if (out[k] !== undefined && out[k] !== null && out[k] !== '') return;
+            if (v === null || v === undefined || v === '') return;
+            out[k] = v;
+        });
+    }
+    return out;
+}
+
+
     var perfil = null;
     var datosFsc = null;
 
@@ -132,7 +151,7 @@
         datosFsc = datosFsc || (window.JPI && window.JPI.USUARIO) || null;
         var uBase = usuarioLocal() || {};
         var uDatos = (datos && datos.usuario) || {};
-        var u = Object.assign({}, uBase, datosFsc || {}, uDatos);
+        var u = ckMezclarPerfil(uBase, datosFsc || {}, uDatos);
 
         u.descripcion = u.descripcion || u.description || u.bio || u.about || '';
         var t = (datos && datos.totales) || {};

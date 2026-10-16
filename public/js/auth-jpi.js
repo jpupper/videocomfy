@@ -14,6 +14,25 @@
 (function () {
     'use strict';
 
+// Mezcla de perfiles: COMPLETA, nunca pisa. Un perfil que llega con
+// displayName/avatar en null NO puede borrar el que ya teníamos (ese era el
+// flash: aparecía la foto y el perfil vacío la tapaba con el placeholder).
+function ckMezclarPerfil() {
+    var out = {};
+    for (var i = 0; i < arguments.length; i++) {
+        var f = arguments[i];
+        if (!f || typeof f !== 'object') continue;
+        Object.keys(f).forEach(function (k) {
+            var v = f[k];
+            if (out[k] !== undefined && out[k] !== null && out[k] !== '') return;
+            if (v === null || v === undefined || v === '') return;
+            out[k] = v;
+        });
+    }
+    return out;
+}
+
+
     var CLAVE = 'fsc_token_jpi';
     var CLAVE_USER = 'fsc_user_jpi';
     var J = window.JPI || {};
@@ -403,7 +422,7 @@
             })
             .then(function (per) {
                 if (per && (per.username || per.displayName || per.avatar || per.email)) {
-                    usuario = per;
+                    usuario = ckMezclarPerfil(usuario, per);   // completa, no pisa (si no, la foto desaparece)
                     guardarUsuario(per);
                     publicarPerfil();
                     pintarBoton(usuario);
@@ -432,7 +451,7 @@
         if (haySesion()) {
             completarConEcosistema(usuario || usuarioGuardado() || {}).then(function (per) {
                 if (per && (per.displayName || per.username || per.avatar)) {
-                    usuario = per;
+                    usuario = ckMezclarPerfil(usuario, per);   // completa, no pisa (si no, la foto desaparece)
                     guardarUsuario(per);
                     pintarBoton(per);
                     if (window.PERFIL_CK && window.PERFIL_CK.pintar) {
