@@ -319,6 +319,33 @@ function arrancar(opciones) {
 
         socket.on('tunnel:http', async (r) => {
             if (!r || !r.reqId) return;
+
+            // ---------------------------------------------------------------
+            // SEGURIDAD: lo que llega por acá viene de la WEB (internet).
+            // Puede pedir generaciones y ver el estado, pero NO puede tocar
+            // la configuración de esta PC ni disparar acciones peligrosas.
+            // El túnel sólo apunta a la app (127.0.0.1:5634), nunca a ComfyUI.
+            // ---------------------------------------------------------------
+            const RUTAS_PROHIBIDAS = [
+                /^\/api\/config/i,                       // cambiar a qué ComfyUI apunta
+                /^\/api\/comfy\/cola\/limpiar/i,          // borrar la cola
+                /^\/api\/actualizar/i,                    // traer código nuevo (git pull)
+                /^\/api\/generate-avatar/i,               // escribía archivos
+                /^\/api\/red\/(agente|nodos|perfil|job)/i, // identidad y trabajos internos
+                /^\/api\/(mo|entorno|salud-memoria)/i
+            ];
+            const ruta = String(r.ruta || '/');
+            if (RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
+                console.log(`⛔ [túnel] pedido de la web BLOQUEADO por seguridad: ${r.method || 'GET'} ${ruta}`);
+                socket.emit('tunnel:http:result', {
+                    reqId: r.reqId, status: 403, contentType: 'application/json',
+                    headers: {}, body: Buffer.from(JSON.stringify({
+                        success: false, message: 'Ese endpoint no está disponible desde la web (sólo desde esta PC).'
+                    }))
+                });
+                return;
+            }
+
             const url = APP + (r.ruta || '/') + (r.query ? '?' + r.query : '');
             const sinCuerpo = r.method === 'GET' || r.method === 'HEAD';
             try {
