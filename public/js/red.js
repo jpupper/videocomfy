@@ -726,6 +726,14 @@
     function arrancar() {
         montarUI();
         ESTADO.elegido = leerElegido();
+        // En la WEB se entra SIN computadora conectada (y los botones de generar
+        // van grises desde el arranque, sin esperar al estado de la red); en local
+        // se elige esta PC. Asi el default no depende de que llegue el WS.
+        try {
+            var esWeb0 = (function () { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; })();
+            if (esWeb0 && ESTADO.elegido) { guardarElegido(''); ESTADO.elegido = ''; }
+            document.body.classList.toggle('ck-sin-computadora', esWeb0 && !ESTADO.elegido);
+        } catch (e) { }
         refrescar(false);
         conectarEventos();
         setInterval(function () { refrescar(false); }, 7000);
