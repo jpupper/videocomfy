@@ -40,11 +40,19 @@
     // resuelve el navegador contra fullscreencode.com y da 404. Esta la vuelve
     // absoluta contra el backend (que redirige al CDN de Cloudflare). Si ya es el
     // link de Cloudflare, la deja como está.
-    window.ckMediaUrl = function (u) {
+    window.ckMediaUrl = function (u, nube) {
         var s = String(u == null ? '' : u);
-        if (!s) return '';
+        var n = String(nube == null ? '' : nube);
+        var esWeb = (function () {
+            try { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; }
+            catch (e) { return false; }
+        })();
+        // REGLA: la nube se usa SÓLO en la web. En local la media es del disco.
+        if (esWeb && /^https?:/i.test(n)) return n;
         if (/^(https?:|data:|blob:)/i.test(s)) return s;
+        if (!esWeb) return s;                       // local: tal cual (ruta local)
         var base = String((window.JPI || {}).API_BASE || '').replace(/\/+$/, '');
+        if (!base) return s;
         return base + (s.charAt(0) === '/' ? s : '/' + s);
     };
 

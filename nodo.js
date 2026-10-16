@@ -361,6 +361,9 @@ function arrancar(opciones) {
                 // La sesión del usuario llega desde el hub: se la pasamos a la
                 // app local tal cual (así la web ve listas, perfil y avatar).
                 if (r.authorization) headers['Authorization'] = r.authorization;
+                // Marca de origen: el server la usa para decidir si devuelve la URL
+                // de Cloudflare (pedido de la web) o la ruta local (pedido de esta PC).
+                headers['X-FSC-Origen'] = 'web';
                 if (r.cookie) headers['Cookie'] = r.cookie;
                 // Timeout: si la app local no contesta, se corta y se avisa (si no,
                 // el pedido que viene de la web quedaba colgado para siempre.

@@ -209,7 +209,7 @@ function handleWsMessage(event) {
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
-                    item.resultUrl = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url);
+                    item.resultUrl = (window.ckMediaUrl ? window.ckMediaUrl(message.url, message.urlNube) : message.url);
 
                     // REEMPLAZO AUTOMATICO PARA REGENERACION
                     if (item.replaceClipId) {
@@ -217,7 +217,7 @@ function handleWsMessage(event) {
                         const clip = document.querySelector(clipQuery);
                         if (clip) {
                             const v = clip.querySelector('video');
-                            v.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url) + '?t=' + Date.now();
+                            v.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url, message.urlNube) : message.url) + '?t=' + Date.now();
                             v.load();
 
                             // Actualizar etiqueta de nombre de archivo
@@ -271,7 +271,7 @@ function handleWsMessage(event) {
             const previewArea = document.getElementById('t2iPreview');
             const previewImg = document.getElementById('t2iPreviewImg');
             if (previewArea && previewImg && message.url) {
-                previewImg.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url) + '?t=' + Date.now();
+                previewImg.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url, message.urlNube) : message.url) + '?t=' + Date.now();
                 previewArea.style.display = 'block';
                 // Wire View button
                 const viewBtn = document.getElementById('t2iPreviewViewBtn');
@@ -4441,7 +4441,7 @@ function updateStoryboardUI() {
 
             div.innerHTML = `
                 <div class="storyboard-media-box">
-                    <img src="${item.url}?t=${Date.now()}" loading="lazy">
+                    <img src="${(window.ckMediaUrl ? window.ckMediaUrl(item.url, item.urlNube) : item.url)}?t=${Date.now()}" loading="lazy">
                     <div class="storyboard-index-badge">${index + 1}</div>
                 </div>
                 <div class="storyboard-info-box">

@@ -278,6 +278,22 @@ function urlMedia(subdir, nombre) {
     return '/' + subdir + '/' + nombre;
 }
 function urlLocalDe(subdir, nombre) { return '/' + subdir + '/' + nombre; }
+// ¿Este pedido viene de la WEB (por el túnel del hub)? El nodo lo marca. Es la
+// regla del usuario: a Cloudflare se sube y se sirve SOLO lo pedido desde la web;
+// en local la media se queda en el disco de la máquina.
+function esPedidoDeLaWeb(req) {
+    try { return String((req.headers && req.headers['x-fsc-origen']) || '').toLowerCase() === 'web'; }
+    catch (e) { return false; }
+}
+// URL para el front: en la web, el link de Cloudflare si el archivo está subido;
+// en local (o si todavía no se subió), la ruta local de siempre.
+function urlParaElFront(req, subdir, nombre) {
+    if (esPedidoDeLaWeb(req)) {
+        var nube = urlEnLaNube(nombre);
+        if (nube) return nube;
+    }
+    return urlLocalDe(subdir, nombre);
+}
 const CARPETAS_MEDIA = { uploads: 'imagenes', videos: 'videos', audio: 'audio' };
 const MIME_POR_EXT = {
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -1499,8 +1515,12 @@ function connectToComfy() {
                                         // Link de Cloudflare cuando el archivo ya está subido:
                                         // el navegador lo carga DIRECTO del CDN (antes iba la ruta
                                         // relativa y en la web daba 404: la imagen no aparecía).
-                                        url: urlMedia(targetSubdir, filenameOnly) || urlLocalDe(targetSubdir, filenameOnly),
+                                        // Al front le van las dos: la ruta local y, si ya está
+                                        // en Cloudflare, el link del CDN. El front usa el CDN sólo
+                                        // en la web; en local se queda con el archivo de la máquina.
+                                        url: urlLocalDe(targetSubdir, filenameOnly),
                                         urlLocal: urlLocalDe(targetSubdir, filenameOnly),
+                                        urlNube: urlEnLaNube(filenameOnly) || '',
                                         filename: filenameOnly,
                                         prompt: metaToSave.prompt,
                                         storyboardIndex: metaToSave.storyboardIndex,
@@ -1687,8 +1707,9 @@ app.get('/api/images', (req, res) => {
                     filename: file,
                     pedidoPor: pedidoPorNombre,
                     computadora: computadoraNombre, 
-                    url: urlMedia('uploads', file) || urlLocalDe('uploads', file),
+                    url: urlParaElFront(req, 'uploads', file),
                     urlLocal: urlLocalDe('uploads', file),
+                    urlNube: urlEnLaNube(file) || '',
                     nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
@@ -1713,8 +1734,9 @@ app.get('/api/audio', (req, res) => {
                 const stats = fs.statSync(path.join(audioDir, file));
                 return { 
                     filename: file, 
-                    url: urlMedia('audio', file) || urlLocalDe('audio', file),
+                    url: urlParaElFront(req, 'audio', file),
                     urlLocal: urlLocalDe('audio', file),
+                    urlNube: urlEnLaNube(file) || '',
                     nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime()
                 };
@@ -1897,8 +1919,9 @@ app.get('/api/videos', (req, res) => {
                 const meta = allMetadata[file] || {};
                 return { 
                     filename: file, 
-                    url: urlMedia('videos', file) || urlLocalDe('videos', file),
+                    url: urlParaElFront(req, 'videos', file),
                     urlLocal: urlLocalDe('videos', file),
+                    urlNube: urlEnLaNube(file) || '',
                     nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
@@ -3127,8 +3150,9 @@ wss.on('connection', (ws) => {
                         if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({
                                 type: 'video_generated',
-                                url: urlMedia('videos', result.filename) || urlLocalDe('videos', result.filename),
+                                url: urlLocalDe('videos', result.filename),
                 urlLocal: urlLocalDe('videos', result.filename),
+                urlNube: urlEnLaNube(result.filename) || '',
                                 filename: result.filename,
                                 prompt: message.prompt,
                                 prompt_id: 'longcat-' + Date.now()
