@@ -263,6 +263,7 @@ const MIME_POR_EXT = {
     '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4'
 };
 let server_logClientes = '';   // última firma de clientes logueada
+let completedJobs = [];        // historial de trabajos terminados (se usaba sin declarar)
 
 const r2Estado = { activo: R2_ACTIVO, subidos: 0, bytes: 0, errores: 0, ultimo: null, enCurso: false, faltan: null };
 
@@ -1216,13 +1217,23 @@ function connectToComfy() {
             // video largo, miles de esos strings hacían volar el heap de 4 GB.
             // Los previews no se usan (la app manda su propio progreso), así que se
             // descartan sin convertirlos.
-            if (Buffer.isBuffer(data) || typeof data !== 'string') {
+            // Los mensajes del WS pueden llegar como Buffer o como texto: antes
+            // se descartaba TODO lo que no fuera string, y el aviso de 'executed'
+            // (que trae la imagen adentro) se perdía -> la imagen nunca llegaba
+            // a STUDIO ASSETS. Ahora los avisos importantes SÍ se procesan.
+            let messageString = Buffer.isBuffer(data) ? data.toString('utf8') : String(data);
+            const esAvisoImportante = /"type"\s*:\s*"(executed|executing|progress|status|execution_success|execution_error|cached)"/.test(messageString.slice(0, 400));
+            if (!esAvisoImportante && messageString.length > 40000) {
+                // preview grande / frame en base64: no hace falta, se descarta
                 return;
             }
-            const messageString = data.toString();
-            if (messageString.length > 40000) {   // los previews rondan 50-150 KB
-                // mensaje gigante (preview / frame en base64): no lo tocamos
-                return;
+            if (esAvisoImportante && messageString.length > 800000) {
+                // aviso con la imagen embebida: se recorta la parte gigante para
+                // poder leerlo sin comerse la memoria
+                messageString = messageString
+                    .replace(/"preview"\s*:\s*"data:[^"]*"/g, '"preview":""')
+                    .replace(/"image"\s*:\s*"data:[^"]*"/g, '"image":""');
+                if (messageString.length > 800000) return;
             }
             // Log solo si no es binario y no es demasiado ruidoso
             if (messageString.length < 1000) {
