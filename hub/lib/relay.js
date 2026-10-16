@@ -334,11 +334,26 @@ function iniciar(io, basePath) {
         });
 
         socket.on('tunnel:http:result', (r) => {
-            const pd = pendientes.get(r && r.reqId);
-            if (!pd) return;
-            pendientes.delete(r.reqId);
-            clearTimeout(pd.timer);
-            pd.resolve(r);
+            if (!r || !r.reqId) return;
+            const pd = pendientes.get(r.reqId);
+            if (pd) {
+                pendientes.delete(r.reqId);
+                clearTimeout(pd.timer);
+                pd.resolve(r);
+                return;
+            }
+            // El hub pide TODO con alStream (para la media grande), pero el nodo
+            // contesta con un 'result' simple cuando la respuesta NO es media (un
+            // JSON de /api/images, /api/examples, etc.). Antes se buscaba solo en
+            // 'pendientes', no estaba, y se DESCARTABA: el pedido quedaba colgado
+            // hasta el timeout ('timeout esperando al nodo') y la web no veia nada.
+            const es = enStream.get(r.reqId);
+            if (!es) return;
+            enStream.delete(r.reqId);
+            clearTimeout(es.timer);
+            try { es.meta({ status: r.status, contentType: r.contentType, headers: r.headers || {} }); } catch (e) { }
+            try { if (r.body) es.chunk(Buffer.from(r.body)); } catch (e) { }
+            try { es.fin(r.body ? Buffer.from(r.body).length : 0); } catch (e) { }
         });
 
         // --- respuesta EN PEDAZOS (media grande): nunca se junta en memoria ---

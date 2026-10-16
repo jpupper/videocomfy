@@ -341,7 +341,7 @@ function arrancar(opciones) {
             const esEscritura = !['GET', 'HEAD'].includes(String(r.method || 'GET').toUpperCase());
             if (esEscritura && RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
                 console.log(`⛔ [túnel] pedido de la web BLOQUEADO por seguridad: ${r.method || 'GET'} ${ruta}`);
-                console.log(`[túnel] → emito ${r.ruta} (${buf.length} bytes)`);
+                // (acá se logueaba buf.length, que todavía no existe: rompía el 403)
                 socket.emit('tunnel:http:result', {
                     reqId: r.reqId, status: 403, contentType: 'application/json',
                     headers: {}, body: Buffer.from(JSON.stringify({
