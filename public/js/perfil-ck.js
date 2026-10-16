@@ -20,13 +20,17 @@ function ckMezclarPerfil() {
         if (!f || typeof f !== 'object') continue;
         Object.keys(f).forEach(function (k) {
             var v = f[k];
-            if (out[k] !== undefined && out[k] !== null && out[k] !== '') return;
+            // Nunca se pisa un dato bueno con uno VACÍO (null/undefined/''),
+            // pero el ÚLTIMO con valor sí gana: así el perfil fresco reemplaza
+            // al cacheado viejo (antes quedaba pegajoso y la foto rota no se
+            // arreglaba nunca).
             if (v === null || v === undefined || v === '') return;
             out[k] = v;
         });
     }
     return out;
 }
+
 
 
     var perfil = null;
