@@ -76,13 +76,10 @@
             var b = document.getElementById(id);
             if (b) botones.push(b);
         });
-        // y barro cualquier botón suelto de esas filas que diga perfil/cuenta/red/pausar
-        document.querySelectorAll('button').forEach(function (b) {
-            if (botones.indexOf(b) >= 0) return;
-            var t = texto(b).toLowerCase();
-            if (t.indexOf('pausar') >= 0 || t.indexOf('reanudar') >= 0 || t.indexOf('perfil') >= 0
-                || t.indexOf('cuenta') >= 0 || t === '🌎 red' || t.indexOf('🌎 red') >= 0) botones.push(b);
-        });
+        // OJO: acá había un barrido que agarraba CUALQUIER botón que dijera
+        // perfil/cuenta/red/pausar (incluidos los de otros paneles) y los
+        // movía a la barra de arriba: por eso aparecían repetidos y en
+        // cualquier lugar. Ahora sólo se mueven los botones con ID conocido.
 
         botones.forEach(function (b) {
             var t = texto(b).toLowerCase();
