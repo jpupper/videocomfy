@@ -50,7 +50,7 @@
             // En la web la versión la sabe el hub: GET /health es público y trae
             // el commit con el que se desplegó (antes pedía /api/version, que pide
             // sesión, y el chip quedaba en "🧩 versión ?").
-            fetch(BASE + '/health', { cache: 'no-store' })
+            fetch(BASE + '/version.json', { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) {
                     if (!chip) return;
