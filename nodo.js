@@ -250,6 +250,7 @@ function arrancar(opciones) {
                 encolados++;
                 enviarEstado();
             } catch (e) {
+                console.log(`[túnel] ✗ error ${r.ruta}: ${e.message}`);
                 logErr('   ❌ no pude encolarlo:', e.message);
                 socket.emit('red:job:estado', { jobId: job.jobId, evento: 'error', error: e.message });
             }
@@ -350,6 +351,7 @@ function arrancar(opciones) {
             }
 
             const url = APP + (r.ruta || '/') + (r.query ? '?' + r.query : '');
+            console.log(`[túnel] ← ${r.method || 'GET'} ${r.ruta} (desde la web)`);
             const sinCuerpo = r.method === 'GET' || r.method === 'HEAD';
             try {
                 const headers = {};
