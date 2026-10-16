@@ -661,11 +661,18 @@ app.post(rutasRed('/api/red/media-mapa'), express.json({ limit: '16mb' }), (req,
         // El asset es de QUIEN LO PIDIÓ: el nodo manda la identidad por archivo
         // (it.email/username), no sólo la del dueño de la PC. Si no viene, se usa
         // la del cuerpo (comportamiento viejo).
-        const quien = {
-            email: it.email || (req.body && req.body.email) || '',
-            username: it.username || (req.body && req.body.username) || '',
-            displayName: it.displayName || (req.body && req.body.displayName) || '',
-            avatar: it.avatar || (req.body && req.body.avatar) || ''
+        // Si el archivo trae SU identidad (quién lo pidió), se usa esa y NO se cae
+        // a la del cuerpo: si no, un pedido de vjpuppet quedaba con el email del
+        // dueño de la PC (mezcla rara) y no aparecía en los assets de quien lo pidió.
+        const traeSuya = !!(it.username || it.email || it.displayName);
+        const quien = traeSuya ? {
+            email: it.email || '', username: it.username || '',
+            displayName: it.displayName || '', avatar: it.avatar || ''
+        } : {
+            email: (req.body && req.body.email) || '',
+            username: (req.body && req.body.username) || '',
+            displayName: (req.body && req.body.displayName) || '',
+            avatar: (req.body && req.body.avatar) || ''
         };
         if (it && it.nombre && it.url) {
             mediaMap.anotar(it.nombre, it.url, { bytes: it.bytes || null });
