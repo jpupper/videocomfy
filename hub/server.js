@@ -122,6 +122,33 @@ function esPublica(ruta) {
         || p === '/api/red/media-mapa';
         }
 
+// ===========================================================================
+// CORS: la web vive en fullscreencode.com y este hub en el VPS (otro origen).
+// Sin estas cabeceras el navegador bloquea TODO (los pedidos y también el
+// preflight OPTIONS, que viaja sin token). Sólo los dominios del ecosistema.
+// ===========================================================================
+const ORIGENES_CORS = (process.env.ORIGENES_CORS || [
+    'https://fullscreencode.com', 'https://www.fullscreencode.com',
+    'https://artedigitaldata.com', 'https://www.artedigitaldata.com',
+    'https://vuelapelucas3000.com.ar', 'https://www.vuelapelucas3000.com.ar',
+    'https://exporural.com', 'https://vps-4455523-x.dattaweb.com'
+].join(','));
+
+app.use((req, res, next) => {
+    const origen = req.headers.origin || '';
+    const permitido = origen && (ORIGENES_CORS.indexOf(origen) >= 0 || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origen));
+    if (permitido) {
+        res.setHeader('Access-Control-Allow-Origin', origen);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-agent-token,x-fsc-internal');
+        res.setHeader('Access-Control-Max-Age', '86400');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();   // preflight: sin token
+    next();
+});
+
 function exigirSesion(req, res, next) {
     if (AUTH_APAGADA) return next();
     if (esPublica(req.path)) return next();

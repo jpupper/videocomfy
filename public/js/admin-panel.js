@@ -30,6 +30,7 @@
     }
 
     function montar() {
+        if (window.__adminPanelOff) return;
         if (document.getElementById('adminPanel')) return;
         var wrap = document.querySelector('#tabSettings .ck-set-wrap') || document.getElementById('tabSettings');
         if (!wrap) return;
@@ -40,7 +41,11 @@
         wrap.insertBefore(caja, wrap.firstChild);
         // sólo si esta cuenta es administradora
         pedir('/api/admin/limite').then(function (d) {
-            if (!d || d._status === 403 || d.success === false) { caja.remove(); return; }
+            if (!d || d._status === 403 || d.success === false) {
+                // si no soy admin (o la sesión no llegó), no se muestra y NO se
+                // vuelve a preguntar: antes insistía cada 8 s y llenaba de 403.
+                caja.remove(); window.__adminPanelOff = true; return;
+            }
             caja.innerHTML =
                 '<h3 class="rank-h4">🛡️ PANEL DE ADMINISTRACIÓN</h3>' +
                 '<div class="admin-fila">' +
