@@ -341,6 +341,7 @@ function arrancar(opciones) {
             const esEscritura = !['GET', 'HEAD'].includes(String(r.method || 'GET').toUpperCase());
             if (esEscritura && RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
                 console.log(`⛔ [túnel] pedido de la web BLOQUEADO por seguridad: ${r.method || 'GET'} ${ruta}`);
+                console.log(`[túnel] → emito ${r.ruta} (${buf.length} bytes)`);
                 socket.emit('tunnel:http:result', {
                     reqId: r.reqId, status: 403, contentType: 'application/json',
                     headers: {}, body: Buffer.from(JSON.stringify({
@@ -369,6 +370,7 @@ function arrancar(opciones) {
                     body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined),
                     signal: AbortSignal.timeout(12000)
                 });
+                console.log(`[túnel] fetch OK ${r.ruta} -> ${resp.status}`);
                 const ct = resp.headers.get('content-type') || '';
                 const largo = Number(resp.headers.get('content-length') || 0);
                 const cabeceras = {
