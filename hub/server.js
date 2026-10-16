@@ -180,6 +180,13 @@ const CK_HEALTH = function (req, res) {
     res.json({ ok: true, rol: 'hub', version: CK_VERSION_HUB || 'hub', base: CK_BASE, nodos: nodos, fecha: new Date().toISOString() });
 };
 app.get([CK_BASE + '/health', '/health', CK_BASE + '/api/version', '/api/version'], CK_HEALTH);
+
+// La version tambien como archivo: el front de la web la pide asi (el chip
+// mostraba 'verificando' cuando el pedido iba al tunel o al dominio sin proxy).
+app.get([CK_BASE + '/version.json', '/version.json'], function (req, res) {
+    res.set('Cache-Control', 'no-store');
+    res.json({ version: CK_VERSION_HUB || 'hub', rol: 'hub', base: CK_BASE });
+});
 app.use(cors({
     origin: (origin, cb) => {
         // Sin Origin (curl, llamadas server → server) no hay nada que habilitar.
