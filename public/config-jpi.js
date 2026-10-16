@@ -24,7 +24,17 @@
     // Token de la sesión FSC (lo guarda js/auth-jpi.js al entrar). En la app
     // local no hay sesión: queda vacío y nada cambia.
     var TOKEN = '';
-    try { TOKEN = localStorage.getItem('fsc_token_jpi') || ''; } catch (e) { }
+    try {
+        // La sesión del ecosistema puede estar en 'fsc_token' (login unificado
+        // jpconnect/fscauth) o en 'token'; la app local usa 'fsc_token_jpi'.
+        // Antes leía UNA sola y por eso la web mandaba todo sin token: 401 en
+        // todos los endpoints y el WebSocket sin ?token=.
+        var CLAVES_TOK = ['fsc_token_jpi', 'fsc_token', 'token'];
+        for (var i = 0; i < CLAVES_TOK.length; i++) {
+            var t = localStorage.getItem(CLAVES_TOK[i]);
+            if (t && String(t).split('.').length === 3) { TOKEN = t; break; }
+        }
+    } catch (e) { }
 
     window.JPI = {
         BASE: BASE,
