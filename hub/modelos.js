@@ -158,8 +158,15 @@ async function rolEnElEcosistema(clave) {
     if (!k) return null;
     try {
         if (!dbGlobal) dbGlobal = mongoose.connection.useDb('fullscreen_global');
+        // Se busca por email, por usuario Y por id: el JWT del ecosistema sólo
+        // trae {id, email, role}, así que sin el _id el perfil no se encontraba
+        // y devolvía nulls -> la web pisaba la foto/nombre con null.
+        const filtros = [{ email: k }, { username: k }];
+        if (/^[a-f0-9]{24}$/i.test(k)) {
+            try { filtros.push({ _id: new mongoose.Types.ObjectId(k) }); } catch (e) { }
+        }
         const u = await dbGlobal.collection('users').findOne(
-            { $or: [{ email: k }, { username: k }] },
+            { $or: filtros },
             { projection: { role: 1, username: 1, email: 1, avatar: 1, displayName: 1, bio: 1 } }
         );
         return u || null;
