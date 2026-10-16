@@ -102,6 +102,7 @@
             if (cont.id === 'tabPrompts') cont.insertBefore(b, cont.firstChild);
             else cont.parentElement.insertBefore(b, cont);
         }
+        if (!esWeb) { b.style.display = 'none'; return; }   // en local no hay a qué conectarse
         var n = nodo();
         if (n && !n.desconocido) {
             b.className = 'ck-conexion-banner ok';
@@ -158,6 +159,19 @@
         }
     }
 
+    // Los botones GENERATE de cada panel (viven fuera de las tarjetas: son
+    // hermanos, no hijos, así que el recorrido de arriba no los veía).
+    function pintarBotonesGenerar() {
+        Array.prototype.forEach.call(document.querySelectorAll('.wf-gen-btn, .generate-btn-main'), function (b) {
+            var wf = b.getAttribute('data-workflow');
+            var ok = wf ? puede(wf) : (esWeb ? !!nodo() : true);
+            b.disabled = !ok;
+            b.classList.toggle('ck-no-disp', !ok);
+            var por = wf ? motivo(wf) : 'No estás conectado a ninguna computadora: elegí una en RED.';
+            if (ok) b.removeAttribute('title'); else b.title = por;
+        });
+    }
+
     // Los botones de generar que NO están dentro de una tarjeta (storyboard, chain…)
     function pintarBotonesSueltos() {
         var ids = ['generateVidsFromStoryboardBtn', 'chainEnhanceBtn', 'confirmRegenBtn'];
@@ -199,6 +213,7 @@
     function pintar() {
         pintarBanner();
         pintarTarjetas();
+        pintarBotonesGenerar();
         pintarBotonesSueltos();
     }
 

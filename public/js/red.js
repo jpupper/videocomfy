@@ -310,22 +310,23 @@
         var elegido = ESTADO.elegido;
         var existeElegido = elegido && (elegido === yoId || peers.some(function (p) { return p.id === elegido; }));
         if (!existeElegido) { guardarElegido(''); elegido = ''; }
-        if (!elegido) {
-            // default: mi Comfy si estoy en local, si no el primer nodo que comparte
+        var esWebAqui = (function () {
+            try { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; }
+            catch (e) { return false; }
+        })();
+        if (!elegido && !esWebAqui) {
+            // En LOCAL, por defecto se genera en esta PC. En la WEB no se elige
+            // NADA por defecto: el usuario decide a quién pedirle en RED y hasta
+            // entonces los workflows de CREATE quedan en gris.
             if (yoId) { guardarElegido(yoId); elegido = yoId; }
             else {
                 var libre = peers.filter(function (p) { return p.compartir; })[0];
                 if (libre) { guardarElegido(libre.id); elegido = libre.id; }
             }
         }
-        // En la WEB no se elige computadora por defecto: el usuario decide a quien
-        // pedirle, y hasta que elija los botones de generar van grises. Se LIMPIA la
-        // seleccion previa (insercion pura, sin tocar el bloque de arriba).
-        try {
-            var esWebAqui = (function () { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; })();
-            if (esWebAqui && elegido) { guardarElegido(''); elegido = ''; ESTADO.elegido = ''; }
-            document.body.classList.toggle('ck-sin-computadora', esWebAqui && !elegido);
-        } catch (e) { }
+        // Sin computadora elegida (por defecto al entrar en la web) los botones de
+        // generar se muestran grises y bloqueados.
+        try { document.body.classList.toggle('ck-sin-computadora', esWebAqui && !elegido); } catch (e) { }
 
         if (elegido) {
             var esMio = (elegido === yoId);
