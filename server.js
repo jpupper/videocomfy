@@ -2866,15 +2866,36 @@ server.listen(port, HOST_ESCUCHA, () => {
 // --- perfil del usuario logueado (local): se lo pedimos al hub -------------
 // En la web el front habla directo con el hub; en local la app hace de proxy
 // para que la pestaña PERFIL muestre tu ficha y tu avatar.
+// OJO (deadlock): antes esto le pedía el perfil AL HUB. Cuando el hub está
+// relayando un pedido de la web hacia esta app, el hub espera la respuesta de
+// la app y la app esperaba al hub -> se colgaban los dos y la web quedaba
+// vacía ("timeout esperando al nodo"). Ahora se lo pide DIRECTO al servicio de
+// cuentas del ecosistema (jpconnect/fscauth), que no está en el medio.
 app.get('/api/me', async (req, res) => {
     try {
-        const host = (process.env.RED_HUB || 'https://vps-4455523-x.dattaweb.com').replace(/\/+$/, '');
-        const base = (process.env.RED_BASE || '/comfylatam').replace(/\/+$/, '');
+        const authBase = (process.env.FSC_AUTH_API || 'https://vps-4455523-x.dattaweb.com/jpconnect').replace(/\/+$/, '');
         const cabeceras = { Accept: 'application/json' };
         if (req.headers.authorization) cabeceras.Authorization = req.headers.authorization;
-        const r = await fetch(host + base + '/api/me', { headers: cabeceras, signal: AbortSignal.timeout(8000) });
-        const texto = await r.text();
-        res.status(r.status).type('application/json').send(texto);
+        if (!req.headers.authorization) return res.status(401).json({ success: false, message: 'requiereLogin' });
+        const r = await fetch(authBase + '/api/auth/profile', { headers: cabeceras, signal: AbortSignal.timeout(8000) });
+        const d = await r.json().catch(() => null);
+        if (!r.ok || !d) return res.status(r.status || 502).json({ success: false, message: 'no pude leer tu perfil' });
+        const u = d.user || d.usuario || d;
+        // Se devuelve la MISMA forma que espera el front ({usuario:{...}}), con
+        // los nombres que usa el ecosistema cargados en el nodo.
+        res.json({
+            success: true,
+            usuario: {
+                id: u.id || u._id || null,
+                username: u.username || null,
+                email: u.email || null,
+                displayName: u.displayName || u.username || null,
+                avatar: u.avatar || null,
+                bio: u.bio || u.descripcion || null,
+                role: u.role || 'USER',
+                origen: u.origin || u.origen || null
+            }
+        });
     } catch (e) {
         res.status(502).json({ success: false, message: 'No pude consultar el perfil: ' + e.message });
     }
