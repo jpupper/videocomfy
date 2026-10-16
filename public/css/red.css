@@ -731,3 +731,16 @@ body.red-arrastrando .container { transition: none !important; }
     vertical-align: middle; margin-right: 6px; }
 #jpiCuentaBtn[data-estado="con-sesion"] { display: inline-flex !important; align-items: center; }
 #jpiCuentaBtn[data-estado="sin-sesion"] { display: inline-flex !important; align-items: center; }
+
+/* El bloque de "generar" vive en CREATE: en RED no va (pedido del usuario).
+   Se oculta por CSS para no tocar el JS del panel. */
+.red-gen { display: none !important; }
+
+/* Sin computadora elegida (por defecto en la web) los botones de generar van grises. */
+body.ck-sin-computadora button[data-generar],
+body.ck-sin-computadora #generateBtn,
+body.ck-sin-computadora #generarBtn,
+body.ck-sin-computadora .btn-generar,
+body.ck-sin-computadora #tabPrompts button[type="submit"] {
+    opacity: .45 !important; filter: grayscale(1); cursor: not-allowed !important;
+}

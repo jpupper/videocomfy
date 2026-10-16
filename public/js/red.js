@@ -311,13 +311,28 @@
         var existeElegido = elegido && (elegido === yoId || peers.some(function (p) { return p.id === elegido; }));
         if (!existeElegido) { guardarElegido(''); elegido = ''; }
         if (!elegido) {
-            // default: mi Comfy si estoy en local, si no el primer nodo que comparte
-            if (yoId) { guardarElegido(yoId); elegido = yoId; }
-            else {
-                var libre = peers.filter(function (p) { return p.compartir; })[0];
-                if (libre) { guardarElegido(libre.id); elegido = libre.id; }
+            // En la WEB no se elige computadora por defecto: el usuario decide a
+            // quién pedirle, y hasta que elija los botones de generar quedan grises.
+            var esWebAqui = (function () {
+                try { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; }
+                catch (e) { return false; }
+            })();
+            if (!esWebAqui) {
+                if (yoId) { guardarElegido(yoId); elegido = yoId; }
+                else {
+                    var libre = peers.filter(function (p) { return p.compartir; })[0];
+                    if (libre) { guardarElegido(libre.id); elegido = libre.id; }
+                }
             }
         }
+        }
+        // Aviso global: sin computadora elegida (por defecto en la web) los botones
+        // de generar se muestran grises.
+        try {
+            var esWebBody = (function () { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; })();
+            document.body.classList.toggle('ck-sin-computadora', esWebBody && !elegido);
+        } catch (e) { }
+
         if (elegido) {
             var esMio = (elegido === yoId);
             var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
