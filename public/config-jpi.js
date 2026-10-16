@@ -36,6 +36,18 @@
         }
     } catch (e) { }
 
+    // Una URL de media puede venir relativa ('/uploads/x.png'): en la web eso lo
+    // resuelve el navegador contra fullscreencode.com y da 404. Esta la vuelve
+    // absoluta contra el backend (que redirige al CDN de Cloudflare). Si ya es el
+    // link de Cloudflare, la deja como está.
+    window.ckMediaUrl = function (u) {
+        var s = String(u == null ? '' : u);
+        if (!s) return '';
+        if (/^(https?:|data:|blob:)/i.test(s)) return s;
+        var base = String((window.JPI || {}).API_BASE || '').replace(/\/+$/, '');
+        return base + (s.charAt(0) === '/' ? s : '/' + s);
+    };
+
     window.JPI = {
         BASE: BASE,
         ORIGIN: ORIGIN,

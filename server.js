@@ -256,6 +256,28 @@ app.get('/api/registro', (req, res) => {
 const r2lib = require('./hub/lib/r2');
 const mediaMap = require('./hub/lib/media-map');
 const R2_ACTIVO = String(process.env.SUBIR_A_R2 || 'true').toLowerCase() !== 'false';
+
+// ----------------------------------------------------------------------------
+// URL PÚBLICA DE LA MEDIA: si el archivo ya está en Cloudflare R2, se devuelve
+// el link del CDN (el navegador lo trae DIRECTO de ahí). Antes se devolvía
+// siempre la ruta relativa '/uploads/x.png' y en la web el navegador la
+// resolvía contra fullscreencode.com -> 404: la imagen NUNCA aparecía.
+// Se manda también la ruta local para que el front tenga de dónde tirar si el
+// archivo todavía no se subió (el subidor trabaja en segundo plano).
+// ----------------------------------------------------------------------------
+const R2_PUBLICO = String(process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+function urlEnLaNube(nombre) {
+    if (!nombre) return '';
+    try { return mediaMap.urlDeArchivo(nombre) || ''; } catch (e) { return ''; }
+}
+function urlMedia(subdir, nombre) {
+    var nube = urlEnLaNube(nombre);
+    if (nube) return nube;
+    // Previsión: si va a subirse (tras el barrido), la ruta del CDN ya sirve.
+    if (R2_PUBLICO && R2_ACTIVO) return '';
+    return '/' + subdir + '/' + nombre;
+}
+function urlLocalDe(subdir, nombre) { return '/' + subdir + '/' + nombre; }
 const CARPETAS_MEDIA = { uploads: 'imagenes', videos: 'videos', audio: 'audio' };
 const MIME_POR_EXT = {
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -1474,7 +1496,11 @@ function connectToComfy() {
                                 if (client.readyState === WebSocket.OPEN) {
                                     const msg = {
                                         type: assetType === 'video' ? 'video_generated' : 'storyboard_generated',
-                                        url: `/${targetSubdir}/${filenameOnly}`,
+                                        // Link de Cloudflare cuando el archivo ya está subido:
+                                        // el navegador lo carga DIRECTO del CDN (antes iba la ruta
+                                        // relativa y en la web daba 404: la imagen no aparecía).
+                                        url: urlMedia(targetSubdir, filenameOnly) || urlLocalDe(targetSubdir, filenameOnly),
+                                        urlLocal: urlLocalDe(targetSubdir, filenameOnly),
                                         filename: filenameOnly,
                                         prompt: metaToSave.prompt,
                                         storyboardIndex: metaToSave.storyboardIndex,
@@ -1661,7 +1687,9 @@ app.get('/api/images', (req, res) => {
                     filename: file,
                     pedidoPor: pedidoPorNombre,
                     computadora: computadoraNombre, 
-                    url: `/uploads/${file}`, 
+                    url: urlMedia('uploads', file) || urlLocalDe('uploads', file),
+                    urlLocal: urlLocalDe('uploads', file),
+                    nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
@@ -1685,7 +1713,9 @@ app.get('/api/audio', (req, res) => {
                 const stats = fs.statSync(path.join(audioDir, file));
                 return { 
                     filename: file, 
-                    url: `/audio/${file}`, 
+                    url: urlMedia('audio', file) || urlLocalDe('audio', file),
+                    urlLocal: urlLocalDe('audio', file),
+                    nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime()
                 };
             })
@@ -1867,7 +1897,9 @@ app.get('/api/videos', (req, res) => {
                 const meta = allMetadata[file] || {};
                 return { 
                     filename: file, 
-                    url: `/videos/${file}`, 
+                    url: urlMedia('videos', file) || urlLocalDe('videos', file),
+                    urlLocal: urlLocalDe('videos', file),
+                    nube: !!urlEnLaNube(file), 
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
@@ -2027,7 +2059,7 @@ app.post('/api/export-timeline', async (req, res) => {
             params: { videoWidth: targetWidth, videoHeight: targetHeight }
         });
 
-        res.json({ success: true, filename: outputFilename, url: `/videos/${outputFilename}` });
+        res.json({ success: true, filename: outputFilename, url: urlMedia('videos', outputFilename) || urlLocalDe('videos', outputFilename), urlLocal: urlLocalDe('videos', outputFilename) });
 
     } catch (error) {
         console.error('Error exporting timeline:', error);
@@ -3095,7 +3127,8 @@ wss.on('connection', (ws) => {
                         if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({
                                 type: 'video_generated',
-                                url: `/videos/${result.filename}`,
+                                url: urlMedia('videos', result.filename) || urlLocalDe('videos', result.filename),
+                urlLocal: urlLocalDe('videos', result.filename),
                                 filename: result.filename,
                                 prompt: message.prompt,
                                 prompt_id: 'longcat-' + Date.now()

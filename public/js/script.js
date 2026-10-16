@@ -209,7 +209,7 @@ function handleWsMessage(event) {
                 if (itemIndex !== -1) {
                     const item = globalGenerationQueue[itemIndex];
                     item.status = 'completed';
-                    item.resultUrl = message.url;
+                    item.resultUrl = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url);
 
                     // REEMPLAZO AUTOMATICO PARA REGENERACION
                     if (item.replaceClipId) {
@@ -217,7 +217,7 @@ function handleWsMessage(event) {
                         const clip = document.querySelector(clipQuery);
                         if (clip) {
                             const v = clip.querySelector('video');
-                            v.src = message.url + '?t=' + Date.now();
+                            v.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url) + '?t=' + Date.now();
                             v.load();
 
                             // Actualizar etiqueta de nombre de archivo
@@ -271,7 +271,7 @@ function handleWsMessage(event) {
             const previewArea = document.getElementById('t2iPreview');
             const previewImg = document.getElementById('t2iPreviewImg');
             if (previewArea && previewImg && message.url) {
-                previewImg.src = message.url + '?t=' + Date.now();
+                previewImg.src = (window.ckMediaUrl ? window.ckMediaUrl(message.url) : message.url) + '?t=' + Date.now();
                 previewArea.style.display = 'block';
                 // Wire View button
                 const viewBtn = document.getElementById('t2iPreviewViewBtn');
