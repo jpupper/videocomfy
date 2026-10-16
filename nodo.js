@@ -355,6 +355,10 @@ function arrancar(opciones) {
                 const headers = {};
                 if (r.contentType) headers['Content-Type'] = r.contentType;
                 if (r.range) headers['Range'] = r.range;
+                // La sesión del usuario llega desde el hub: se la pasamos a la
+                // app local tal cual (así la web ve listas, perfil y avatar).
+                if (r.authorization) headers['Authorization'] = r.authorization;
+                if (r.cookie) headers['Cookie'] = r.cookie;
                 const resp = await fetch(url, {
                     method: r.method || 'GET', headers,
                     body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined)
