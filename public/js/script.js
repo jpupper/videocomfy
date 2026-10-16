@@ -1354,9 +1354,6 @@ function quienPide() {
     }
     return { usuario: 'sin sesión', displayName: 'sin sesión (anónimo)', avatar: '', email: '', tipo: esLaWeb() ? 'web' : 'local' };
 }
-    } catch (e) { }
-    return { usuario: 'sin sesión', displayName: 'sin sesión (anónimo)', avatar: '', tipo: 'local' };
-}
 window.quienPide = quienPide;
 
 function updateGlobalQueueUI() {
