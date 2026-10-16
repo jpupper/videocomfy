@@ -744,3 +744,13 @@ body.ck-sin-computadora .btn-generar,
 body.ck-sin-computadora #tabPrompts button[type="submit"] {
     opacity: .45 !important; filter: grayscale(1); cursor: not-allowed !important;
 }
+
+/* Los botones REALES de CREATE (clases medidas en index.html) */
+body.ck-sin-computadora .wf-gen-btn,
+body.ck-sin-computadora .generate-btn-main,
+body.ck-sin-computadora .generate-btn-main-premium,
+body.ck-sin-computadora #generateVidsFromStoryboardBtn,
+body.ck-sin-computadora #chainEnhanceBtn,
+body.ck-sin-computadora #confirmRegenBtn {
+    opacity: .45 !important; filter: grayscale(1); cursor: not-allowed !important;
+}
