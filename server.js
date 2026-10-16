@@ -705,7 +705,7 @@ const NOMBRE_WORKFLOW = {
     'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
     'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
     'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
-    'video_ltx2_t2v_api.json': 'LTX-2 texto→video',
+    'video_ltx2_t2v_api.json': 'LTX-2.5 texto→video',
     'video_ltx2_i2v_api.json': 'LTX-2 imagen→video',
     'video_ltx25_i2v_api.json': 'LTX-2.5 imagen→video',
     'video_wan2_2_14B_flf2v_api.json': 'WAN 2.2 (video)'
@@ -1435,6 +1435,7 @@ function connectToComfy() {
                                     pedidoPor: metaToSave.pedidoPor,
                                     origen: metaToSave.origen,
                                     modelo: metaToSave.modelo,
+                                    model: metaToSave.model || metaToSave.modelo,
                                 });
                             } else {
                                 saveImageMetadata(filenameOnly, {
@@ -1446,6 +1447,7 @@ function connectToComfy() {
                                     pedidoPor: metaToSave.pedidoPor,
                                     origen: metaToSave.origen,
                                     modelo: metaToSave.modelo,
+                                    model: metaToSave.model || metaToSave.modelo,
                                     batchName: metaToSave.batchName,
                                     prompt_id: promptId,
                                     isForWan: metaToSave.isForWan,
@@ -2553,7 +2555,7 @@ async function encolarTrabajoRed(b) {
         ? await generarImagenModelo(modelo, prompt, params)
         : (b && b.imagen
             ? await generarVideoLTX25(prompt, params, b.imagen)
-            : await generarVideo(prompt, params, null));
+            : await generarVideoT2VLTX25(prompt, params));
 
     // Quién lo pidió: si viene de la red, el hub manda pedidoPor; si es local,
     // es el usuario logueado en esta PC (o "vos").
@@ -2563,6 +2565,7 @@ async function encolarTrabajoRed(b) {
         params,
         type: modelo ? MODELOS_IMAGEN[modelo].tipoSalida : 'video',
         modelo: modelo || 'ltx2',
+        model: modelo ? MODELOS_IMAGEN[modelo].etiqueta : 'LTX-2.5 distilled',
         origen: 'red',
         pedidoPor,
         computadora: datosDeEstaPC(),
@@ -2918,7 +2921,7 @@ wss.on('connection', (ws) => {
                         ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
                         : (message.imageFilename
                             ? await generarVideoLTX25(message.prompt, message.params, message.imageFilename)
-                            : await generarVideo(message.prompt, message.params, message.imageFilename));
+                            : await generarVideoT2VLTX25(message.prompt, message.params));
                     console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
                     const details = { 
                         prompt: message.prompt,
@@ -2933,6 +2936,8 @@ wss.on('connection', (ws) => {
                         // 'video' = video. Lo lee el manejador de 'executed'.
                         type: modeloImagen ? MODELOS_IMAGEN[modeloImagen].tipoSalida : 'video',
                         modelo: modeloImagen || 'ltx2',
+                        // Nombre lindo para el panel de metadata (el DATA del previz)
+                        model: modeloImagen ? MODELOS_IMAGEN[modeloImagen].etiqueta : 'LTX-2.5 distilled',
                         batchId: message.batchId,
                         batchName: message.batchName,
                         generationStartTime: Date.now()
@@ -3324,6 +3329,65 @@ async function generarVideoLTX25(promptText, params = {}, imageFilename = null) 
 
     const promptId = await queuePrompt(wf);
     console.log(`🚀 Prompt LTX 2.5 enviado a ComfyUI. ID: ${promptId}`);
+    return promptId;
+}
+
+// ============================================================
+// T2V LTX 2.5 (GGUF distilled) — mismo pipeline que el I2V pero
+// SIN imagen de referencia. Workflow: video_ltx2_t2v_api.json.
+// Toggles del panel: ltx25Enhance / ltx25Upscale / ltx25Audio.
+// Steps y CFG van FIJO (ManualSigmas + video_cfg/audio_cfg=1).
+// ============================================================
+async function generarVideoT2VLTX25(promptText, params = {}) {
+    const data = await fs.promises.readFile(path.join(__dirname, 'workflows/video_ltx2_t2v_api.json'), 'utf8');
+    const wf = JSON.parse(data);
+
+    const seedValue = (params.seed !== undefined && params.seed !== -1)
+        ? params.seed : Math.floor(Math.random() * 1000000000);
+
+    const enhance = params.ltx25Enhance !== false;   // default ON
+    const upscale = params.ltx25Upscale !== false;   // default ON
+    const audio   = params.ltx25Audio   !== false;   // default ON
+
+    // LTX 2.5 exige resolución en múltiplos de 32 (VAE espacial 32x)
+    const round32 = (v) => Math.max(32, Math.round(v / 32) * 32);
+    const W = round32(Number(params.videoWidth)  || 1280);
+    const H = round32(Number(params.videoHeight) || 704);
+    let frames = Number(params.videoLength) || 121;
+    const MAX_FRAMES = 169;   // limite seguro
+    if (frames > MAX_FRAMES) { console.warn(`⚠️  frames ${frames} -> ${MAX_FRAMES} (limite)`); frames = MAX_FRAMES; }
+
+    // prompt y negativo
+    wf['376']['inputs']['value'] = promptText;
+    if (params.negativePrompt) wf['373']['inputs']['text'] = params.negativePrompt;
+
+    // enhance (Prompt Enhance del panel)
+    wf['383']['inputs']['value'] = enhance;
+    wf['408']['inputs']['text'] = enhance ? ['382', 0] : promptText;
+
+    // seed
+    wf['339']['inputs']['noise_seed'] = seedValue;
+
+    // resolucion base (con upscale se genera a la mitad y se reescala x2); base también múltiplo de 32
+    wf['356']['inputs']['width']  = upscale ? round32(W / 2) : W;
+    wf['356']['inputs']['height'] = upscale ? round32(H / 2) : H;
+    wf['356']['inputs']['length'] = frames;
+    wf['366']['inputs']['frames_number'] = frames;
+
+    // routing del upscaler (etapa 2)
+    wf['340']['inputs']['video_latent'] = upscale ? ['348', 0] : ['367', 0];
+
+    // audio
+    if (!audio) delete wf['370']['inputs']['audio'];
+
+    if (ultimoTrabajo !== 'video') {
+        console.log('🧹 Liberando VRAM antes del video LTX 2.5 (T2V)...');
+        await liberarVram();
+    }
+    ultimoTrabajo = 'video';
+
+    const promptId = await queuePrompt(wf);
+    console.log(`🚀 Prompt LTX 2.5 T2V enviado a ComfyUI. ID: ${promptId}`);
     return promptId;
 }
 

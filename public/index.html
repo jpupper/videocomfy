@@ -526,28 +526,36 @@
                             <div class="wf-params-grid">
                                 <div class="wf-param">
                                     <label>Width <span class="wf-val">1280</span></label>
-                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="t2vWidth">
+                                    <input type="range" min="384" max="1920" step="32" value="1280" class="wf-param-slider" data-bind="t2vWidth">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Height <span class="wf-val">720</span></label>
-                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="t2vHeight">
+                                    <label>Height <span class="wf-val">704</span></label>
+                                    <input type="range" min="352" max="1088" step="32" value="704" class="wf-param-slider" data-bind="t2vHeight">
                                 </div>
                                 <div class="wf-param">
                                     <label>Frames <span class="wf-val">121</span></label>
                                     <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="t2vFrames">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Steps <span class="wf-val">20</span></label>
-                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="t2vSteps">
+                                    <label>Steps <span class="wf-val">8</span> 🔒</label>
+                                    <input type="range" min="10" max="50" step="1" value="8" class="wf-param-slider" data-bind="t2vSteps" disabled style="opacity:0.45" title="Fijo en 8 steps (LTX 2.5 distilled usa sigmas manuales)">
                                 </div>
                                 <div class="wf-param">
-                                    <label>CFG <span class="wf-val">4.0</span></label>
-                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="t2vCFG">
+                                    <label>CFG <span class="wf-val">1.0</span> 🔒</label>
+                                    <input type="range" min="1" max="10" step="0.5" value="1" class="wf-param-slider" data-bind="t2vCFG" disabled style="opacity:0.45" title="Fijo en 1 para LTX 2.5 distilled">
                                 </div>
                                 <div class="wf-param">
                                     <label>Seed</label>
                                     <input type="number" value="-1" class="wf-seed-input" id="t2vSeed">
                                     <label class="wf-check-label"><input type="checkbox" id="t2vRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <div class="wf-section" style="margin-top: 14px;">
+                                <label class="wf-label">🎛️ LTX 2.5 Options</label>
+                                <div class="wf-options-row">
+                                    <label class="wf-check-label"><input type="checkbox" id="t2vEnhance" checked> ✨ Prompt Enhance</label>
+                                    <label class="wf-check-label"><input type="checkbox" id="t2vUpscale" checked> 🔍 Upscale x2</label>
+                                    <label class="wf-check-label"><input type="checkbox" id="t2vAudio" checked> 🎵 Audio</label>
                                 </div>
                             </div>
                             <button class="wf-gen-btn generate-btn-main" data-workflow="t2v">🚀 GENERATE VIDEO</button>

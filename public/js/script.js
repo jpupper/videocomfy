@@ -4844,24 +4844,27 @@ function generateQwen21() {
     document.getElementById('tabOutputBtn')?.click();
 }
 
-// Generate T2V (DIRECT VIDEO)
+// Generate T2V (DIRECT VIDEO — LTX 2.5 distilled)
 function generateT2V() {
     const prompt = document.getElementById('t2vPrompt')?.value.trim();
     if (!prompt) { appendConsoleLine('⚠️ Please enter a video prompt', 'warning'); return; }
     
     addToQueue(prompt, null, {
-        model: 'ltx2',
         params: {
             videoWidth: getSliderVal('t2vWidth') || 1280,
-            videoHeight: getSliderVal('t2vHeight') || 720,
+            videoHeight: getSliderVal('t2vHeight') || 704,
             videoLength: getSliderVal('t2vFrames') || 121,
-            samplerSteps: getSliderVal('t2vSteps') || 20,
-            cfgScale: getSliderVal('t2vCFG') || 4.0,
-            seed: getSeed('t2v')
-        }
+            samplerSteps: 8,
+            cfgScale: 1,
+            seed: getSeed('t2v'),
+            ltx25Enhance: document.getElementById('t2vEnhance')?.checked ?? true,
+            ltx25Upscale: document.getElementById('t2vUpscale')?.checked ?? true,
+            ltx25Audio: document.getElementById('t2vAudio')?.checked ?? true
+        },
+        model: 'ltx2'
     });
     
-    appendConsoleLine(`🎬 T2V queued: ${prompt.substring(0, 50)}...`, 'system');
+    appendConsoleLine(`🎬 T2V queued (LTX 2.5): ${prompt.substring(0, 50)}...`, 'system');
     document.getElementById('tabOutputBtn')?.click();
 }
 

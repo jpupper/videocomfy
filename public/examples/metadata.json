@@ -33,5 +33,24 @@
     "modelo": "ltx2",
     "timestamp": 1792075553343,
     "model": "LTX 2.5 distilled"
+  },
+  "1990s-retro-hand-drawn-anime-style.mp4": {
+    "prompt": "1990s retro hand-drawn anime style, dramatic low-angle panning shot. A colossal weathered biomechanical robot covered in overgrown moss and vines stands dormant in a flooded post-apocalyptic city square. Suddenly, its visor flickers to life with a bright amber glow, sending ripples across the surrounding water and startling a flock of white birds that fly upward across the frame. Wind blows tall grass in the foreground, dramatic cumulous clouds moving in the sky, nostalgic cel-shaded aesthetic.",
+    "params": {
+      "videoWidth": 832,
+      "videoHeight": 448,
+      "videoLength": 97,
+      "samplerSteps": 8,
+      "cfgScale": 1,
+      "refStrength": 1.0,
+      "ltx25Enhance": false,
+      "ltx25Upscale": true,
+      "ltx25Audio": true,
+      "seed": 577304894863049
+    },
+    "imageFilename": null,
+    "model": "LTX-2.5 distilled",
+    "type": "video",
+    "timestamp": 1792109425389
   }
 }
