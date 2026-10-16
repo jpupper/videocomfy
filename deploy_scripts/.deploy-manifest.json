@@ -10,7 +10,7 @@
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "d678167fb973f3749c42c16a1da540904877ee05",
-  "/comfylatam/index.html": "91b6bd0862361aa07e7590bc18110496e0626f9b",
+  "/comfylatam/index.html": "7195856d4ba57386c87b5ae0df1d7cd7ad29a21f",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "5dba9835c5c0677ed1aae1f1d4f6fa73a83e69e0",
   "/comfylatam/js/cola-pausa.js": "cb79adda2b931b99dafd43644f7591736c582117",
@@ -31,7 +31,7 @@
   "/comfylatam/js/cola-comfy.js": "41fa2ca453fcdddd1c9e486ed8fc1e331520a63c",
   "/comfylatam/arquitectura.html": "27a021c7a28a6b08c928b5391e911876e8e20c3c",
   "/comfylatam/js/registro.js": "2072a8945dc5e5bece436ee204c54a01b82cd8ea",
-  "/comfylatam/js/version.js": "2b56cf5a01080918a6b9b77b1c4f3200cd8b4e54",
+  "/comfylatam/js/version.js": "33c53e9c70c4f1d789349b4932edc3fdacaa6585",
   "/comfylatam/js/ranking.js": "6e4a2ea3cbd8386b6ab5e2247ed9807b71bdb793",
   "/comfylatam/js/workflows-red.js": "103ba9fb60863b99b823a3965aef2295b9a067a9",
   "/comfylatam/js/create-workflows.js": "1b6f19710184cd2b518d5ec6af81e9ba3f4a9f10",
@@ -50,5 +50,6 @@
   "/comfylatam/js/ideogram4.js": "655017be86486b5f42c1fbe08051a1c6f7174af9",
   "/comfylatam/css/fsc-web.css": "e6ccf09054f5e0e0c1baa3d4bfa2f6a605f6dd7a",
   "/comfylatam/js/fsc-token-fetch.js": "76b0d0701b9ef9ba5f048ee937cdfe6f65b908f5",
-  "/comfylatam/js/fsc-web.js": "2ea55fec9c230bb70caad4361c2bcf60a3b7ce8a"
+  "/comfylatam/js/fsc-web.js": "2ea55fec9c230bb70caad4361c2bcf60a3b7ce8a",
+  "/comfylatam/version.json": "74bf74b0554e0bb7b54a9abe81e12b12bf446697"
 }

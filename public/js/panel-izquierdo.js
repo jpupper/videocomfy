@@ -39,6 +39,7 @@
         equipoDot: null,
         equipoBadge: null,
         equipoHost: null,
+        equipoTitulo: null,
         equipoSub: null,
         equipoTele: null,
 
@@ -74,6 +75,7 @@
         dom.equipoDot = document.getElementById('piEquipoDot');
         dom.equipoBadge = document.getElementById('piEquipoBadge');
         dom.equipoHost = document.getElementById('piEquipoHost');
+        dom.equipoTitulo = document.getElementById('piEquipoTituloTxt');
         dom.equipoSub = document.getElementById('piEquipoSub');
         dom.equipoTele = document.getElementById('piEquipoTele');
 
@@ -209,7 +211,8 @@
             }
         }
 
-        // C) TU COMPUTADORA (Minipanel)
+        // C) LA COMPUTADORA DEL PANEL: en la web, la que elegiste; en local, esta.
+        if (dom.equipoTitulo) dom.equipoTitulo.textContent = esWeb ? 'Conectado a' : 'Tu Computadora';
         var hostName = (d && d.host) || (esWeb ? 'Tu PC' : 'Esta máquina');
         if (dom.equipoHost) dom.equipoHost.textContent = hostName;
 
@@ -224,27 +227,36 @@
             if (dom.equipoSub) dom.equipoSub.textContent = 'Esta máquina (Host local)';
             if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>⚡ Nodo Local</span><span style="color:#34d399">Activa</span>';
         } else {
-            // Entorno web: miramos si el agente reporta al VPS
-            var agenteOk = !!(d && d.agente && d.datoFresco);
-            if (agenteOk) {
+            // Entorno WEB: la app corre en el VPS y el trabajo lo hace la PC de la
+            // red que el usuario elija. Si no eligió ninguna, NO se dice "tu
+            // computadora": se avisa que no está conectado a ningún equipo.
+            var redEst = (window.comfyRed && window.comfyRed.estado) || null;
+            var elegidoId = redEst ? redEst.elegido : null;
+            var peersRed = (redEst && redEst.peers) || [];
+            var mioRed = (redEst && redEst.yo) || null;
+            var peerSel = elegidoId ? peersRed.filter(function (x) { return x.id === elegidoId; })[0] : null;
+            var esMiPc = !!(elegidoId && mioRed && elegidoId === mioRed.peerId);
+            var nombreSel = peerSel ? peerSel.nombre : (esMiPc ? (mioRed.nombre || 'Esta PC') : '');
+            var selVivo = !!(elegidoId && (esMiPc || (peerSel && peerSel.conectado && peerSel.compartir)));
+            if (dom.equipoHost) dom.equipoHost.textContent = elegidoId ? (nombreSel || 'Ninguna') : 'Ninguna';
+            if (!elegidoId) {
+                if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box vacio';
+                if (dom.equipoDot) dom.equipoDot.className = 'pi-dot idle';
+                if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge idle'; dom.equipoBadge.textContent = '⚪ Sin equipo'; }
+                if (dom.equipoSub) dom.equipoSub.textContent = 'No estás conectado a ningún equipo';
+                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>Elegí una computadora en <b>RED</b></span><span style="color:#fbbf24">Sin equipo</span>';
+            } else if (selVivo) {
                 if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box online';
                 if (dom.equipoDot) dom.equipoDot.className = 'pi-dot online';
-                if (dom.equipoBadge) {
-                    dom.equipoBadge.className = 'pi-badge online';
-                    dom.equipoBadge.textContent = '🟢 Prendida';
-                }
-                if (dom.equipoSub) dom.equipoSub.textContent = 'Conectada al VPS';
-                var s = d.reporteHaceSegundos != null ? d.reporteHaceSegundos : 0;
-                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>Sincronizada</span><span>hace ' + s + 's</span>';
+                if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge online'; dom.equipoBadge.textContent = '🟢 Conectado'; }
+                if (dom.equipoSub) dom.equipoSub.textContent = esMiPc ? 'Esta computadora (la tuya)' : 'Generando en esta computadora';
+                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>🖥️ Equipo de la red</span><span style="color:#34d399">Conectado</span>';
             } else {
                 if (dom.equipoBox) dom.equipoBox.className = 'pi-equipo-box offline';
                 if (dom.equipoDot) dom.equipoDot.className = 'pi-dot offline';
-                if (dom.equipoBadge) {
-                    dom.equipoBadge.className = 'pi-badge offline';
-                    dom.equipoBadge.textContent = '🔴 Apagada';
-                }
-                if (dom.equipoSub) dom.equipoSub.textContent = 'Sin reporte en el VPS';
-                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span style="color:#f87171">Corré conectar-comfylatam.bat</span>';
+                if (dom.equipoBadge) { dom.equipoBadge.className = 'pi-badge offline'; dom.equipoBadge.textContent = '🔴 Desconectado'; }
+                if (dom.equipoSub) dom.equipoSub.textContent = 'Esa computadora no está conectada ahora';
+                if (dom.equipoTele) dom.equipoTele.innerHTML = '<span>Elegí otra en <b>RED</b></span><span style="color:#f87171">Sin respuesta</span>';
             }
         }
     }
@@ -377,6 +389,19 @@
         });
 
         window.addEventListener('jpi-cola-actualizada', actualizarCola);
+
+        // Elegir otra computadora pasa en RED: repintamos el minipanel al toque
+        // (el polling de /api/status tarda 6s y no se enteraria del cambio).
+        var ultimoElegidoVisto = null;
+        setInterval(function () {
+            try {
+                var e = (window.comfyRed && window.comfyRed.estado) ? window.comfyRed.estado.elegido : null;
+                if (e !== ultimoElegidoVisto) {
+                    ultimoElegidoVisto = e;
+                    if (ultimoStatus) actualizarServidoresYEquipo(ultimoStatus, false);
+                }
+            } catch (err) { }
+        }, 1200);
     }
 
     if (document.readyState === 'loading') {

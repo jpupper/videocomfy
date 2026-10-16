@@ -608,3 +608,14 @@
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ================= SIN COMPUTADORA ELEGIDA (default en la web) =================
+   Ni prendida ni apagada: simplemente no hay equipo al que pedirle. */
+.pi-badge.idle {
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.pi-equipo-box.vacio::before { background: #94a3b8; }
+.pi-equipo-box.vacio .pi-equipo-host { color: #e2e8f0; }
