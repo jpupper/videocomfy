@@ -47,14 +47,18 @@
     // ---------- local: /api/version ----------
     function traer() {
         if (!esLocal) {
-            // en la web sólo mostramos la versión del hub
-            fetch(BASE + '/api/version').then(function (r) { return r.ok ? r.json() : fetch(BASE + '/health').then(function (x) { return x.ok ? x.json() : null; }); }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-                if (!chip) return;
-                var v = (d && (d.version || d.commit)) || null;
-                chip.className = 'ck-version-chip solo-lectura';
-                chip.textContent = v ? '🧩 ' + v : '🧩 versión ?';
-                chip.title = 'Versión del hub (la actualiza el dueño del VPS)';
-            }).catch(function () { });
+            // En la web la versión la sabe el hub: GET /health es público y trae
+            // el commit con el que se desplegó (antes pedía /api/version, que pide
+            // sesión, y el chip quedaba en "🧩 versión ?").
+            fetch(BASE + '/health', { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!chip) return;
+                    var v = (d && (d.version || d.commit)) || null;
+                    chip.className = 'ck-version-chip solo-lectura';
+                    chip.textContent = v ? '🧩 ' + v : '🧩 versión ?';
+                    chip.title = 'Versión del hub (la actualiza el dueño del VPS)';
+                }).catch(function () { });
             return;
         }
         fetch('api/version').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {

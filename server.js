@@ -2824,7 +2824,11 @@ process.on('uncaughtException', (e) => {
     console.log('⚠️  Excepción no capturada (sigo vivo):', (e && e.message) || e);
 });
 
-server.listen(port, () => {
+// ESCUCHA: por defecto sólo en tu PC (127.0.0.1). Antes escuchaba en toda la
+// red local, así que cualquier dispositivo de la misma red podía entrar.
+// Si necesitás abrirla a la red, poné HOST=0.0.0.0 en el .env.
+const HOST_ESCUCHA = process.env.HOST || '127.0.0.1';
+server.listen(port, HOST_ESCUCHA, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
     try {
         const wfs = indiceDeWorkflows();
