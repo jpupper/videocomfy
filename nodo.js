@@ -363,17 +363,12 @@ function arrancar(opciones) {
                 if (r.cookie) headers['Cookie'] = r.cookie;
                 // Timeout: si la app local no contesta, se corta y se avisa (si no,
                 // el pedido que viene de la web quedaba colgado para siempre.
+                // Timeout: si la app local no contesta, se corta y se avisa.
                 const resp = await fetch(url, {
                     method: r.method || 'GET', headers,
                     body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined),
                     signal: AbortSignal.timeout(12000)
                 });
-                    method: r.method || 'GET', headers,
-                    body: sinCuerpo ? undefined : (r.body ? Buffer.from(r.body) : undefined)
-                    // Si la app local no contesta, se corta (antes quedaba colgado).
-                    signal: AbortSignal.timeout(12000)
-                });
-
                 const ct = resp.headers.get('content-type') || '';
                 const largo = Number(resp.headers.get('content-length') || 0);
                 const cabeceras = {
