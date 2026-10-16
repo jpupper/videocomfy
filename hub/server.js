@@ -209,29 +209,6 @@ setInterval(() => { db.cerrarSesionesViejas().catch(() => { }); }, 60000);
 const BASE_PATH = process.env.BASE_PATH || '/comfylatam';
 const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 
-// --- CORS (el front vive en el FTP y habla con el VPS) -------------------
-const ORIGENES_FSC = [
-    'https://fullscreencode.com', 'https://www.fullscreencode.com',
-    'https://artedigitaldata.com', 'https://www.artedigitaldata.com',
-    'https://exporural.com', 'https://www.exporural.com',
-    'https://exporuralsanjuan.com', 'https://www.exporuralsanjuan.com',
-    'https://vuelapelucas3000.com', 'https://www.vuelapelucas3000.com',
-    'https://vuelapelucas3000.com.ar', 'https://www.vuelapelucas3000.com.ar',
-    'https://vps-4455523-x.dattaweb.com'
-];
-const esOrigenLocal = (o) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(o || ''));
-
-app.use(cors({
-    origin: (origin, cb) => {
-        if (!origin) return cb(null, true);
-        if (ORIGENES_FSC.includes(origin) || esOrigenLocal(origin)) return cb(null, true);
-        return cb(null, false);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    credentials: true
-}));
-app.options('*', cors());
 
 app.use((req, res, next) => {
     res.setHeader('Content-Security-Policy', [
