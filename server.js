@@ -44,6 +44,10 @@ const serverAddress = ipglobal.includes(':') ? ipglobal : `${ipglobal}:8188`;
 // ============================================================
 const RUTA_CONFIG = path.join(__dirname, process.env.RED_CONFIG || 'config-local.json');
 let comfyAddress = ipglobal;
+// Segundo motor, OPCIONAL y aparte de la red de computadoras: un ComfyUI
+// externo tipo RunPod. Si está activo, la app le manda los trabajos a ESE en
+// lugar del Comfy de esta PC. Apagado por defecto: no cambia nada.
+let comfyExterno = { url: '', activo: false };
 
 (function cargarConfigLocal() {
     try {
@@ -53,9 +57,13 @@ let comfyAddress = ipglobal;
                 comfyAddress = c.comfyAddress.trim();
                 console.log(`📌 Dirección de ComfyUI tomada de config-local.json: ${comfyAddress}`);
             }
+            if (c && c.comfyExterno && typeof c.comfyExterno.url === 'string') {
+                comfyExterno = { url: c.comfyExterno.url.trim(), activo: !!c.comfyExterno.activo };
+                if (comfyExterno.url) console.log(`📌 Comfy externo (RunPod): ${comfyExterno.url} ${comfyExterno.activo ? '· ACTIVO' : '· apagado'}`);
+            }
         }
     } catch (e) {
-        console.warn('⚠️  No pude leer config-local.json:', e.message);
+        console.warn(`⚠️  No pude leer config-local.json: ${e.message}`);
     }
 })();
 
@@ -63,6 +71,7 @@ function guardarConfigLocal() {
     try {
         fs.writeFileSync(RUTA_CONFIG, JSON.stringify({
             comfyAddress,
+            comfyExterno: { url: comfyExterno.url || '', activo: !!comfyExterno.activo },
             red: {
                 peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir,
                 nombreManual: RED.nombreManual, usuario: RED.usuario, propietario: RED.propietario,
@@ -76,7 +85,8 @@ function guardarConfigLocal() {
 
 // URL base http(s) de ComfyUI, sin barra final
 function comfyBase() {
-    let a = String(comfyAddress || '').trim().replace(/\/+$/, '');
+    // Si hay un Comfy externo (RunPod) encendido, ESE es el motor.
+    let a = String((comfyExterno && comfyExterno.activo && comfyExterno.url) ? comfyExterno.url : (comfyAddress || '')).trim().replace(/\/+$/, '');
     if (/^https?:\/\//i.test(a)) return a;                 // URL completa (RunPod)
     if (a.includes(':')) return 'http://' + a;             // host:puerto
     return 'http://' + a + ':8188';                        // host -> puerto por defecto
@@ -293,6 +303,15 @@ function urlParaElFront(req, subdir, nombre) {
         if (nube) return nube;
     }
     return urlLocalDe(subdir, nombre);
+}
+// Listas para el FRONT: lo que se generó en LOCAL vive en el disco de esa PC y
+// NUNCA se sube a Cloudflare (regla del usuario). Si la web lo lista, el link
+// (/uploads/x.png) se resuelve contra el dominio y aparece ROTO. Así que a los
+// pedidos que vienen de la web se les devuelve SOLO lo que está en la nube.
+// El REGISTRO (/api/registro) no se filtra: ahí sí tienen que figurar.
+function soloConLinkDeNube(req, lista) {
+    if (!esPedidoDeLaWeb(req)) return lista;
+    return (lista || []).filter((x) => !!(x && x.nube && x.url));
 }
 const CARPETAS_MEDIA = { uploads: 'imagenes', videos: 'videos', audio: 'audio' };
 const MIME_POR_EXT = {
@@ -941,7 +960,11 @@ app.get('/api/red/workflows', async (req, res) => {
     }
 });
 
-app.post('/api/red/workflows', async (req, res) => {
+// OJO: el bodyParser global se registra MUCHO más abajo (línea ~1290). Toda ruta
+// que lea req.body y esté declarada antes de esa línea necesita su propio
+// bodyParser.json(), o req.body llega undefined y el POST "no hace nada"
+// (así estaba el tilde de workflows: contestaba 400 "falta el archivo").
+app.post('/api/red/workflows', bodyParser.json(), async (req, res) => {
     const b = req.body || {};
     if (!b.archivo) return res.status(400).json({ success: false, message: 'falta el archivo' });
     RED.workflowsCompartidos = RED.workflowsCompartidos || {};
@@ -1227,7 +1250,7 @@ app.get('/api/comfy/cola', async (req, res) => {
 
 // Vaciar la cola de ComfyUI (para las sobras de corridas viejas) o cortar lo
 // que está ejecutando ahora.
-app.post('/api/comfy/cola/limpiar', async (req, res) => {
+app.post('/api/comfy/cola/limpiar', bodyParser.json(), async (req, res) => {
     const que = String((req.body && req.body.que) || 'pendientes');
     try {
         if (que === 'todo' || que === 'ejecutando') {
@@ -1282,6 +1305,174 @@ app.post('/api/config/comfy', bodyParser.json(), async (req, res) => {
 
     res.json({ success: true, address: comfyAddress, base: comfyBase(), ws: comfyWs(), esLocal: esComfyLocal() });
 });
+// ---------------------------------------------------------------------------
+// COMFY EXTERNO (RunPod u otra nube) — aparte de la red de computadoras
+// ---------------------------------------------------------------------------
+app.get('/api/config/comfy-externo', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, url: comfyExterno.url || '', activo: !!comfyExterno.activo, base: comfyBase() });
+});
+
+app.post('/api/config/comfy-externo', bodyParser.json(), async (req, res) => {
+    const b = req.body || {};
+    const url = String(b.url || '').trim();
+    if (url && !/^(https?:\/\/)?[\w.-]+(:\d+)?(\/.*)?$/i.test(url)) {
+        return res.status(400).json({ success: false, message: 'Esa dirección no parece válida.' });
+    }
+    comfyExterno = { url, activo: !!b.activo && !!url };
+    guardarConfigLocal();
+    console.log(`🔧 Comfy externo: ${url || '(vacío)'} ${comfyExterno.activo ? '· ACTIVO' : '· apagado'}`);
+    try { if (wsComfy) wsComfy.close(); } catch (e) { }
+    setTimeout(() => { try { connectToComfy(); } catch (e) { } }, 300);
+    res.json({ success: true, url, activo: comfyExterno.activo, base: comfyBase() });
+});
+
+// ---------------------------------------------------------------------------
+// QUÉ MODELOS ESTÁN CARGADOS EN EL MOTOR (el "puente" con ComfyUI)
+// ---------------------------------------------------------------------------
+// ComfyUI no publica esta información por ninguna ruta propia: la lee el nodo
+// `comfylatam_state` que vive en custom_nodes (lee current_loaded_models).
+// Si ese nodo no está instalado, igual devolvemos VRAM/RAM reales y decimos
+// `detalle: false` — nunca inventamos qué modelo está cargado.
+const CACHE_MOTOR_MS = 2500;
+let ultimoMotor = { ts: 0, datos: null };
+
+// Qué archivos de modelo pide un workflow (los mismos campos que mira
+// faltantesDeWorkflow).
+function modelosDeWorkflow(archivo) {
+    const salida = [];
+    try {
+        const wf = JSON.parse(fs.readFileSync(path.join(WORKFLOWS_DIR, archivo), 'utf8'));
+        for (const id of Object.keys(wf)) {
+            const n = wf[id];
+            if (!n || !n.class_type) continue;
+            for (const [campo, valor] of Object.entries(n.inputs || {})) {
+                if (!CAMPOS_DE_MODELO.test(campo)) continue;
+                for (const v of (Array.isArray(valor) ? valor : [valor])) {
+                    if (typeof v === 'string' && v) salida.push({ campo, archivo: v, nodo: n.class_type });
+                }
+            }
+        }
+    } catch (e) { }
+    // sin repetir
+    return salida.filter((x, i) => salida.findIndex((y) => y.archivo === x.archivo) === i);
+}
+
+async function pedirEstadoAlMotor() {
+    let detalle = null, vram = null, error = '';
+    try {
+        const r = await fetch(comfyBase() + '/comfylatam/estado-modelos', { signal: AbortSignal.timeout(4000) });
+        if (r.ok) detalle = await r.json();
+        else error = 'el nodo comfylatam_state contestó HTTP ' + r.status;
+    } catch (e) {
+        error = /timeout|abort/i.test(String(e.message)) ? 'ComfyUI no contestó a tiempo' : 'no pude hablar con ComfyUI';
+    }
+    if (!detalle) {
+        try {
+            const s = await fetch(comfyBase() + '/system_stats', { signal: AbortSignal.timeout(4000) });
+            if (s.ok) vram = await s.json();
+        } catch (e) { }
+    }
+    return { detalle, vram, error };
+}
+
+// OJO con qué significa "cargado" en ComfyUI 0.40: `loaded_size()` (lo que
+// informa el nodo) cuenta los pesos que ComfyUI tiene registrados como cargados,
+// pero con la carga dinámica esos pesos viven en RAM del proceso y recién pasan
+// a la placa cuando el sampler los usa (medido acá: loaded_size 7.6 GB con 1.8 GB
+// reales en la GPU). Por eso "está cargado" = el patcher está VIVO en
+// current_loaded_models: ya se leyó del disco y está en memoria de la máquina.
+function estadoDeModelo(pieza, cargados) {
+    const c = (cargados || []).find((x) => x.archivo && pieza.archivo && x.archivo.split(/[\\/]/).pop() === pieza.archivo);
+    if (!c) return 'disco';
+    return 'cargado';
+}
+
+app.get('/api/motor/estado-modelos', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!req.query.forzar && ultimoMotor.datos && (Date.now() - ultimoMotor.ts) < CACHE_MOTOR_MS) {
+        return res.json(ultimoMotor.datos);
+    }
+    const { detalle, vram, error } = await pedirEstadoAlMotor();
+    const cargados = (detalle && Array.isArray(detalle.cargados)) ? detalle.cargados : [];
+    const wfs = indiceDeWorkflows();
+    const workflows = wfs.map((w) => {
+        const piezas = modelosDeWorkflow(w.archivo).map((p) => {
+            const estado = estadoDeModelo(p, cargados);
+            const c = cargados.find((x) => x.archivo && x.archivo.split(/[\\/]/).pop() === p.archivo);
+            return { archivo: p.archivo, campo: p.campo, estado, vramMB: c ? c.vramMB : 0, ramMB: c ? c.ramMB : 0, clase: c ? c.clase : '' };
+        });
+        let general = 'disco';
+        if (!piezas.length) general = 'sin-modelos';
+        else if (piezas.every((p) => p.estado === 'cargado')) general = 'cargado';
+        else if (piezas.some((p) => p.estado === 'cargado' || p.estado === 'parcial')) general = 'parcial';
+        else if (piezas.some((p) => p.estado === 'ram')) general = 'ram';
+        if (!detalle) general = 'desconocido';
+        return { archivo: w.archivo, nombre: NOMBRE_WORKFLOW[w.archivo] || w.archivo, estado: general, piezas };
+    });
+    // VRAM: del nodo si está, si no del /system_stats
+    let vramDatos = { total: 0, libre: 0, usado: 0 };
+    const dev = (detalle && detalle.vram) || (vram && Array.isArray(vram.devices) && vram.devices[0]) || null;
+    if (dev) {
+        // el nodo manda {total, free}; /system_stats manda {vram_total, vram_free}
+        const total = Number(dev.vram_total || dev.total || 0), libre = Number(dev.vram_free || dev.free || 0);
+        vramDatos = { total, libre, usado: Math.max(0, total - libre) };
+    }
+    const datos = {
+        success: true,
+        detalle: !!detalle,
+        motor: comfyBase(),
+        error: detalle ? '' : (error || 'el nodo comfylatam_state no está instalado en ComfyUI'),
+        vram: vramDatos,
+        ram: { total: Number((detalle && detalle.ram && detalle.ram.total) || (vram && vram.system && vram.system.ram_total) || 0), libre: Number((detalle && detalle.ram && detalle.ram.libre) || (vram && vram.system && vram.system.ram_free) || 0) },
+        cargados,
+        workflows
+    };
+    ultimoMotor = { ts: Date.now(), datos };
+    res.json(datos);
+});
+
+// Prender un workflow: manda al motor sólo los nodos de carga + el nodo
+// pasante de comfylatam_state, que llama a load_models_gpu() y deja los pesos
+// en VRAM sin samplear. Si el nodo no está, se avisa (no se finge).
+app.post('/api/motor/precargar', bodyParser.json(), async (req, res) => {
+    const archivo = String((req.body && req.body.archivo) || '');
+    if (!archivo) return res.status(400).json({ success: false, message: 'falta el archivo del workflow' });
+    try {
+        const wf = JSON.parse(fs.readFileSync(path.join(WORKFLOWS_DIR, archivo), 'utf8'));
+        // nodos de carga (los que producen MODEL / CLIP / VAE)
+        const carga = {};
+        const ids = [];
+        for (const [id, nodo] of Object.entries(wf)) {
+            if (!nodo || !nodo.class_type) continue;
+            if (/(Loader|Load)/i.test(nodo.class_type)) { carga[id] = nodo; ids.push(id); }
+        }
+        if (!ids.length) return res.status(400).json({ success: false, message: 'ese workflow no tiene nodos de carga' });
+        // El nodo pasante acepta in1..in8 (cualquier tipo): se conecta cada loader.
+        const entradas = {};
+        ids.slice(0, 8).forEach((id, i) => { entradas['in' + (i + 1)] = [id, 0]; });
+        carga['precarga_ck'] = { class_type: 'ComfyLatamPrecargar', inputs: entradas };
+        const r = await fetch(comfyBase() + '/prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: carga, client_id: 'comfylatam-precarga' }),
+            signal: AbortSignal.timeout(15000)
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            const detalleErr = d && d.node_errors ? Object.keys(d.node_errors).join(', ') : '';
+            const msg = (d && d.error && (d.error.message || d.error.type)) || ('HTTP ' + r.status);
+            return res.status(502).json({ success: false, message: msg + (detalleErr ? ' (' + detalleErr + ')' : ''),
+                pista: /ComfyLatamPrecargar|invalid|not found/i.test(String(msg) + detalleErr) ? 'falta el nodo comfylatam_state en ComfyUI' : '' });
+        }
+        ultimoMotor = { ts: 0, datos: null };
+        console.log(`🔥 Precargando modelos de ${archivo} (prompt ${d.prompt_id || '?'})`);
+        res.json({ success: true, prompt_id: d.prompt_id || '', nodos: ids.length });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // El limite por defecto de body-parser es 100 KB: cualquier POST mas grande
 // (proyectos con timeline, batches, etc.) explotaba con PayloadTooLargeError.
 app.use(bodyParser.json({ limit: '32mb' }));
@@ -1809,7 +2000,7 @@ app.get('/api/images', (req, res) => {
                 };
             })
             .sort((a, b) => b.timestamp - a.timestamp);
-        res.json(images);
+        res.json(soloConLinkDeNube(req, images));
     });
 });
 
@@ -1833,7 +2024,7 @@ app.get('/api/audio', (req, res) => {
                 };
             })
             .sort((a, b) => b.mtime - a.mtime);
-        res.json(audioFiles);
+        res.json(soloConLinkDeNube(req, audioFiles));
     });
 });
 
@@ -2021,7 +2212,7 @@ app.get('/api/videos', (req, res) => {
                 };
             })
             .sort((a, b) => b.timestamp - a.timestamp);
-        res.json(videoFiles);
+        res.json(soloConLinkDeNube(req, videoFiles));
     });
 });
 

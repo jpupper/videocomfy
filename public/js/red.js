@@ -116,6 +116,17 @@
             '  <span class="red-badge" id="redResumen"></span>',
             '  <button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
             '</div>',
+
+            // Dos sub-pestañas (pedido explícito del usuario): una muestra LA RED
+            // (nodos conectados, cuál está elegido, generar) y la otra es la
+            // configuración PERSONAL (cómo expongo mi computadora: compartir,
+            // workflows, equipo).
+            '<div class="red-subtabs">',
+            '  <button type="button" class="red-subtab active" data-redsub="redTabLaRed">🌐 LA RED</button>',
+            '  <button type="button" class="red-subtab" data-redsub="redTabMiEquipo">⚙️ MI EQUIPO</button>',
+            '</div>',
+
+            '<div class="red-subtab-content active" id="redTabLaRed">',
             '<p class="red-sub">Cada persona que corre la app en su PC aporta su Comfy a la red. ',
             'Elegí el nodo, escribí el prompt y el trabajo se hace en la máquina de esa persona: acá llega el resultado.</p>',
 
@@ -129,23 +140,6 @@
             '<div class="red-leyenda">🟢 listo para generar · 🟡 ocupado (en cola) · ⚪ apagado / sin transmitir · ',
             'el nodo sale de la lista cuando se desconecta (queda en las conexiones pasadas, con el ojito).</div>',
             '<div class="red-grid" id="redNodos"></div>',
-
-            '<div id="redMio"></div>',
-
-            // Esto antes vivía en el panel izquierdo (⚡ COMFYLATAM / Entorno /
-            // ComfyUI / Estado): se movió acá, que es donde tiene sentido.
-            // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
-            '<div class="red-clientes" id="redClientes"></div>',
-
-            '<div class="red-equipo" id="redEquipo">',
-            '  <h3 class="red-titulo">⚡ TU EQUIPO</h3>',
-            '  <div class="red-eq-filas">',
-            '    <div class="red-eq-fila"><span>Entorno</span><b id="redEqEntorno">—</b></div>',
-            '    <div class="red-eq-fila"><span>ComfyUI</span><b id="redEqComfy">—</b></div>',
-            '    <div class="red-eq-fila"><span>Estado</span><b id="redEqEstado">—</b></div>',
-            '  </div>',
-            '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
-            '</div>',
 
             '<div class="red-gen">',
             '  <h3>🎯 GENERAR EN LA RED</h3>',
@@ -164,9 +158,44 @@
             '    <button class="red-btn" id="redGenerar">GENERAR EN LA RED</button>',
             '  </div>',
             '  <div class="red-log" id="redLog">Todavía no hay movimientos.</div>',
+            '</div>',
+            '</div>',
+
+            '<div class="red-subtab-content" id="redTabMiEquipo">',
+            '<p class="red-sub">Así exponés TU computadora a la red. Nada de esto afecta tu uso local.</p>',
+            '<div id="redMio"></div>',
+            // acá se engancha el panel de workflows que compartís (js/workflows-red.js)
+            '<div id="redWfSlot"></div>',
+
+            // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
+            '<div class="red-clientes" id="redClientes"></div>',
+
+            '<div class="red-equipo" id="redEquipo">',
+            '  <h3 class="red-titulo">⚡ TU EQUIPO</h3>',
+            '  <div class="red-eq-filas">',
+            '    <div class="red-eq-fila"><span>Entorno</span><b id="redEqEntorno">—</b></div>',
+            '    <div class="red-eq-fila"><span>ComfyUI</span><b id="redEqComfy">—</b></div>',
+            '    <div class="red-eq-fila"><span>Estado</span><b id="redEqEstado">—</b></div>',
+            '  </div>',
+            '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
+            '</div>',
             '</div>'
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
+
+        // Las dos sub-pestañas de RED (LA RED / MI EQUIPO)
+        panel.querySelectorAll('.red-subtab').forEach(function (b) {
+            b.addEventListener('click', function (e) {
+                e.preventDefault();
+                var destino = b.getAttribute('data-redsub');
+                panel.querySelectorAll('.red-subtab').forEach(function (x) {
+                    x.classList.toggle('active', x === b);
+                });
+                panel.querySelectorAll('.red-subtab-content').forEach(function (c) {
+                    c.classList.toggle('active', c.id === destino);
+                });
+            });
+        });
 
         // Botón gemelo en el panel izquierdo (la fila de pestañas se recorta
         // en ventanas angostas) y en la barra mobile.

@@ -754,3 +754,20 @@ body.ck-sin-computadora #chainEnhanceBtn,
 body.ck-sin-computadora #confirmRegenBtn {
     opacity: .45 !important; filter: grayscale(1); cursor: not-allowed !important;
 }
+
+/* ---------- RED: las dos sub-pestañas (LA RED / MI EQUIPO) ---------- */
+.red-subtabs {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin: 4px 0 14px 0; border-bottom: 1px solid rgba(148, 163, 184, .25);
+    padding-bottom: 8px;
+}
+.red-subtab {
+    background: transparent; color: #cbd5e1;
+    border: 1px solid #475569; border-radius: 999px;
+    padding: 7px 16px; font-size: .78rem; font-weight: 800;
+    letter-spacing: .04em; cursor: pointer;
+}
+.red-subtab:hover { border-color: #7c3aed; color: #fff; }
+.red-subtab.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.red-subtab-content { display: none; }
+.red-subtab-content.active { display: block; }

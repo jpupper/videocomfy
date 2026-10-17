@@ -146,6 +146,74 @@
         }
     }
 
+    // --- 3b) SETTINGS: Comfy EXTERNO (RunPod / otra nube) ------------------
+    function conectarExterno() {
+        var inp = document.getElementById('ckComfyExtUrl');
+        var chk = document.getElementById('ckComfyExtActivo');
+        var btn = document.getElementById('ckComfyExtGuardar');
+        var btnProbar = document.getElementById('ckComfyExtProbar');
+        var msg = document.getElementById('ckComfyExtMsg');
+        var est = document.getElementById('ckComfyExtEstado');
+        if (!inp || !btn) return;
+
+        function decir(txt, tipo) {
+            if (!msg) return;
+            msg.className = 'ck-set-msg ' + (tipo || '');
+            msg.textContent = txt;
+        }
+
+        function pintarEstado(d) {
+            if (!est) return;
+            var act = !!(d && d.activo);
+            est.innerHTML = '<div><b>Guardado:</b> ' + ((d && d.url) || '—') + '</div>' +
+                '<div><b>Estado:</b> ' + (act ? '🟢 ACTIVO — los trabajos van a ese motor' : '⚪ apagado') + '</div>' +
+                '<div><b>Motor en uso:</b> ' + ((d && d.base) || '—') + '</div>';
+        }
+
+        api('/api/config/comfy-externo').then(function (r) {
+            var d = r.data || {};
+            if (!inp.value) inp.value = d.url || '';
+            if (chk) chk.checked = !!d.activo;
+            pintarEstado(d);
+        }).catch(function () { });
+
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            decir('Guardando…');
+            api('/api/config/comfy-externo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: (inp.value || '').trim(), activo: !!(chk && chk.checked) })
+            }).then(function (r) {
+                btn.disabled = false;
+                if (!r.ok) { decir((r.data && r.data.message) || 'No se pudo guardar.', 'err'); return; }
+                decir('✅ Guardado. Motor en uso: ' + (r.data.base || '—'), 'ok');
+                pintarEstado(r.data);
+                setTimeout(actualizarVistas, 1200);
+            }).catch(function () {
+                btn.disabled = false;
+                decir('No se pudo contactar la app.', 'err');
+            });
+        });
+
+        if (btnProbar) {
+            btnProbar.addEventListener('click', function () {
+                // prueba la URL escrita, sin guardarla: pide /system_stats al Comfy externo
+                var url = (inp.value || '').trim().replace(/\/+$/, '');
+                if (!url) { decir('Escribí una dirección.', 'err'); return; }
+                if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+                decir('Probando ' + url + ' …');
+                fetch(url + '/system_stats', { signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined) })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) {
+                        if (d && d.system) decir('✅ Responde: ComfyUI ' + (d.system.comfyui_version || '?') + ' · ' + (d.system.python_version || '').split('|')[0], 'ok');
+                        else decir('❌ No parece un ComfyUI (o CORS lo bloquea desde el navegador).', 'err');
+                    })
+                    .catch(function () { decir('❌ No responde (o el navegador lo bloquea por CORS). Igual podés guardarlo: la app lo prueba del lado del servidor.', 'err'); });
+            });
+        }
+    }
+
     // --- 4) barra de energía ----------------------------------------------
     function energia() {
         var bg = document.querySelector('.progress-bar-bg');
@@ -182,6 +250,7 @@
         // pestaña RED (ver red.js → bloqueEquipo). El panel izq queda limpio.
         /* pintarPanelIzq(); -> movido a la pestaña RED */
         conectarSettings();
+        conectarExterno();
         energia();
         actualizarVistas();
         setInterval(actualizarVistas, 15000);

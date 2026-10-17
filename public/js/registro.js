@@ -50,36 +50,48 @@
     }
 
     // ---------- 2) a qué computadora está dirigida ----------
+    // OJO (pedido explícito del usuario): en la WEB no existe "esta PC" — esa es
+    // la app local. Antes, sin nodo elegido, la web decía "🖥️ esta PC (genera tu
+    // propio ComfyUI)", que es falso y confunde. Acá se distingue de verdad:
+    //   local            -> esta PC (tu ComfyUI)
+    //   web, sin nodo    -> ☁️ la nube (servidor COMFYLATAM): falta elegir fierro
+    //   web, con nodo    -> esa computadora
     function pintarDestino() {
         var caja = document.getElementById('regDestino');
         if (!caja) return;
         var yo = usuarioLocal();
         var elegido = '';
         try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
-        // OJO: el id propio hay que pedírselo a la app. Antes se comparaba con un
-        // window.JPI.PEER_ID que no existía, así que si elegías tu propia PC en
-        // RED te decía "el nodo elegido no está conectado" y no te dejaba generar.
-        var esEstaPc = !elegido || elegido === 'esta-pc' || elegido === (window.JPI && window.JPI.PEER_ID)
-            || !/^nodo-/.test(elegido) || !/^[0-9a-f]{6,}$/i.test(elegido);
-        if (esEstaPc) {
+
+        // ---- LOCAL: el motor es el ComfyUI de esta máquina ----
+        if (esLocal) {
             caja.innerHTML = '<h3>🎯 A DÓNDE VA ESTA GENERACIÓN</h3>' +
                 '<div class="reg-datos"><span>🖥️ <b>esta PC</b> (genera tu propio ComfyUI)</span>' +
                 (yo ? '<span>👤 pedido por <b>@' + esc(yo.username || yo.displayName) + '</b></span>' : '') +
                 '<span>elegí otra computadora en la pestaña 🌎 RED si querés usar la de alguien más</span></div>';
             return;
         }
+
+        // ---- WEB: siempre pasa por el servidor (la nube) ----
+        var cabeza = '<h3>🎯 A DÓNDE VA ESTA GENERACIÓN</h3>' +
+            '<div class="reg-datos"><span>☁️ <b>a la nube</b> (servidor COMFYLATAM → la computadora conectada)</span>';
+        if (yo) cabeza += '<span>👤 la pedís vos: <b>@' + esc(yo.username || yo.displayName) + '</b></span>';
+
+        if (!elegido) {
+            caja.innerHTML = cabeza +
+                '<span>⚠️ todavía no elegiste qué computadora lo hace: elegila en la pestaña 🌎 RED</span></div>';
+            return;
+        }
         fetch(BASE + '/api/red/peers').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
             .then(function (d) {
                 var p = (d && (d.peers || []).filter(function (x) { return x.id === elegido; })[0]) || null;
                 if (!p) {
-                    caja.innerHTML = '<h3>🎯 A DÓNDE VA ESTA GENERACIÓN</h3><div class="reg-datos"><span>⚠️ el nodo elegido no está conectado</span></div>';
+                    caja.innerHTML = cabeza + '<span>⚠️ la computadora elegida no está conectada</span></div>';
                     return;
                 }
-                caja.innerHTML = '<h3>🎯 A DÓNDE VA ESTA GENERACIÓN</h3>' +
-                    '<div class="reg-datos">' +
-                    '<span>🖥️ <b>' + esc(p.nombre) + '</b>' + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</span>' +
+                caja.innerHTML = cabeza +
+                    '<span>🖥️ lo hace <b>' + esc(p.nombre) + '</b>' + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</span>' +
                     '<span>' + (p.ocupado ? '🟡 ocupada (' + (p.encolados || 0) + ' en cola)' : '🟢 libre') + ' · ' + esc(p.gpu || 'sin GPU') + '</span>' +
-                    (yo ? '<span>👤 la pedís vos: <b>@' + esc(yo.username || yo.displayName) + '</b></span>' : '') +
                     '</div>';
             });
     }

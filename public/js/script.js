@@ -129,10 +129,14 @@ function handleWsOpen() {
         ws.send(JSON.stringify({ type: 'request_queue_state' }));
     }
     
-    // If we have a restored queue from localStorage, start processing it
+    // OJO (pedido explicito del usuario): la cola restaurada NO se arranca sola.
+    // Al abrir la web se reprocesaban los pendientes guardados en localStorage y
+    // aparecia una generacion "fantasma" (el famoso "an orange falling from a
+    // tree") sin que nadie la pidiera. Ahora queda EN PAUSA y sigue solo con el
+    // boton PLAY de la cola.
     if (globalGenerationQueue.filter(i => i.status === 'pending').length > 0) {
-        appendConsoleLine('🚀 Checking persisted queue items...', 'system');
-        setTimeout(() => checkGlobalQueue(), 1500);
+        window.JPI_COLA_PAUSADA = true;
+        appendConsoleLine('⏸ Hay trabajos guardados de la sesion anterior: quedan en pausa. Apreta PLAY para seguir.', 'system');
     }
 }
 
@@ -5643,8 +5647,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGlobalQueueUI();
         const pendingCount = globalGenerationQueue.filter(i => i.status === 'pending').length;
         if (pendingCount > 0) {
-            appendConsoleLine(`🚀 Restarting generation engine with ${pendingCount} pending items...`, 'system');
-            setTimeout(() => checkGlobalQueue(), 2000);
+            // NO se arranca sola (ver handleWsOpen): queda en pausa hasta el PLAY.
+            window.JPI_COLA_PAUSADA = true;
+            appendConsoleLine(`⏸ ${pendingCount} trabajo(s) de la sesion anterior en pausa. Apreta PLAY para seguir.`, 'system');
         }
         const waitingCount = globalGenerationQueue.filter(i => i.status === 'waiting').length;
         if (waitingCount > 0) {

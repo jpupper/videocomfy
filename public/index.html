@@ -12,10 +12,10 @@
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
-    <link rel="stylesheet" href="css/red.css?v=27">
+    <link rel="stylesheet" href="css/red.css?v=28">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=9">
     <link rel="stylesheet" href="css/ideogram4.css?v=1">
-    <link rel="stylesheet" href="css/ck-estado.css?v=5">
+    <link rel="stylesheet" href="css/ck-estado.css?v=6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -39,7 +39,7 @@
     window.addEventListener('load', function () { setTimeout(listo, 350); });
   })();
 </script>
-  <link rel="stylesheet" href="css/fsc-web.css?v=3">
+  <link rel="stylesheet" href="css/fsc-web.css?v=4">
 </head>
 <body>
     <div class="container">
@@ -910,6 +910,7 @@
                                 (<code>127.0.0.1</code>), otra máquina de tu red (<code>192.168.0.50:8188</code>) o
                                 una nube tipo <b>RunPod</b> (<code>https://xxxx-8188.proxy.runpod.net</code>).
                                 Se guarda en la app y el websocket se reconecta solo.
+                                <br><b>En la web</b> esto configura el ComfyUI de la computadora conectada (el trabajo lo hace ella).
                             </div>
                             <label class="ck-set-label">Dirección de ComfyUI</label>
                             <input id="ckComfyAddress" class="ck-set-input" type="text" placeholder="127.0.0.1  ·  https://xxxx-8188.proxy.runpod.net">
@@ -919,6 +920,30 @@
                             </div>
                             <div id="ckComfyMsg" class="ck-set-msg"></div>
                             <div class="ck-set-estado" id="ckComfyEstado"></div>
+                        </div>
+
+                        <!-- SEGUNDO MOTOR: un ComfyUI externo (RunPod u otra nube),
+                             aparte de la red de computadoras. Si está activo, la app
+                             le manda los trabajos a ESE en vez del Comfy de la PC. -->
+                        <div class="ck-set-card ck-set-externo">
+                            <div class="ck-set-titulo">☁️ COMFY EXTERNO — RunPod / otra nube</div>
+                            <div class="ck-set-desc">
+                                Un ComfyUI aparte, <b>fuera</b> de la red de computadoras. Sirve para poner un
+                                pod de RunPod (u otro ComfyUI con IP pública) y generar ahí. Si lo activás, los
+                                trabajos van a ese motor en lugar del Comfy de tu PC.
+                            </div>
+                            <label class="ck-set-label">Dirección del Comfy externo</label>
+                            <input id="ckComfyExtUrl" class="ck-set-input" type="text" placeholder="https://xxxx-8188.proxy.runpod.net">
+                            <label class="ck-set-check" style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.82rem;color:#cbd5e1;">
+                                <input type="checkbox" id="ckComfyExtActivo">
+                                <span>Usar este Comfy externo como motor</span>
+                            </label>
+                            <div class="ck-set-row">
+                                <button id="ckComfyExtGuardar" class="ck-set-btn">GUARDAR</button>
+                                <button id="ckComfyExtProbar" class="ck-set-btn ghost">PROBAR</button>
+                            </div>
+                            <div id="ckComfyExtMsg" class="ck-set-msg"></div>
+                            <div class="ck-set-estado" id="ckComfyExtEstado"></div>
                         </div>
 
                         <div class="ck-set-card">
@@ -1099,17 +1124,17 @@
   <!-- Token del ecosistema en todas las llamadas a la API de la app -->
   <script src="js/fsc-token-fetch.js?v=2"></script>
     <script src="js/auth-jpi.js?v=16"></script>
-    <script src="js/script.js?v=106"></script>
+    <script src="js/script.js?v=107"></script>
     <script src="js/mobile.js?v=1"></script>
     <script src="js/estado.js?v=4"></script>
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
     <script src="js/cola-pausa.js?v=2"></script>
     <script src="js/cola-comfy.js?v=3"></script>
-    <script src="js/registro.js?v=1"></script>
+    <script src="js/registro.js?v=2"></script>
     <script src="js/version.js?v=3"></script>
     <script src="js/ranking.js?v=5"></script>
-    <script src="js/workflows-red.js?v=28"></script>
+    <script src="js/workflows-red.js?v=29"></script>
     <script src="js/create-workflows.js?v=1"></script>
     <script src="js/ui-ajustes.js?v=1"></script>
     <script src="js/ui2.js?v=7"></script>
@@ -1117,13 +1142,14 @@
     <script src="js/admin-panel.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/ideogram4.js?v=1"></script>
-    <script src="js/entorno-jpi.js?v=3"></script>
+    <script src="js/entorno-jpi.js?v=4"></script>
     <script src="vendor/socket.io.min.js"></script>
-    <script src="js/red.js?v=28"></script>
+    <script src="js/red.js?v=29"></script>
     <script src="js/paneles.js?v=1"></script>
     <script src="js/sidebar-collapse.js?v=1"></script>
     <script src="js/panel-izquierdo.js?v=10"></script>
-    <script src="js/conexion.js?v=4"></script>
+    <script src="js/conexion.js?v=5"></script>
+    <script src="js/modelos-estado.js?v=1"></script>
     <script src="js/progreso.js?v=1"></script>
     <script src="js/ck-mobile.js?v=1"></script>
 </body>

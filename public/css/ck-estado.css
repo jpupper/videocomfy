@@ -158,3 +158,28 @@
     /* que se vea que hay más pestañas a la derecha */
     .tabs-container::after { content: ''; flex: 0 0 12px; }
 }
+
+/* ---------- LOAD MODELS: estado del modelo en cada tarjeta de workflow ---------- */
+.wf-card { position: relative; }
+.wf-load-badge {
+    position: absolute;
+    top: 4px; right: 6px;
+    font-size: .58rem; font-weight: 800; letter-spacing: .02em;
+    padding: 2px 6px; border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, .35);
+    background: rgba(15, 23, 42, .85);
+    color: #cbd5e1; cursor: pointer; z-index: 6;
+    white-space: nowrap; line-height: 1.35;
+}
+.wf-load-badge:hover { border-color: #7c3aed; color: #fff; }
+.wf-load-vram { background: rgba(22, 101, 52, .9); color: #bbf7d0; border-color: #22c55e; }
+.wf-load-parcial { background: rgba(120, 53, 15, .9); color: #fde68a; border-color: #f59e0b; }
+.wf-load-ram { background: rgba(30, 58, 138, .9); color: #bfdbfe; border-color: #3b82f6; }
+.wf-load-disco { background: rgba(51, 65, 85, .9); color: #cbd5e1; }
+.wf-load-sindato { background: rgba(51, 65, 85, .7); color: #94a3b8; }
+.wf-load-cargando { background: rgba(124, 58, 237, .92); color: #fff; border-color: #a855f7; }
+.ck-vram-label {
+    margin-left: 10px; font-size: .68rem; font-weight: 800;
+    color: #a5b4fc; border: 1px solid rgba(148, 163, 184, .3);
+    border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+}

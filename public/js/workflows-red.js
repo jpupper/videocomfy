@@ -22,15 +22,17 @@
     function contenedor() {
         var caja = document.getElementById('redWorkflowsCaja');
         if (caja) return caja;
-        // se engancha dentro del panel de RED, arriba de los nodos conectados
+        // Vive en la sub-pestaña ⚙️ MI EQUIPO de RED (antes estaba arriba de los
+        // nodos, mezclado con LA RED, que es otra cosa).
+        var slot = document.getElementById('redWfSlot')
+            || document.getElementById('redDisponibles');
         var ancla = document.getElementById('redDisponibles');
-        var panel = ancla ? ancla.parentElement : document.getElementById('redPanel');
+        var panel = slot || (ancla ? ancla.parentElement : document.getElementById('redPanel'));
         if (!panel) return null;
         caja = document.createElement('div');
         caja.id = 'redWorkflowsCaja';
         caja.className = 'red-workflows';
-        if (ancla && ancla.parentElement === panel) panel.insertBefore(caja, ancla);
-        else panel.appendChild(caja);
+        panel.appendChild(caja);
         return caja;
     }
 
@@ -43,12 +45,16 @@
             return;
         }
         var filas = lista.map(function (w) {
-            var estado = w.disponible === false
-                ? '<span class="red-wf-falta" title="' + esc((w.falta || []).join(' · ')) + '">⚠️ faltan modelos' + ((w.falta || []).length ? ': ' + esc((w.falta || [])[0]) + ((w.falta || []).length > 1 ? ' (+' + ((w.falta || []).length - 1) + ')' : '') : '') + '</span>'
+            // Instalado = el archivo existe Y todos sus modelos/nodos están.
+            var noInstalado = w.disponible === false;
+            var estado = noInstalado
+                ? '<span class="red-wf-falta" title="' + esc((w.falta || []).join(' · ')) + '">⚠️ NO instalado' + ((w.falta || []).length ? ': ' + esc((w.falta || [])[0]) + ((w.falta || []).length > 1 ? ' (+' + ((w.falta || []).length - 1) + ')' : '') : '') + '</span>'
                 : (w.disponible === null ? '<span class="red-wf-duda">❔ no pude chequear ComfyUI</span>' : '<span class="red-wf-ok">✅ instalado</span>');
-            var noSePuede = w.disponible === false;
-            return '<label class="red-wf' + (noSePuede ? ' deshabilitado' : '') + '">' +
-                '<input type="checkbox" data-wf="' + esc(w.archivo) + '"' + (w.compartido && !noSePuede ? ' checked' : '') + (noSePuede ? ' disabled' : '') + '>' +
+            // El tilde SIEMPRE se puede tocar (pedido explícito): así podés dejar
+            // apagado un workflow aunque hoy no lo tengas instalado, para que la
+            // web no lo use cuando lo instales.
+            return '<label class="red-wf' + (noInstalado ? ' deshabilitado' : '') + '">' +
+                '<input type="checkbox" data-wf="' + esc(w.archivo) + '"' + (w.compartido ? ' checked' : '') + '>' +
                 '<span class="red-wf-nombre">' + esc(w.nombre) + '</span>' +
                 '<span class="red-wf-archivo">' + esc(w.archivo) + '</span>' +
                 estado +
@@ -59,9 +65,10 @@
         caja.innerHTML = '<h3 class="red-titulo">🔧 WORKFLOWS QUE COMPARTÍS ' +
             '<span class="red-badge">' + compartidos + ' de ' + lista.length + '</span>' +
             '<button class="red-btn secundario" id="redWfRefrescar" style="margin-left:8px">Revisar</button></h3>' +
-            '<div class="red-aviso">Tildá los que querés ofrecer a la red. Lo que no tildás (o lo que no tenés instalado) no se le puede pedir a esta PC.</div>' +
+            '<div class="red-aviso">Tildá los que querés ofrecer a la red. Destildado = la web NO lo puede usar en tu PC. ' +
+            'Los que dicen <b>NO instalado</b> igual se pueden destildar (para que no se usen cuando los instales).</div>' +
             '<div class="red-wf-lista">' + filas + '</div>' +
-            (rotos ? '<div class="red-aviso">⚠️ ' + rotos + ' workflow(s) no se pueden usar en esta PC porque faltan modelos: quedan desactivados automáticamente.</div>' : '');
+            (rotos ? '<div class="red-aviso">⚠️ ' + rotos + ' workflow(s) no se pueden usar todavía en esta PC (falta un modelo o un nodo): quedan fuera de la red hasta que los instales.</div>' : '');
 
         var ref = document.getElementById('redWfRefrescar');
         if (ref) ref.addEventListener('click', function () { traer(true); });
