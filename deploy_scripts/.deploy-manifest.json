@@ -10,7 +10,7 @@
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "d678167fb973f3749c42c16a1da540904877ee05",
-  "/comfylatam/index.html": "2adc71bfedcb4561f63d40cde053b1cf13f65a5d",
+  "/comfylatam/index.html": "2b79632c04271d4132040e76aa2372e4a2fd8e78",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "5dba9835c5c0677ed1aae1f1d4f6fa73a83e69e0",
   "/comfylatam/js/cola-pausa.js": "cb79adda2b931b99dafd43644f7591736c582117",
@@ -18,7 +18,7 @@
   "/comfylatam/js/estado.js": "99c1c6d1334aab275a443a88897852cd88674ab2",
   "/comfylatam/js/mobile.js": "6c46df5ad40aa9dac4aa790a03e4a84b6cc8306b",
   "/comfylatam/js/motor-imagen.js": "000eba7db0d70cd4c043643bb52f750eca7be781",
-  "/comfylatam/js/red.js": "32a07fa9ea3d7ebbffca33ebbf13f94fb02e4730",
+  "/comfylatam/js/red.js": "6144595670ec8719b2cb940b7d13f373d99c0758",
   "/comfylatam/js/script.js": "9e6adf4b6dea3dc3a9f437bc85e86deeba67db47",
   "/comfylatam/js/scroll-guard.js": "c9e04f6b949050947090dd701980aef678111e2c",
   "/comfylatam/js/sidebar-collapse.js": "7523ce0b2d2f1c4e0f3c7c10a97cfa569f9c3479",
@@ -56,5 +56,5 @@
   "/comfylatam/js/ck-mobile.js": "1d6308b261b8aba9b86ea4a81b5e922977ea3d5d",
   "/comfylatam/js/conexion.js": "bbccbd1b825db4ced3b7a4ce9ae645bd1b2f4578",
   "/comfylatam/js/progreso.js": "acaf6bd764ab9f6739afe7d798c3fd2f9331d305",
-  "/comfylatam/js/modelos-estado.js": "67e15d8bc27bbe9e945ce9fd34d150b22be54b98"
+  "/comfylatam/js/modelos-estado.js": "8ea9449b2d925b2b6d52f3e45bb25a1b6ba7746c"
 }

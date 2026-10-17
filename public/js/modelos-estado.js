@@ -62,9 +62,17 @@
     function conectadoEnWeb() {
         // en la web sin nodo elegido no hay a quién preguntarle
         if (!esWeb) return true;
-        var elegido = '';
-        try { elegido = localStorage.getItem('comfylatam_nodo_elegido') || ''; } catch (e) { }
-        return !!elegido;
+        return !!nodoElegido();
+    }
+
+    function nodoElegido() {
+        try { return localStorage.getItem('comfylatam_nodo_elegido') || ''; } catch (e) { return ''; }
+    }
+
+    // En la web el pedido tiene que ir AL NODO ELEGIDO (/p/<nodo>/…), no al hub:
+    // si no, le preguntaríamos el estado del motor a la PC equivocada.
+    function rutaMotor(ruta) {
+        return esWeb && nodoElegido() ? ('/p/' + encodeURIComponent(nodoElegido()) + ruta) : ruta;
     }
 
     // estado del workflow para una tarjeta
@@ -154,7 +162,7 @@
             return;
         }
         pidiendo = true;
-        api('/api/motor/estado-modelos' + (primera ? '?forzar=1' : ''))
+        api(rutaMotor('/api/motor/estado-modelos' + (primera ? '?forzar=1' : '')))
             .then(function (d) {
                 pidiendo = false;
                 if (!d || !d.success) return;
@@ -170,7 +178,7 @@
         var badge = document.querySelector('.wf-load-badge[data-wf-file="' + archivo + '"]');
         var antes = badge ? badge.textContent : '';
         if (badge) { badge.textContent = '⏳ cargando…'; badge.className = 'wf-load-badge wf-load-cargando'; }
-        api('/api/motor/precargar', { method: 'POST', json: { archivo: archivo } })
+        api(rutaMotor('/api/motor/precargar'), { method: 'POST', json: { archivo: archivo } })
             .then(function (r) {
                 if (r && r.success) {
                     try {

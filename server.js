@@ -935,17 +935,19 @@ function comparteWorkflow(archivo) {
 }
 
 // Lo que se publica en la red: sólo los que comparte Y tiene instalados.
-async function workflowsPublicables() {
+async function workflowsPublicables(forzar) {
     try {
-        const todos = await estadoDeWorkflows(false);
+        // `forzar` = recalcular AHORA (después de un tilde): con el estado cacheado
+        // la lista publicada quedaba una modificación atrasada.
+        const todos = await estadoDeWorkflows(!!forzar);
         return todos.filter((w) => w.compartido && w.disponible !== false).map((w) => w.archivo);
     } catch (e) { return []; }
 }
 
 // se recalcula cada 2 minutos y cuando alguien cambia la selección
-async function refrescarWorkflowsRed() {
+async function refrescarWorkflowsRed(forzar) {
     try {
-        RED.workflowsRed = await workflowsPublicables();
+        RED.workflowsRed = await workflowsPublicables(!!forzar);
         avisarRedATodos();
     } catch (e) { }
 }
@@ -971,9 +973,44 @@ app.post('/api/red/workflows', bodyParser.json(), async (req, res) => {
     RED.workflowsCompartidos[b.archivo] = !!b.compartido;
     guardarConfigLocal();
     console.log(`🔧 Workflow ${b.archivo}: ${b.compartido ? 'COMPARTIDO' : 'privado (no se ofrece en la red)'}`);
+    // Recalcular LO QUE SE PUBLICA (RED.workflowsRed) y avisar en el acto: antes
+    // sólo se recalculaba cada 2 minutos, así que la web seguía viendo el
+    // workflow viejo hasta que el nodo volviera a anunciarse.
+    await refrescarWorkflowsRed(true);
+    try { if (global.__comfylatamNodo && global.__comfylatamNodo.avisar) global.__comfylatamNodo.avisar(); } catch (e) { }
     const wfs = await estadoDeWorkflows(true);
-    avisarRedATodos();
-    res.json({ success: true, workflows: wfs });
+    res.json({ success: true, workflows: wfs, publicados: RED.workflowsRed || [] });
+});
+
+// Un cliente (la web o un local) se CONECTA a esta computadora: se le contesta
+// con la identidad de este fierro, si su ComfyUI responde y qué workflows
+// ofrece. Es el "feedback" de que la conexión llegó de verdad a esa PC.
+app.post('/api/red/conectar', bodyParser.json(), async (req, res) => {
+    const desdeWeb = esPedidoDeLaWeb(req);
+    let comfyOk = false;
+    try {
+        const r = await fetch(comfyBase() + '/system_stats', { signal: AbortSignal.timeout(4000) });
+        comfyOk = r.ok;
+    } catch (e) { comfyOk = false; }
+    let wfs = [];
+    try { wfs = await workflowsPublicables(true); } catch (e) { }
+    RED.workflowsRed = wfs;
+    const pc = (typeof datosDeEstaPC === 'function' ? datosDeEstaPC() : {}) || {};
+    console.log(`🔗 CONEXIÓN: ${desdeWeb ? 'la web' : 'local'}`);
+    console.log(`   se conectó a ${RED.nombre} (${RED.peerId}) · ComfyUI ${comfyOk ? 'listo' : 'SIN RESPUESTA'} · ${wfs.length} workflow(s)`);
+    res.json({
+        success: true,
+        mensaje: 'conectado',
+        desde: desdeWeb ? 'web' : 'local',
+        peer: {
+            id: RED.peerId, nombre: RED.nombre,
+            usuario: (RED.usuario && (RED.usuario.username || RED.usuario.displayName)) || '',
+            gpu: pc.gpu || '', compartir: !!RED.compartir
+        },
+        comfy: { ok: comfyOk, base: comfyBase() },
+        workflows: wfs,
+        cuando: Date.now()
+    });
 });
 
 // Valida un pedido que llega DE LA RED: sólo workflows compartidos e instalados.

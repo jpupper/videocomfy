@@ -169,16 +169,6 @@
 
             // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
             '<div class="red-clientes" id="redClientes"></div>',
-
-            '<div class="red-equipo" id="redEquipo">',
-            '  <h3 class="red-titulo">⚡ TU EQUIPO</h3>',
-            '  <div class="red-eq-filas">',
-            '    <div class="red-eq-fila"><span>Entorno</span><b id="redEqEntorno">—</b></div>',
-            '    <div class="red-eq-fila"><span>ComfyUI</span><b id="redEqComfy">—</b></div>',
-            '    <div class="red-eq-fila"><span>Estado</span><b id="redEqEstado">—</b></div>',
-            '  </div>',
-            '  <button class="red-btn secundario" id="redEqConfig">⚙️ Configurar ComfyUI</button>',
-            '</div>',
             '</div>'
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
@@ -245,13 +235,13 @@
             pintar();
         });
         document.getElementById('redNodos').addEventListener('click', function (e) {
+            var bd = e.target.closest('[data-desconectar]');
+            if (bd) { e.preventDefault(); desconectar(); return; }
             var b = e.target.closest('[data-usar]');
             if (!b) return;
             var id = b.getAttribute('data-usar');
             if (b.disabled) return;
-            guardarElegido(id);
-            log('🎯 Nodo elegido: ' + nombreDe(id));
-            pintar();
+            conectar(id);
         });
     }
 
@@ -259,6 +249,53 @@
         if (esLocal && ESTADO.yo && ESTADO.yo.peerId === id) return 'esta PC (mi Comfy)';
         var p = ESTADO.peers.filter(function (x) { return x.id === id; })[0];
         return p ? p.nombre : id;
+    }
+
+    // ---------- conectar / desconectar ----------
+    // Al conectar se le pide al nodo que CONFIRME (endpoint /api/red/conectar).
+    // En la web va por /p/<nodo>/…, así la respuesta viene de esa computadora y
+    // no del hub: si el pedido llegó y el ComfyUI contesta, se dice "conectado".
+    function conectar(id) {
+        guardarElegido(id);
+        pintar();
+        log('🔗 Conectando a ' + nombreDe(id) + '…');
+        var ruta = esLocal ? '/api/red/conectar' : ('/p/' + encodeURIComponent(id) + '/api/red/conectar');
+        api(ruta, { json: { peerId: id } }).then(function (r) {
+            var d = r.datos || {};
+            if (r.ok && d.success) {
+                var nom = (d.peer && d.peer.nombre) || nombreDe(id);
+                var nwf = (d.workflows || []).length;
+                if (d.comfy && d.comfy.ok) {
+                    log('✅ Conectado a ' + nom + ' · ComfyUI listo · ' + nwf + ' workflow(s) disponibles');
+                } else {
+                    log('⚠️ Conectado a ' + nom + ', pero su ComfyUI no responde (' + ((d.comfy && d.comfy.base) || '—') + '): no va a poder generar.');
+                }
+                // los workflows que ese fierro ofrece ya están en la respuesta:
+                // sirven para pintar CREATE en el acto, sin esperar al socket.
+                if (d.peer && d.peer.id) {
+                    var peer = ESTADO.peers.filter(function (x) { return x.id === d.peer.id; })[0];
+                    if (peer) peer.workflows = d.workflows || [];
+                }
+                try { window.CKConexion && window.CKConexion.pintar(); } catch (e) { }
+            } else {
+                log('⚠️ No pude confirmar la conexión: ' + ((d && d.message) || ('HTTP ' + r.status)));
+            }
+            pintar();
+        }).catch(function (e) {
+            log('⚠️ Sin respuesta de esa computadora: ' + e.message);
+            pintar();
+        });
+    }
+
+    function desconectar() {
+        var eraRemoto = !!ESTADO.elegido && !(ESTADO.yo && ESTADO.yo.peerId === ESTADO.elegido);
+        guardarElegido('');
+        ESTADO.elegido = '';
+        log(eraRemoto || !esLocal
+            ? '🔌 Desconectado. Elegí otra computadora cuando quieras.'
+            : '🔌 Soltaste el nodo: en local volvés a generar en esta PC.');
+        pintar();
+        try { window.CKConexion && window.CKConexion.pintar(); } catch (e) { }
     }
 
     function abrir() {
@@ -360,13 +397,19 @@
         if (elegido) {
             var esMio = (elegido === yoId);
             var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
-            caja.innerHTML = '🎯 Vas a generar en: <b>' + esc(nombreDe(elegido)) + '</b>' +
+            caja.innerHTML = '🔗 <b>CONECTADO</b> a <b>' + esc(nombreDe(elegido)) + '</b>' +
                 (esMio ? ' <span class="red-badge comparto">tu Comfy</span>'
-                    : (p2 ? ' <span class="red-badge">' + (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') + '</span>' : ''));
+                    : (p2 ? ' <span class="red-badge">' + (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') + '</span>' : '')) +
+                ' <button class="red-btn secundario chico" id="redDesconectar">🔌 DESCONECTAR</button>';
         } else {
-            caja.innerHTML = '🎯 No hay ningún nodo para generar. Prendé compartir en tu app (o esperá que alguien entre a la red).';
+            caja.innerHTML = '🔌 <b>No estás conectado</b> a ninguna computadora — elegí una abajo para generar.';
         }
         caja.className = 'red-elegido' + (elegido ? '' : ' vacio');
+        var bd = document.getElementById('redDesconectar');
+        if (bd) bd.addEventListener('click', function (e) {
+            e.preventDefault();
+            desconectar();
+        });
 
         // grilla de nodos
         var tarjetas = [];
@@ -450,11 +493,6 @@
                     });
                 });
             }
-            var ec = document.getElementById('redEqConfig');
-            if (ec) ec.addEventListener('click', function () {
-                var b = document.getElementById('tabSettingsBtn');
-                if (b) b.click();
-            });
             var gb = document.getElementById('redGuardarNombre');
             if (gb) {
                 gb.addEventListener('click', function () {
@@ -519,9 +557,10 @@
         var modelos = (p.modelos || []).map(function (m) { return m.nombre || m.id; }).join(' · ') || '—';
         var puede = mio || (p.compartir && p.conectado);
         var boton = elegido
-            ? '<button class="red-btn chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>✅ ELEGIDO</button>'
+            ? '<button class="red-btn chico" data-desconectar="' + esc(p.id) + '">🔌 DESCONECTAR</button>'
             : '<button class="red-btn secundario chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>' +
-              (puede ? 'Usar este Comfy' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
+              (puede ? 'CONECTAR' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
+        var sello = elegido ? ' <span class="red-badge comparto">✅ CONECTADO</span>' : '';
         var estado;
         if (mio) {
             estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
@@ -550,6 +589,7 @@
             mio ? '<span class="red-badge comparto">tu nodo</span>'
                 : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
+            sello,
             '  </div>',
             '  <div class="linea">' + (p.gpu ? esc(p.gpu) : 'sin GPU') + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</div>',
             '  <div class="linea">' + esc(modelos) + '</div>',
@@ -597,27 +637,8 @@
         ].join('\n');
     }
 
-    // --- el equipo: entorno, ComfyUI en uso y estado (antes en el panel izq) ---
-    function pintarEquipo() {
-        var ent = document.getElementById('redEqEntorno');
-        var com = document.getElementById('redEqComfy');
-        var est = document.getElementById('redEqEstado');
-        if (!ent) return;
-        ent.textContent = esLocal ? '💻 LOCAL' : '🌐 WEB';
-
-        api('/api/config/comfy').then(function (r) {
-            var d = r.datos || {};
-            if (com) com.textContent = d.base || d.address || '—';
-        }).catch(function () { });
-
-        api('/api/status').then(function (r) {
-            var d = r.datos || {};
-            if (est) {
-                est.textContent = d.comfy ? '🟢 Conectado' : '🔴 Sin ComfyUI';
-                est.className = d.comfy ? 'bien' : 'mal';
-            }
-        }).catch(function () { });
-    }
+    // --- (el bloque "TU EQUIPO" se sacó: en la web no tiene sentido y en local
+    // duplicaba el panel de la izquierda, que ya muestra entorno/ComfyUI/estado) ---
 
     function refrescar(manual) {
         var ruta = esLocal ? '/api/red/estado' : '/api/red/peers';
@@ -650,7 +671,6 @@
             }
             if (manual) log('🔄 Red actualizada: ' + ESTADO.peers.length + ' nodo(s)');
             pintar();
-            pintarEquipo();
             pintarClientes();
         }).catch(function (e) { if (manual) log('⚠️ ' + e.message); });
     }

@@ -335,11 +335,18 @@ function arrancar(opciones) {
                 /^\/api\/red\/(agente|nodos|perfil|job)/i, // identidad y trabajos internos
                 /^\/api\/(mo|entorno|salud-memoria)/i
             ];
+            // Excepciones: /api/motor/* es la ventana al estado del motor y la
+            // precarga (LOAD MODELS). El filtro de arriba lo atrapaba con el
+            // prefijo "mo" y desde la web daba 403. Sólo estas dos.
+            const RUTAS_PERMITIDAS = [
+                /^\/api\/motor\/estado-modelos/i,
+                /^\/api\/motor\/precargar/i
+            ];
             const ruta = String(r.ruta || '/');
             // Sólo se bloquean las ESCRITURAS: leer configuración es inofensivo
             // y el panel de la web lo necesita para mostrar el estado.
             const esEscritura = !['GET', 'HEAD'].includes(String(r.method || 'GET').toUpperCase());
-            if (esEscritura && RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta))) {
+            if (esEscritura && RUTAS_PROHIBIDAS.some((rx) => rx.test(ruta)) && !RUTAS_PERMITIDAS.some((rx) => rx.test(ruta))) {
                 console.log(`⛔ [túnel] pedido de la web BLOQUEADO por seguridad: ${r.method || 'GET'} ${ruta}`);
                 // (acá se logueaba buf.length, que todavía no existe: rompía el 403)
                 socket.emit('tunnel:http:result', {
@@ -488,7 +495,10 @@ function arrancar(opciones) {
 
     return {
         estado: () => ({ conectado: ultimoConectado, peerId: identidad.peerId, nombre: identidad.nombre, comfy: estComfy, compartir: identidad.compartir }),
-        reconectar: () => { try { socket.disconnect(); socket.connect(); } catch (e) { } }
+        reconectar: () => { try { socket.disconnect(); socket.connect(); } catch (e) { } },
+        // Empujar YA el estado al hub (lo usa la app cuando cambian los workflows
+        // compartidos, para que la web se entere sin esperar los 15 s).
+        avisar: () => { try { leerIdentidad().then(() => enviarEstado()).catch(() => enviarEstado()); } catch (e) { } }
     };
 }
 
