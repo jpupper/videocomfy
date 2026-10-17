@@ -18,3 +18,9 @@
 .es-web #piVpsAlert {         /* aviso de caída del motor */
     display: none !important;
 }
+
+/* En la WEB, el bloque "Dirección / Base / WebSocket / Conectado" del card COMFO
+   describe el Comfy de otra máquina: sin sesión llegaba vacío y mostraba
+   "Conectado ❌ no", que se lee como si estuviera roto. La web sólo muestra el
+   campo para cambiarlo. */
+.es-web #ckComfyEstado { display: none !important; }
