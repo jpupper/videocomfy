@@ -185,61 +185,6 @@
 }
 
 /* ============================================================================
-   SUB-PESTAÑAS (STAGE: COMMUNITY/BATCH · CREATE: WORKFLOWS/EDITOR/STORYBOARD)
-   ----------------------------------------------------------------------------
-   Medido: la activa quedaba con `background: rgba(99,102,241,.08)` (8% de
-   opacidad) → no se distinguía cuál estaba seleccionada. Acá se pinta igual que
-   en RANKING (que el usuario dice que se ve bien): fondo sólido + texto oscuro.
-   ============================================================================ */
-.sub-tabs-container .sub-tab-btn.active,
-#stageSubTabs .sub-tab-btn.active,
-#crearSubTabs .sub-tab-btn.active,
-#tabOutput .sub-tab-btn.active,
-#tabPrompts .sub-tab-btn.active {
-    background: var(--accent, #10b981) !important;
-    color: #04121a !important;
-    border-color: var(--accent, #10b981) !important;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
-    font-weight: 900 !important;
-    opacity: 1 !important;
-}
-.sub-tabs-container .sub-tab-btn:not(.active),
-#stageSubTabs .sub-tab-btn:not(.active),
-#crearSubTabs .sub-tab-btn:not(.active) {
-    background: rgba(148, 163, 184, 0.10) !important;
-    color: #cbd5e1 !important;
-    border: 1px solid rgba(148, 163, 184, 0.28) !important;
-    box-shadow: none !important;
-}
-.sub-tabs-container .sub-tab-btn:not(.active):hover,
-#stageSubTabs .sub-tab-btn:not(.active):hover,
-#crearSubTabs .sub-tab-btn:not(.active):hover {
-    background: rgba(148, 163, 184, 0.22) !important;
-    color: #fff !important;
-}
-
-/* NEW SESSION (+) y SAVE (💾) en línea con el menú de sub-pestañas */
-#crearSubTabs .ck-btn-nav-inline {
-    flex: 0 0 auto !important;
-    margin-left: 0 !important;
-    width: 34px;
-    min-width: 34px;
-    height: 32px;
-    padding: 0 !important;
-    border-radius: 9px !important;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9rem !important;
-    background: rgba(148, 163, 184, 0.10) !important;
-    border: 1px solid rgba(148, 163, 184, 0.28) !important;
-    color: #e2e8f0 !important;
-}
-#crearSubTabs .ck-btn-nav-inline:first-of-type { margin-left: auto !important; }
-#crearSubTabs .ck-btn-nav-inline:hover { background: rgba(148, 163, 184, 0.25) !important; }
-#crearSubTabs { align-items: center; flex-wrap: wrap; }
-
-/* ============================================================================
    PEDIDOS QUE LLEGAN DE LA RED — tarjetas con LÍNEA DE TIEMPO (STAGE · BATCH)
    ============================================================================ */
 #queueRedVuelo.red-vuelo {
@@ -337,16 +282,3 @@
     .red-tl-paso { font-size: 0.66rem; padding: 3px 6px; }
     .red-tl-paso i { display: none; }
 }
-
-/* La fila de CREATE tiene que quedar en UNA línea: 3 sub-pestañas + NEW + SAVE.
-   Si el panel es angosto, se achican los botones y la barra se desplaza en
-   horizontal, en vez de que los últimos caigan a una segunda fila. */
-#crearSubTabs { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; }
-#crearSubTabs::-webkit-scrollbar { height: 0; }
-#crearSubTabs .sub-tab-btn {
-    flex: 0 0 auto !important;
-    padding: 6px 8px !important;
-    font-size: 0.72rem !important;
-    white-space: nowrap;
-}
-#crearSubTabs .ck-btn-nav-inline { width: 30px; min-width: 30px; height: 30px; }

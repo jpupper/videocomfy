@@ -612,33 +612,11 @@ body.red-arrastrando .container { transition: none !important; }
 #tabOutput > #jpiPausaBtn { order: -1 !important; }
 .project-tabs-nav { background: transparent; border: none; padding: 0; }
 
-/* === SUBMENUS: mismo diseño que el menu principal, pegados abajo sin margen === */
-.sub-tabs-container, .asset-tabs-container,
-#tabRanking .sub-tabs-container, #tabPrompts .sub-tabs-container, #tabOutput .sub-tabs-container {
-    display: flex !important; gap: 2px !important; align-items: center !important;
-    height: auto !important; width: 100% !important; max-width: none !important;
-    margin: 0 0 18px 0 !important; padding: 0 !important;
-    background: transparent !important; border: none !important; border-radius: 0 !important;
-    border-bottom: 1px solid var(--border) !important; overflow: visible !important;
-}
-.sub-tabs-container .sub-tab-btn, .asset-tabs-container .asset-tab-btn,
-#tabRanking .sub-tab-btn, #tabPrompts .sub-tab-btn {
-    background: transparent !important; color: var(--text-muted) !important;
-    font-size: .65em !important; font-weight: 800 !important; text-transform: uppercase !important;
-    letter-spacing: .5px !important; padding: 0 12px !important; height: 34px !important;
-    display: flex !important; align-items: center !important; gap: 6px !important;
-    border: none !important; border-bottom: 4px solid transparent !important;
-    border-radius: 0 !important; box-shadow: none !important; transition: all .2s ease !important;
-    cursor: pointer !important; white-space: nowrap !important;
-}
-.sub-tabs-container .sub-tab-btn:hover, #tabRanking .sub-tab-btn:hover {
-    color: var(--foreground) !important; background: rgba(255,255,255,.03) !important;
-}
-.sub-tabs-container .sub-tab-btn.active, .asset-tabs-container .asset-tab-btn.active,
-#tabRanking .sub-tab-btn.active, #tabPrompts .sub-tab-btn.active {
-    color: var(--primary) !important; border-bottom-color: var(--primary) !important;
-    background: rgba(99,102,241,.08) !important; box-shadow: none !important;
-}
+/* === SUBMENUS ===
+   El diseño y el estado de las pestañas ya NO se definen acá: los maneja el
+   sistema central (js/ui-sistema.js + css/ui-sistema.css), que es la ÚNICA
+   fuente de verdad. Este bloque era el que dejaba la pestaña activa en un
+   violeta al 8% y hacía que no se notara cuál estaba seleccionada. */
 
 /* --- PERFIL COMFYLATAM (botón del menú + panel) --- */
 .ck-perfil-btn { display: flex; align-items: center; gap: 8px; background: transparent !important;

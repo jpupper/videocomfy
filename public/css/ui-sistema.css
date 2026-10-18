@@ -1,0 +1,188 @@
+/* ============================================================================
+   SISTEMA CENTRAL DE UI — apariencia única de categorías y subcategorías
+   ----------------------------------------------------------------------------
+   Una sola forma de pestaña para toda la app:
+     · categorías  (PREVIZ / STAGE / CREATE / CONSOLE / RANKING / SETTINGS / RED / MI CUENTA)
+     · subcategorías (VIDEO/DATA · COMMUNITY/BATCH · WORKFLOWS/EDITOR/STORYBOARD ·
+                      EJEMPLOS/VIDEOS/IMAGES/... · ranking por tiempo/generaciones/fierros)
+   Los estilos viejos (.tab-button, .sub-tab-btn, .asset-tab-btn, .red-tab-btn)
+   siguen existiendo en el CSS original, pero acá se pisan: hay UNA sola fuente
+   de verdad visual. La lógica de estado vive en js/ui-sistema.js.
+   ============================================================================ */
+
+/* ---- la barra ------------------------------------------------------------ */
+.ck-tabs,
+.ck-tabs.sub-tabs-container,
+.ck-tabs.asset-tabs-container,
+.ck-tabs.tabs-container {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-wrap: wrap;
+    padding: 0 !important;
+    margin: 0 0 10px !important;
+    background: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+/* en escritorio la barra de categorías envuelve (2 filas como mucho); en
+   celular se desplaza en horizontal para no comerse la pantalla */
+@media (max-width: 900px) {
+    .ck-tabs[data-ck-nivel="categoria"] {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .ck-tabs[data-ck-nivel="categoria"]::-webkit-scrollbar { height: 0; }
+}
+
+/* ---- la pestaña ---------------------------------------------------------- */
+body .ck-tabs .ck-tab, .ck-tabs .ck-tab {
+    flex: 0 0 auto;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: auto;
+    min-height: 32px;
+    padding: 6px 12px !important;
+    margin: 0 !important;
+    border-radius: 9px !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    background: rgba(148, 163, 184, 0.10) !important;
+    color: #cbd5e1 !important;
+    font-family: inherit !important;
+    font-size: 0.74rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: none !important;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.ck-tabs .ck-tab:hover {
+    background: rgba(148, 163, 184, 0.22) !important;
+    color: #ffffff !important;
+    border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+.ck-tabs .ck-tab:active { transform: translateY(1px); }
+
+.ck-tabs .ck-tab:focus-visible {
+    outline: 2px solid var(--accent, #10b981);
+    outline-offset: 2px;
+}
+
+/* la elegida: UNA sola, bien visible (antes era un 8% de opacidad) */
+body .ck-tabs .ck-tab.active, .ck-tabs .ck-tab.active {
+    background: var(--accent, #10b981) !important;
+    color: #04121a !important;
+    border-color: var(--accent, #10b981) !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+    font-weight: 900 !important;
+    opacity: 1 !important;
+}
+
+/* categorías: un punto más grandes, el resto igual */
+.ck-tabs[data-ck-nivel="categoria"] .ck-tab {
+    min-height: 34px;
+    padding: 7px 14px !important;
+    font-size: 0.78rem !important;
+}
+
+/* el botón RED tenía color y tipografía propios: ahora es una pestaña más */
+.ck-tabs .ck-tab.red-tab-btn,
+.ck-tabs .ck-tab.ck-perfil-btn {
+    background: rgba(148, 163, 184, 0.10) !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    box-shadow: none !important;
+}
+.ck-tabs .ck-tab.red-tab-btn.active,
+.ck-tabs .ck-tab.ck-perfil-btn.active {
+    background: var(--accent, #10b981) !important;
+    color: #04121a !important;
+    border-color: var(--accent, #10b981) !important;
+}
+
+/* CREATE tiene 3 sub-pestañas + NEW + SAVE: en una sola línea, con scroll si no entra */
+#crearSubTabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+#crearSubTabs::-webkit-scrollbar { height: 0; }
+
+/* ---- acciones pegadas al menú (NEW SESSION / SAVE en CREATE) -------------- */
+.ck-tabs > .ck-btn-nav-inline {
+    flex: 0 0 auto !important;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    border-radius: 9px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem !important;
+}
+.ck-tabs > .ck-btn-nav-inline:first-of-type { margin-left: auto !important; }
+
+/* ---- celular ------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .ck-tabs { gap: 5px !important; }
+    body .ck-tabs .ck-tab, .ck-tabs .ck-tab {
+        padding: 6px 9px !important;
+        font-size: 0.68rem !important;
+        min-height: 30px;
+    }
+    .ck-tabs[data-ck-nivel="categoria"] .ck-tab {
+        padding: 6px 10px !important;
+        font-size: 0.72rem !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   El header tenía alto fijo (70px). Con la barra de categorías en 2 filas, la
+   barra se salía por arriba (los botones quedaban con y negativo y no se
+   podían tocar). El header ahora crece y las pestañas bajan a su propia fila.
+   --------------------------------------------------------------------------- */
+.workspace-header {
+    height: auto !important;
+    min-height: 70px;
+    flex-wrap: wrap !important;
+    row-gap: 8px;
+    align-items: flex-start !important;
+    padding-bottom: 8px;
+}
+.workspace-header .tabs-container {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ck-tabs[data-ck-nivel="categoria"] {
+    flex-wrap: wrap !important;
+    row-gap: 6px;
+}
+/* pestañas de categoría un toque más compactas para que entren en 2 filas */
+.ck-tabs[data-ck-nivel="categoria"] .ck-tab {
+    padding: 6px 11px !important;
+    font-size: 0.74rem !important;
+    min-height: 30px;
+}
+
+/* En celular la barra de categorías NO envuelve: una sola fila que se desplaza
+   (si no, el header se come un cuarto de la pantalla). Va al final para ganarle
+   a la regla de escritorio de más arriba. */
+@media (max-width: 900px) {
+    .ck-tabs[data-ck-nivel="categoria"] {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none;
+    }
+    .ck-tabs[data-ck-nivel="categoria"]::-webkit-scrollbar { height: 0; }
+    .workspace-header { min-height: 0 !important; row-gap: 4px !important; padding-bottom: 4px; }
+}
