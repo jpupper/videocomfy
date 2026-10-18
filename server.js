@@ -3037,6 +3037,8 @@ app.post('/api/red/clientes', (req, res) => {
         usuarios: Array.isArray(d.usuarios) ? d.usuarios : [],
         clientes: Array.isArray(d.clientes) ? d.clientes : [],
         appsLocales: Number(d.appsLocales || 0),
+        // quién está usando esta PC desde la web (lo manda el hub)
+        porNodo: (d.porNodo && typeof d.porNodo === 'object') ? d.porNodo : {},
         recibido: Date.now()
     };
     // Sólo se avisa cuando CAMBIA: antes escribía esto cada vez que el hub
