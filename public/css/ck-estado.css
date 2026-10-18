@@ -183,3 +183,169 @@
     color: #a5b4fc; border: 1px solid rgba(148, 163, 184, .3);
     border-radius: 999px; padding: 3px 10px; white-space: nowrap;
 }
+
+/* ============================================================================
+   SUB-PESTAÑAS (STAGE: COMMUNITY/BATCH · CREATE: WORKFLOWS/EDITOR/STORYBOARD)
+   ----------------------------------------------------------------------------
+   Medido: la activa quedaba con `background: rgba(99,102,241,.08)` (8% de
+   opacidad) → no se distinguía cuál estaba seleccionada. Acá se pinta igual que
+   en RANKING (que el usuario dice que se ve bien): fondo sólido + texto oscuro.
+   ============================================================================ */
+.sub-tabs-container .sub-tab-btn.active,
+#stageSubTabs .sub-tab-btn.active,
+#crearSubTabs .sub-tab-btn.active,
+#tabOutput .sub-tab-btn.active,
+#tabPrompts .sub-tab-btn.active {
+    background: var(--accent, #10b981) !important;
+    color: #04121a !important;
+    border-color: var(--accent, #10b981) !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+    font-weight: 900 !important;
+    opacity: 1 !important;
+}
+.sub-tabs-container .sub-tab-btn:not(.active),
+#stageSubTabs .sub-tab-btn:not(.active),
+#crearSubTabs .sub-tab-btn:not(.active) {
+    background: rgba(148, 163, 184, 0.10) !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    box-shadow: none !important;
+}
+.sub-tabs-container .sub-tab-btn:not(.active):hover,
+#stageSubTabs .sub-tab-btn:not(.active):hover,
+#crearSubTabs .sub-tab-btn:not(.active):hover {
+    background: rgba(148, 163, 184, 0.22) !important;
+    color: #fff !important;
+}
+
+/* NEW SESSION (+) y SAVE (💾) en línea con el menú de sub-pestañas */
+#crearSubTabs .ck-btn-nav-inline {
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+    width: 34px;
+    min-width: 34px;
+    height: 32px;
+    padding: 0 !important;
+    border-radius: 9px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem !important;
+    background: rgba(148, 163, 184, 0.10) !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    color: #e2e8f0 !important;
+}
+#crearSubTabs .ck-btn-nav-inline:first-of-type { margin-left: auto !important; }
+#crearSubTabs .ck-btn-nav-inline:hover { background: rgba(148, 163, 184, 0.25) !important; }
+#crearSubTabs { align-items: center; flex-wrap: wrap; }
+
+/* ============================================================================
+   PEDIDOS QUE LLEGAN DE LA RED — tarjetas con LÍNEA DE TIEMPO (STAGE · BATCH)
+   ============================================================================ */
+#queueRedVuelo.red-vuelo {
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), rgba(15, 23, 42, 0.55));
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+#queueRedVuelo h4 {
+    margin: 0 0 10px;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7dd3fc;
+}
+.red-tl-card {
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-left: 4px solid #38bdf8;
+    border-radius: 10px;
+    background: rgba(2, 6, 23, 0.55);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+.red-tl-card[data-estado="comfy"]    { border-left-color: #f59e0b; }
+.red-tl-card[data-estado="subiendo"]  { border-left-color: #a855f7; }
+.red-tl-card[data-estado="listo"]     { border-left-color: #10b981; }
+.red-tl-card[data-estado="sin_nube"]  { border-left-color: #ef4444; }
+.red-tl-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.red-tl-origen {
+    font-size: 0.66rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    padding: 3px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.red-tl-origen.web { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.45); }
+.red-tl-origen.red { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.45); }
+.red-tl-user { color: #f8fafc; font-size: 0.86rem; }
+.red-tl-hora { margin-left: auto; font-size: 0.7rem; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.red-tl-prompt { font-size: 0.8rem; color: #cbd5e1; line-height: 1.35; margin-bottom: 8px; }
+.red-tl-modelo {
+    font-size: 0.66rem; color: #94a3b8; border: 1px solid rgba(148,163,184,.3);
+    border-radius: 5px; padding: 1px 5px; margin-left: 4px; white-space: nowrap;
+}
+.red-tl-pasos {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+}
+.red-tl-paso {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(148, 163, 184, 0.06);
+    color: #94a3b8;
+    white-space: nowrap;
+}
+.red-tl-paso i { font-style: normal; font-size: 0.64rem; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.red-tl-paso.hecho {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.12);
+    color: #6ee7b7;
+}
+.red-tl-paso.actual {
+    border-color: rgba(245, 158, 11, 0.6);
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    font-weight: 800;
+    animation: ckPulsoPaso 1.6s ease-in-out infinite;
+}
+@keyframes ckPulsoPaso {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
+    50%      { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.0); }
+}
+.red-tl-flecha { color: #475569; font-size: 0.7rem; }
+.red-tl-archivo { margin-top: 7px; font-size: 0.7rem; color: #94a3b8; }
+
+@media (max-width: 768px) {
+    .red-tl-pasos { gap: 4px; }
+    .red-tl-flecha { display: none; }
+    .red-tl-paso { font-size: 0.66rem; padding: 3px 6px; }
+    .red-tl-paso i { display: none; }
+}
+
+/* La fila de CREATE tiene que quedar en UNA línea: 3 sub-pestañas + NEW + SAVE.
+   Si el panel es angosto, se achican los botones y la barra se desplaza en
+   horizontal, en vez de que los últimos caigan a una segunda fila. */
+#crearSubTabs { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; }
+#crearSubTabs::-webkit-scrollbar { height: 0; }
+#crearSubTabs .sub-tab-btn {
+    flex: 0 0 auto !important;
+    padding: 6px 8px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap;
+}
+#crearSubTabs .ck-btn-nav-inline { width: 30px; min-width: 30px; height: 30px; }

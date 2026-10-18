@@ -660,6 +660,10 @@
                 ESTADO.pasados = r.datos.pasados || [];
                 ESTADO.clientes = r.datos.clientes || ESTADO.clientes;
                 ESTADO.enVueloDetalle = r.datos.enVueloDetalle || [];
+        // el panel del STAGE se alimenta también con el estado inicial (antes sólo
+        // se pintaba cuando llegaba un aviso por WebSocket: al entrar quedaba vacío)
+        window.JPI_RED_VUELO = ESTADO.enVueloDetalle || [];
+        if (typeof window.jpiPintarVuelo === 'function') { try { window.jpiPintarVuelo(); } catch (e) { } }
                 ESTADO.computadora = r.datos.computadora || ESTADO.computadora;
             } else {
                 ESTADO.yo = null;

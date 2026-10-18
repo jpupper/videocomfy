@@ -28,7 +28,7 @@
             Array.prototype.slice.call(nodo.children || []).forEach(function (hijo) {
                 if (hijo.id === 'stageSubTabs') return;
                 if (contiene(hijo, ['a dónde va', 'última generación', 'registro'])) bloques.push({ nodo: hijo, tipo: 'community' });
-                else if (contiene(hijo, ['tu batch local', 'completed history', 'nothing to generate', 'en cola', 'pendientes'])) bloques.push({ nodo: hijo, tipo: 'batch' });
+                else if (contiene(hijo, ['tu batch local', 'completed history', 'nothing to generate', 'en cola', 'pendientes', 'pedidos de la red', 'pedidos que llegan'])) bloques.push({ nodo: hijo, tipo: 'batch' });
                 else juntar(hijo);
             });
         })(stage);
@@ -104,17 +104,27 @@
             }
         });
 
-        // NEW SESSION (+) y SAVE (💾) -> dentro de CREATE
+        // NEW SESSION (+) y SAVE (💾) -> EN LÍNEA con WORKFLOWS / EDITOR / STORYBOARD
+        // (pedido del usuario: antes quedaban en una fila aparte, arriba del menú).
         var crear = document.getElementById('tabPrompts');
         var nuevo = document.getElementById('newProjectBtn');
         var guardar = document.getElementById('saveProjectBtn');
         if (crear && nuevo && guardar) {
-            var caja = document.getElementById('crearAcciones') || document.createElement('div');
-            caja.id = 'crearAcciones';
-            caja.className = 'crear-acciones';
-            caja.appendChild(nuevo);
-            caja.appendChild(guardar);
-            crear.insertBefore(caja, crear.firstChild);
+            var barraSub = document.getElementById('crearSubTabs') || crear.querySelector('.sub-tabs-container');
+            if (barraSub) {
+                // al final de la misma fila, pegados a la derecha
+                if (nuevo.parentElement !== barraSub) barraSub.appendChild(nuevo);
+                if (guardar.parentElement !== barraSub) barraSub.appendChild(guardar);
+                nuevo.classList.add('ck-btn-nav-inline');
+                guardar.classList.add('ck-btn-nav-inline');
+            } else {
+                var caja = document.getElementById('crearAcciones') || document.createElement('div');
+                caja.id = 'crearAcciones';
+                caja.className = 'crear-acciones';
+                caja.appendChild(nuevo);
+                caja.appendChild(guardar);
+                crear.insertBefore(caja, crear.firstChild);
+            }
         }
 
         // si hay dos botones de pausa (uno viejo creado de nuevo), se saca el duplicado

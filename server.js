@@ -401,11 +401,13 @@ async function subirArchivoAR2(carpeta, nombre) {
         if (!cupo.permitido) return false;
         const st = fs.statSync(ruta);
         if (!st.isFile() || st.size === 0) return false;
+        marcarPedidoRedPorArchivo(nombre, { estado: 'subiendo' });   // línea de tiempo: "subiendo a Cloudflare"
         const r = await r2lib.subirArchivo(ruta, {
             tipo: 'comfylatam', sub: carpeta, filename: nombre,
             mime: mimeDe(nombre), size: st.size
         });
-        if (!r) { r2Estado.errores++; return false; }
+        if (!r) { r2Estado.errores++; marcarPedidoRedPorArchivo(nombre, { estado: 'sin_nube' }); return false; }
+        marcarPedidoRedPorArchivo(nombre, { estado: 'listo', urlNube: r.url });
         mediaMap.anotar(nombre, r.url, { carpeta, bytes: st.size, cuando: Date.now() });
         colaMapa.set(nombre, {          // avisa al hub (302 al CDN) y queda en la base
             url: r.url, bytes: st.size, key: r.key || '',
@@ -1603,6 +1605,11 @@ function connectToComfy() {
                     value: message.data.value,
                     max: message.data.max
                 });
+                // el paso x/N también alimenta la línea de tiempo del pedido de la red
+                const _enEj = (comfyCola.enEjecucion || [])[0];
+                if (_enEj && _enEj.promptId) {
+                    marcarPedidoRed(_enEj.promptId, { estado: 'comfy', paso: message.data.value, total: message.data.max });
+                }
             }
 
             // ---- COLA REAL DE COMFYUI -------------------------------------
@@ -1619,6 +1626,8 @@ function connectToComfy() {
                 // queda registrado qué prompt está ejecutando ahora mismo
                 comfyCola.enEjecucion = [Object.assign({ promptId: message.data.prompt_id },
                     quienEsEstePrompt(message.data.prompt_id))];
+                // si es un pedido que vino de la red, la línea de tiempo del STAGE local avanza
+                marcarPedidoRed(message.data.prompt_id, { estado: 'comfy' });
                 broadcastComfyCola();
             }
 
@@ -1780,7 +1789,12 @@ function connectToComfy() {
                             // de "en vuelo" (antes el contador sólo subía).
                             if (metaToSave.origen === 'red') {
                                 RED.enVuelo = Math.max(0, (RED.enVuelo || 0) - 1);
-                                RED.enVueloDetalle = (RED.enVueloDetalle || []).filter((j) => j.promptId !== promptId);
+                                // Antes se borraba de la lista y en el STAGE local nunca
+                                // se veía el proceso completo. Ahora queda como "listo"
+                                // (y sigue viva la subida a Cloudflare), guardando sólo
+                                // los últimos 12 para no crecer sin límite.
+                                marcarPedidoRed(promptId, { estado: 'listo', archivo: filenameOnly, fin: Date.now() });
+                                if ((RED.enVueloDetalle || []).length > 12) RED.enVueloDetalle = RED.enVueloDetalle.slice(-12);
                                 console.log(`✅ Pedido de la red terminado — quedan ${RED.enVuelo} en vuelo`);
                                 avisarRedATodos();
                             }
@@ -2924,6 +2938,41 @@ function datosDeEstaPC() {
     };
 }
 
+// ---------------------------------------------------------------------------
+// LÍNEA DE TIEMPO de un pedido que llegó de la RED (web o de otra PC).
+// El pedido NO desaparece cuando empieza a generar: queda en el STAGE local
+// mostrando en qué paso va (pedido -> comfy -> subida a Cloudflare -> listo).
+// ---------------------------------------------------------------------------
+function marcarPedidoRed(promptId, cambios) {
+    const lista = RED.enVueloDetalle || [];
+    const j = lista.find((x) => x && (x.promptId === promptId));
+    if (!j) return null;
+    return _aplicarPasoRed(j, cambios);
+}
+function marcarPedidoRedPorArchivo(nombre, cambios) {
+    const lista = RED.enVueloDetalle || [];
+    for (let k = lista.length - 1; k >= 0; k--) {
+        if (lista[k] && lista[k].archivo === nombre) return _aplicarPasoRed(lista[k], cambios);
+    }
+    return null;
+}
+function _aplicarPasoRed(j, cambios) {
+    const ahora = Date.now();
+    Object.assign(j, cambios || {});
+    j.actualizado = ahora;
+    j.pasos = j.pasos || {};
+    if (j.estado && !j.pasos[j.estado]) j.pasos[j.estado] = ahora;   // hora de cada paso, una sola vez
+    // 'listo' se re-sella cuando termina la subida: si no, quedaba con la hora del
+    // fin de ComfyUI y en la línea de tiempo aparecía antes que 'subiendo'.
+    if (cambios && cambios.estado === 'listo') j.pasos.listo = ahora;
+    // no inundar el socket: como mucho un aviso cada 700 ms por pedido
+    if (!j._ultimoAviso || ahora - j._ultimoAviso > 700) {
+        j._ultimoAviso = ahora;
+        try { avisarRedATodos(); } catch (e) { }
+    }
+    return j;
+}
+
 async function encolarTrabajoRed(b) {
     const prompt = String((b && b.prompt) || '').trim();
     if (!prompt) throw new Error('El trabajo no trae prompt.');
@@ -2978,7 +3027,11 @@ async function encolarTrabajoRed(b) {
         jobId: details.red.jobId, promptId, prompt: prompt.slice(0, 120),
         modelo: details.modelo, de: pedidoPor.displayName || pedidoPor.usuario,
         usuario: pedidoPor.usuario, avatar: pedidoPor.avatar || '', tipo: pedidoPor.tipo || 'web',
-        desde: Date.now()
+        origen: (pedidoPor.tipo === 'web' ? 'web' : 'red'),
+        desde: Date.now(),
+        // --- línea de tiempo ---
+        estado: 'pedido', pasos: { pedido: Date.now() }, paso: 0, total: 0,
+        archivo: null, urlNube: null, actualizado: Date.now()
     });
     if (RED.enVueloDetalle.length > 20) RED.enVueloDetalle = RED.enVueloDetalle.slice(-20);
     avisarRedATodos({ job: { jobId: details.red.jobId, promptId, modelo: details.modelo, de: details.red.de } });

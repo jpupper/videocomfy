@@ -114,11 +114,54 @@
         caja.classList.remove('hidden');
         var cont = document.getElementById('redVueloLista');
         if (cont) {
+            // --- LÍNEA DE TIEMPO -------------------------------------------------
+            // Cada pedido que llega de la web (o de otra PC) muestra en qué paso
+            // va: pedido -> ComfyUI (paso x/N) -> subida a Cloudflare -> listo.
+            // Antes desaparecía apenas arrancaba a generar y no se veía el proceso.
+            var hora = function (t) {
+                if (!t) return '';
+                var d = new Date(t);
+                return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
+            };
+            var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]; }); };
             cont.innerHTML = lista.map(function (j) {
-                return '<div class="red-vuelo-fila">👤 <b>@' + (j.usuario || j.de || '?') + '</b>' +
-                    ' <span class="rule-origen rule-red">de la red</span> · ' +
-                    '🎛️ ' + (j.modelo || 'auto') + ' · ' +
-                    '“' + String(j.prompt || '').slice(0, 70) + '”</div>';
+                var est = j.estado || 'pedido';
+                var pasos = j.pasos || {};
+                var web = (j.origen === 'web') || j.tipo === 'web';
+                // qué paso está en curso / hecho
+                var orden = ['pedido', 'comfy', 'subiendo', 'listo'];
+                var idx = orden.indexOf(est);
+                if (est === 'sin_nube') idx = 3;
+                var clase = function (i) { return i < idx ? 'hecho' : (i === idx ? 'actual' : ''); };
+                var comfyTxt = '⚙️ ComfyUI';
+                if (est === 'comfy' && j.total) comfyTxt += ' · paso ' + (j.paso || 0) + '/' + j.total;
+                var nubeTxt = '☁️ Cloudflare';
+                if (est === 'subiendo') nubeTxt = '☁️ Subiendo a Cloudflare…';
+                else if (j.urlNube && est === 'listo') nubeTxt = '☁️ En Cloudflare';
+                else if (est === 'sin_nube') nubeTxt = '☁️ No se pudo subir';
+                else if (est === 'listo' && !j.urlNube) nubeTxt = '💾 Quedó en esta PC';
+                var finTxt = (est === 'listo' && j.urlNube) ? '✅ Ya se ve en la web' : '✅ Terminado';
+                return '<div class="red-tl-card" data-estado="' + esc(est) + '">' +
+                    '<div class="red-tl-head">' +
+                        '<span class="red-tl-origen ' + (web ? 'web' : 'red') + '">' +
+                            (web ? '🌐 PEDIDO DESDE LA WEB' : '🖧 PEDIDO DE OTRA PC') + '</span>' +
+                        '<b class="red-tl-user">@' + esc(j.usuario || j.de || '?') + '</b>' +
+                        '<span class="red-tl-hora">' + hora(j.desde) + '</span>' +
+                    '</div>' +
+                    '<div class="red-tl-prompt">“' + esc(String(j.prompt || '').slice(0, 110)) + '”' +
+                        ' <span class="red-tl-modelo">' + esc(j.modelo || 'auto') + '</span></div>' +
+                    '<div class="red-tl-pasos">' +
+                        '<span class="red-tl-paso ' + clase(0) + '">① Pedido <i>' + hora(pasos.pedido || j.desde) + '</i></span>' +
+                        '<span class="red-tl-flecha">→</span>' +
+                        '<span class="red-tl-paso ' + clase(1) + '">' + comfyTxt + ' <i>' + hora(pasos.comfy) + '</i></span>' +
+                        '<span class="red-tl-flecha">→</span>' +
+                        '<span class="red-tl-paso ' + clase(2) + '">' + nubeTxt + ' <i>' + hora(pasos.subiendo) + '</i></span>' +
+                        '<span class="red-tl-flecha">→</span>' +
+                        '<span class="red-tl-paso ' + clase(3) + '">' + finTxt + ' <i>' + hora(pasos.listo) + '</i></span>' +
+                    '</div>' +
+                    (j.archivo ? '<div class="red-tl-archivo">📄 ' + esc(j.archivo) + '</div>' : '') +
+                '</div>';
             }).join('');
         }
     }
