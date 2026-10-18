@@ -2951,7 +2951,18 @@ function estadoRed() {
         email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,
         computadora: datosDeEstaPC(),
-        clientes: RED.clientes,
+        // clientes conectados a ESTA PC:
+        //  · localAca = navegadores abiertos contra esta app (wss.clients)
+        //  · webAca   = clientes web que eligieron esta máquina (el hub los cuenta)
+        clientes: (function () {
+            const c = Object.assign({}, RED.clientes || {});
+            const porNodo = (c.porNodo && RED.peerId && c.porNodo[RED.peerId]) || { web: 0, usuarios: [] };
+            c.localAca = (typeof wss !== 'undefined' && wss.clients ? wss.clients.size : 0);
+            c.webAca = Number(porNodo.web || 0);
+            c.usuariosAca = porNodo.usuarios || [];
+            c.localAcaUsuario = (RED.usuario && (RED.usuario.usuario || RED.usuario.username)) || '';
+            return c;
+        })(),
         enVueloDetalle: RED.enVueloDetalle || [],
         hub: RED.hub,
         // "conectado" = MI nodo aparece publicado en la red (lo dice el hub)

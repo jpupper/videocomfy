@@ -610,12 +610,13 @@
         var c = ESTADO.clientes || {};
         var miId = (ESTADO.yo && ESTADO.yo.peerId) || '';
         var porNodo = (c.porNodo && miId && c.porNodo[miId]) || { web: 0, usuarios: [] };
-        var locales = Number(c.local || 0);        // navegadores abiertos en apps locales
-        var webAca = Number(porNodo.web || 0);     // clientes web que eligieron ESTA PC
+        // localAca/webAca los calcula el nodo (esta PC); si no vienen, se usa el global
+        var locales = Number(c.localAca != null ? c.localAca : (c.local || 0));
+        var webAca = Number(c.webAca != null ? c.webAca : (porNodo.web || 0));
         var aca = locales + webAca;
         var usuarios = c.usuarios || [];
         var usandoAca = {};
-        (porNodo.usuarios || []).forEach(function (u) { usandoAca[u.usuario] = 1; });
+        (c.usuariosAca || porNodo.usuarios || []).forEach(function (u) { usandoAca[u.usuario] = 1; });
 
         // si no hay datos todavía
         if (!c.total && !aca && !usuarios.length) {
