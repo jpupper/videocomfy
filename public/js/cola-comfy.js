@@ -153,7 +153,7 @@
                     '<div class="red-tl-prompt">“' + esc(String(j.prompt || '').slice(0, 110)) + '”' +
                         ' <span class="red-tl-modelo">' + esc(j.modelo || 'auto') + '</span></div>' +
                     '<div class="red-tl-pasos">' +
-                        '<span class="red-tl-paso ' + clase(0) + '">① Pedido <i>' + hora(pasos.pedido || j.desde) + '</i></span>' +
+                        '<span class="red-tl-paso ' + clase(0) + '">1) Pedido <i>' + hora(pasos.pedido || j.desde) + '</i></span>' +
                         '<span class="red-tl-flecha">→</span>' +
                         '<span class="red-tl-paso ' + clase(1) + '">' + comfyTxt + ' <i>' + hora(pasos.comfy) + '</i></span>' +
                         '<span class="red-tl-flecha">→</span>' +

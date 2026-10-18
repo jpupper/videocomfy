@@ -67,9 +67,21 @@
         marcarBotones(barra);
     }
 
+    // Saca el emoji/glifo del principio del texto (los submenús van sin iconos:
+    // pedido del usuario, y además ⬢/① se ven como cuadraditos en algunos equipos).
+    var RE_ICONO_INICIAL = /^[\p{Extended_Pictographic}\uFE0F\u200D\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u25A0-\u27BF\u2B00-\u2BFF\u0020]+/u;
+
+    function sacarIcono(b) {
+        var t = (b.textContent || '');
+        var limpio = t.replace(RE_ICONO_INICIAL, '').trim();
+        if (limpio && limpio !== t.trim()) b.textContent = limpio;
+    }
+
     function marcarBotones(barra) {
+        var esSub = barra.dataset.ckNivel === 'subcategoria';
         Array.prototype.forEach.call(barra.children, function (b) {
             if (!esBotonPestania(b)) return;
+            if (esSub) sacarIcono(b);
             b.classList.add('ck-tab');
             if (!b.getAttribute('role')) b.setAttribute('role', 'tab');
             // el estado accesible se sincroniza siempre (lo usa también el CSS)

@@ -80,14 +80,14 @@
 
         // Botón visible: ya viene en el HTML (#tabRedBtn, en el menú de pestañas).
         // Antes este módulo creaba OTRO botón con el mismo id y en pantalla
-        // quedaban dos "⬢ RED" (uno en el menú y otro en la fila de sesiones).
+        // quedaban dos "RED" (uno en el menú y otro en la fila de sesiones).
         var btn = document.getElementById('tabRedBtn');
         if (!btn) {
             btn = document.createElement('button');
             btn.className = 'tab-button red-tab-btn';
             btn.id = 'tabRedBtn';
             btn.setAttribute('data-target', 'panelRed');
-            btn.textContent = '⬢ RED';
+            btn.textContent = 'RED';
             btn.title = 'Red ComfyLatam: elegir en qué Comfy de la red generar';
             var barra = document.getElementById('projectTabsNav');
             var badge = document.getElementById('jpiEstado');
@@ -111,7 +111,7 @@
         panel.id = 'panelRed';
         panel.innerHTML = [
             '<div class="red-head">',
-            '  <h2>⬢ RED COMFYLATAM</h2>',
+            '  <h2>RED COMFYLATAM</h2>',
             '  <span class="red-badge" id="redModo"></span>',
             '  <span class="red-badge" id="redResumen"></span>',
             '  <button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
@@ -204,7 +204,7 @@
             mb.type = 'button';
             mb.id = 'mobRed';
             mb.className = 'mobile-tab';
-            mb.textContent = '⬢ RED';
+            mb.textContent = 'RED';
             barra.appendChild(mb);
             mb.addEventListener('click', function () { abrir(); });
         }

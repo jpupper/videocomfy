@@ -186,3 +186,30 @@ body .ck-tabs .ck-tab.active, .ck-tabs .ck-tab.active {
     .ck-tabs[data-ck-nivel="categoria"]::-webkit-scrollbar { height: 0; }
     .workspace-header { min-height: 0 !important; row-gap: 4px !important; padding-bottom: 4px; }
 }
+
+/* ---------------------------------------------------------------------------
+   SUBMENÚS: pegados y sin radio (pedido del usuario). Se comportan como un
+   control segmentado: los bordes se tocan y no hay separación entre botones.
+   --------------------------------------------------------------------------- */
+.ck-tabs[data-ck-nivel="subcategoria"] {
+    gap: 0 !important;
+}
+.ck-tabs[data-ck-nivel="subcategoria"] .ck-tab {
+    border-radius: 0 !important;
+    margin: 0 0 0 -1px !important;   /* el borde izquierdo pisa al anterior */
+}
+.ck-tabs[data-ck-nivel="subcategoria"] .ck-tab:first-child {
+    margin-left: 0 !important;
+}
+.ck-tabs[data-ck-nivel="subcategoria"] .ck-tab.active {
+    position: relative;
+    z-index: 1;                       /* el borde de la activa queda arriba */
+}
+/* las acciones (+ / 💾) siguen separadas y con su radio */
+.ck-tabs[data-ck-nivel="subcategoria"] > .ck-btn-nav-inline {
+    margin-left: 8px !important;
+    border-radius: 9px !important;
+}
+.ck-tabs[data-ck-nivel="subcategoria"] > .ck-btn-nav-inline:first-of-type {
+    margin-left: auto !important;
+}
