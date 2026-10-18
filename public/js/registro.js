@@ -185,7 +185,9 @@
     // generó y lo cancelado: eso es lo que da el ESTADO de cada fila)
     function traerAmbos(urlRegistro) {
         return Promise.all([
-            fetch(urlRegistro, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+            (urlRegistro
+                ? fetch(urlRegistro, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+                : Promise.resolve(null)),
             fetch(BASE + '/api/pedidos', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
         ]).then(function (res) {
             var d = res[0], p = res[1];
@@ -208,8 +210,11 @@
                 var peers = (d && d.peers) || [];
                 var principal = peers.filter(function (p) { return p.principal; })[0] || peers[0];
                 if (principal) pedir(principal.id);
+                // sin sesión (401) o sin nodos: igual se pinta el registro de PEDIDOS,
+                // que es público y ya trae estado, archivo y URL de cada generación
+                else traerAmbos(null);
             })
-            .catch(function () { });
+            .catch(function () { traerAmbos(null); });
     }
 
     function arrancar() {
