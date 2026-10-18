@@ -176,7 +176,19 @@ function resumenClientes() {
         };
         usuarios[c.usuario][c.origen === 'local' ? 'local' : 'web'] += 1;
     });
+    // cuántos clientes están usando CADA nodo (los que eligieron "usar esta
+    // computadora"): el hub lo sabe por el prefijo /p/<peerId> de sus pedidos
+    const porNodo = {};
+    lista.forEach((c) => {
+        if (!c.peerId) return;
+        const n = porNodo[c.peerId] = porNodo[c.peerId] || { web: 0, usuarios: [] };
+        if (c.origen !== 'local') n.web += 1;
+        if (c.usuario && !n.usuarios.some((u) => u.usuario === c.usuario)) {
+            n.usuarios.push({ usuario: c.usuario, avatar: c.avatar || '' });
+        }
+    });
     return {
+        porNodo,
         total: lista.length,
         web: lista.filter((c) => c.origen !== 'local').length,
         local: lista.filter((c) => c.origen === 'local').length,
@@ -197,6 +209,17 @@ function avisarClientes() {
     // y a los nodos, para que su app local muestre lo mismo
     try { enviarATodos('red:clientes', r); } catch (e) { }
     return r;
+}
+
+// Marca con qué nodo está trabajando un cliente web (por su IP) para poder
+// mostrar "clientes conectados a esta PC" en el panel RED de cada máquina.
+function marcarClienteEnNodo(ip, peerId) {
+    if (!peerId) return;
+    const ipLimpia = String(ip || '').split(',')[0].trim();
+    if (!ipLimpia) return;
+    clientes.forEach((c) => {
+        if (c.ip && c.ip === ipLimpia) { c.peerId = peerId; c.peerIdDesde = Date.now(); }
+    });
 }
 
 function anotarCliente(socket, datos) {
@@ -605,6 +628,6 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
 module.exports = {
     anotarCliente, listarClientes, resumenClientes, avisarClientes, setResolutorUsuario, actualizarCliente,
     iniciar, estado, enviarAlAgente, enviarA, enviarATodos, alRecibirBroadcast, alCambiarPeers,
-    reenviarHttp, reescribirJson, reescribirUrl, reescribirTexto, origenPublico,
+    reenviarHttp, reescribirJson, marcarClienteEnNodo, reescribirUrl, reescribirTexto, origenPublico,
     listarPeers, listarPasados, peer, principal, prefijoDe, avisarPeers, publico
 };

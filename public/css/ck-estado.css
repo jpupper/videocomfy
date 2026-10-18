@@ -364,3 +364,4 @@
 #globalQueueContainer[style*="display: none"] {
     display: block !important;
 }
+.batch-ojo { margin-left: 4px; align-self: center; font-size: 1.05rem; }

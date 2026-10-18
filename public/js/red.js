@@ -562,16 +562,20 @@
               (puede ? 'CONECTAR' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
         var sello = elegido ? ' <span class="red-badge comparto">✅ CONECTADO</span>' : '';
         var estado;
+        // OJO: el puntito de estado ya lo pone <span class="red-punto">; acá NO va
+        // otro emoji (antes salían dos verdes seguidos: el punto y el 🟢).
         if (mio) {
-            estado = p.conectado ? '🟢 publicado en la red' : '⚪ sin publicar (corré conectar-comfylatam.bat)';
+            estado = p.conectado ? 'publicado en la red' : 'sin publicar (corré conectar-comfylatam.bat)';
         } else {
             if (p.conectado) {
                 var quien = p.usuario ? ' · de @' + p.usuario : '';
+                var enUso = !!(p.ocupado || p.encolados > 0 || p.ejecutando > 0);
                 estado = (p.comfy
-                    ? (p.ocupado || p.encolados > 0
-                        ? '🟡 OCUPADO · ' + (p.encolados || 0) + ' en cola'
-                        : '🟢 LIBRE para generar')
-                    : '⚪ Comfy apagado') + quien;
+                    ? (enUso
+                        // se puede conectar igual: sólo se avisa que está trabajando
+                        ? 'EN USO · ' + ((p.encolados || 0) + (p.ejecutando > 0 ? 1 : 0)) + ' en cola (te podés conectar igual)'
+                        : 'LIBRE para generar')
+                    : 'Comfy apagado') + quien;
             } else {
                 var hace = '';
                 if (p.visto) {
@@ -604,12 +608,19 @@
         var caja = document.getElementById('redClientes');
         if (!caja) return;
         var c = ESTADO.clientes || {};
-        var total = Number(c.total || 0);
+        var miId = (ESTADO.yo && ESTADO.yo.peerId) || '';
+        var porNodo = (c.porNodo && miId && c.porNodo[miId]) || { web: 0, usuarios: [] };
+        var locales = Number(c.local || 0);        // navegadores abiertos en apps locales
+        var webAca = Number(porNodo.web || 0);     // clientes web que eligieron ESTA PC
+        var aca = locales + webAca;
         var usuarios = c.usuarios || [];
+        var usandoAca = {};
+        (porNodo.usuarios || []).forEach(function (u) { usandoAca[u.usuario] = 1; });
 
-        if (!total && !usuarios.length && !(c.appsLocales || 0)) {
-            caja.innerHTML = '<h3 class="red-titulo">👥 CLIENTES CONECTADOS</h3>' +
-                '<div class="red-sub-chico">Todavía no hay nadie más conectado.</div>';
+        // si no hay datos todavía
+        if (!c.total && !aca && !usuarios.length) {
+            caja.innerHTML = '<h3 class="red-titulo">👥 CLIENTES CONECTADOS A ESTA PC</h3>' +
+                '<div class="red-sub-chico">Todavía no hay nadie conectado.</div>';
             return;
         }
 
@@ -618,22 +629,24 @@
             var tipos = [];
             if (u.web) tipos.push(u.web + ' web');
             if (u.local) tipos.push(u.local + ' local');
+            var aca = usandoAca[u.usuario] ? ' <span class="red-badge comparto">usando esta PC</span>' : '';
             return '<div class="red-cliente-fila">' + foto +
                 '<b>@' + esc(u.usuario) + '</b>' +
-                '<span class="red-cliente-tipo">' + tipos.join(' · ') + '</span></div>';
+                '<span class="red-cliente-tipo">' + tipos.join(' · ') + '</span>' + aca + '</div>';
         }).join('');
 
         caja.innerHTML = [
-            '<h3 class="red-titulo">👥 CLIENTES CONECTADOS <span class="red-badge">' + total + '</span></h3>',
+            '<h3 class="red-titulo">👥 CLIENTES CONECTADOS A ESTA PC <span class="red-badge">' + aca + '</span></h3>',
             '<div class="red-cliente-resumen">',
-            '  <span>🌐 ' + (c.web || 0) + ' en la web</span>',
-            '  <span>💻 ' + ((c.local || 0) + (c.appsLocales || 0)) + ' en local</span>',
-            '  <span>👤 ' + (c.usuariosTotal || 0) + ' usuario(s)</span>',
+            '  <span>💻 ' + locales + ' local(es) en esta PC</span>',
+            '  <span>🌐 ' + webAca + ' desde la web usando esta PC</span>',
+            '  <span>👤 ' + (c.usuariosTotal || 0) + ' usuario(s) en la red</span>',
             (c.anonimos ? '  <span class="red-cliente-anon">' + c.anonimos + ' sin sesión</span>' : ''),
             '</div>',
             filas ? '<div class="red-clientes-lista">' + filas + '</div>' : '',
-            '<div class="red-sub-chico">Un <b>cliente</b> es cada navegador conectado (la web o una app local). ' +
-            'La app local además aparece como nodo, con su Comfy.</div>'
+            '<div class="red-sub-chico">Un <b>cliente</b> es cada navegador conectado: los locales de esta PC ' +
+            'y los de la web que eligieron usarla (los que apretaron <b>usar esta compu</b>). ' +
+            'En toda la red hay ' + (c.total || 0) + ' cliente(s): ' + (c.web || 0) + ' web · ' + (c.local || 0) + ' local.</div>'
         ].join('\n');
     }
 

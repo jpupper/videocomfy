@@ -125,6 +125,10 @@
                     '<div class="batch-estado-txt">' + esc(store.ICONO[est] || ICONO[est] || '') + ' ' + esc(store.TEXTO[est] || TEXTO[est] || est) +
                         (p.archivo ? ' · 📄 ' + esc(p.archivo) : '') + '</div>' +
                 '</div>' +
+                // el ojo sólo si se generó (misma clase que el del registro: la abre el visor)
+                (((est === 'listo' || est === 'sin_nube') && (p.url || p.archivo))
+                    ? '<button class="reg-ojo batch-ojo" data-url="' + esc(p.url || '') + '" data-arch="' + esc(p.archivo || '') + '" title="Ver la imagen">👁️</button>'
+                    : '') +
             '</div>';
         };
 

@@ -921,6 +921,15 @@ app.use((req, res, next) => {
         }
     }
 
+    // deja anotado que este cliente web está usando ese nodo (para el panel RED
+    // de esa PC: "clientes conectados a esta computadora")
+    try {
+        if (req.peerId) {
+            const ip = String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+            relay.marcarClienteEnNodo(ip, req.peerId);
+        }
+    } catch (e) { }
+
     relay.reenviarHttp({
         peerId: req.peerId || null,
         method: req.method,
