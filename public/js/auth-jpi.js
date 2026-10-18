@@ -195,6 +195,11 @@ function ckMezclarPerfil() {
     // --- 4) el nodo publica tu identidad (nombre + avatar) -------------------
     function publicarPerfil() {
         if (!usuario) return;
+        // SÓLO en la app local. La identidad de una PC la fija su dueño: si se
+        // publicara desde la web, un usuario web le cambiaría el perfil a otra
+        // persona (y el túnel del nodo lo bloquea con razón, ensuciando la
+        // consola con "POST /api/red/perfil BLOQUEADO").
+        if (!esLocal) return;
         fetch(API + '/api/red/perfil', {
             method: 'POST',
             headers: Object.assign({ 'Content-Type': 'application/json' },

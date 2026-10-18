@@ -329,7 +329,8 @@ function arrancar(opciones) {
             // ---------------------------------------------------------------
             const RUTAS_PROHIBIDAS = [
                 /^\/api\/config/i,                       // cambiar a qué ComfyUI apunta
-                /^\/api\/comfy\/cola\/limpiar/i,          // borrar la cola
+                // /api/comfy/cola/limpiar SÍ se permite: es el botón "Vaciar cola"
+                // del panel de STAGE, y desde la web quedaba bloqueado sin avisar.
                 /^\/api\/actualizar/i,                    // traer código nuevo (git pull)
                 /^\/api\/generate-avatar/i,               // escribía archivos
                 /^\/api\/red\/(agente|nodos|perfil|job)/i, // identidad y trabajos internos
