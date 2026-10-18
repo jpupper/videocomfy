@@ -213,3 +213,31 @@ body .ck-tabs .ck-tab.active, .ck-tabs .ck-tab.active {
 .ck-tabs[data-ck-nivel="subcategoria"] > .ck-btn-nav-inline:first-of-type {
     margin-left: auto !important;
 }
+
+/* ---------------------------------------------------------------------------
+   HEADER: los chips "LOCAL" y "Comfy listo" estaban en un contenedor display:block
+   con alturas distintas (27px vs 28px) => quedaban corridos 1-2px y parecía roto.
+   Ahora van en fila, centrados y con la misma altura.
+   --------------------------------------------------------------------------- */
+.workspace-header { padding-top: 6px !important; }
+.header-title-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+    min-height: 30px;
+}
+.header-title-row #ckEntornoPill,
+.header-title-row #jpiEstado,
+.header-title-row .jpiEstado {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center;
+    height: 28px !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    line-height: 1 !important;
+    vertical-align: middle;
+    white-space: nowrap;
+}

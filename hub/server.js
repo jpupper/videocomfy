@@ -17,6 +17,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const { Readable } = require('stream');
 const app = express();
 const http = require('http');
 const path = require('path');
@@ -547,6 +548,48 @@ function esAgente(req) {
 }
 
 // Lista de nodos de la red (los que están corriendo la app con su Comfy).
+
+// --- PEDIDOS: el BATCH agregado de TODAS las máquinas conectadas ------------
+// En la web el BATCH no es de una sola PC: se le pide a cada nodo en línea su
+// registro y se junta todo, marcando de qué máquina es cada pedido.
+app.get(rutasRed('/api/pedidos'), async (req, res) => {
+    const peers = relay.listarPeers().filter((p) => p.conectado);
+    const pedidos = [];
+    const maquinas = [];
+    await Promise.all(peers.map(async (p) => {
+        try {
+            const r = await relay.reenviarHttp({ peerId: p.id, method: 'GET', ruta: '/api/pedidos' });
+            const j = r.jsonReescrito || JSON.parse(r.body.toString('utf8'));
+            const lista = (j && j.pedidos) || [];
+            maquinas.push({ id: p.id, nombre: p.nombre, usuario: p.usuario, gpu: p.gpu, pedidos: lista.length });
+            lista.forEach((x) => pedidos.push(Object.assign({}, x, {
+                maquina: { id: p.id, nombre: p.nombre, usuario: p.usuario, gpu: p.gpu }
+            })));
+        } catch (e) {
+            maquinas.push({ id: p.id, nombre: p.nombre, usuario: p.usuario, error: e.message });
+        }
+    }));
+    pedidos.sort((a, b) => (b.cuando || 0) - (a.cuando || 0));
+    res.json({ success: true, agregado: true, maquinas, pedidos: pedidos.slice(0, 200) });
+});
+
+// limpiar el batch: se les pide a todas las máquinas
+app.post(rutasRed('/api/pedidos/limpiar'), express.json({ limit: '1mb' }), async (req, res) => {
+    let cancelados = 0;
+    await Promise.all(relay.listarPeers().filter((p) => p.conectado).map(async (p) => {
+        try {
+            const r = await relay.reenviarHttp({
+                peerId: p.id, method: 'POST', ruta: '/api/pedidos/limpiar',
+                contentType: 'application/json', stream: Readable.from(['{}'])
+            });
+            const j = r.jsonReescrito || JSON.parse(r.body.toString('utf8'));
+            cancelados += (j && j.cancelados) || 0;
+        } catch (e) { }
+    }));
+    res.json({ success: true, cancelados });
+});
+
+
 app.get(rutasRed('/api/red/peers'), (req, res) => {
     const quien = autorizadoRed(req);
     if (!quien) {

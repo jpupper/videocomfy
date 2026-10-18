@@ -402,12 +402,14 @@ async function subirArchivoAR2(carpeta, nombre) {
         const st = fs.statSync(ruta);
         if (!st.isFile() || st.size === 0) return false;
         marcarPedidoRedPorArchivo(nombre, { estado: 'subiendo' });   // línea de tiempo: "subiendo a Cloudflare"
+        actualizarPedido({ archivo: nombre }, { estado: 'subiendo' });
         const r = await r2lib.subirArchivo(ruta, {
             tipo: 'comfylatam', sub: carpeta, filename: nombre,
             mime: mimeDe(nombre), size: st.size
         });
         if (!r) { r2Estado.errores++; marcarPedidoRedPorArchivo(nombre, { estado: 'sin_nube' }); return false; }
         marcarPedidoRedPorArchivo(nombre, { estado: 'listo', urlNube: r.url });
+        actualizarPedido({ archivo: nombre }, { estado: 'listo', url: r.url });
         mediaMap.anotar(nombre, r.url, { carpeta, bytes: st.size, cuando: Date.now() });
         colaMapa.set(nombre, {          // avisa al hub (302 al CDN) y queda en la base
             url: r.url, bytes: st.size, key: r.key || '',
@@ -1630,6 +1632,7 @@ function connectToComfy() {
                 // avanza — pero con node:null ComfyUI avisa que CERRÓ, no que empezó
                 if (message.data.node !== null && message.data.node !== undefined) {
                     marcarPedidoRed(message.data.prompt_id, { estado: 'comfy' });
+                    actualizarPedido({ promptId: message.data.prompt_id }, { estado: 'en_comfy' });
                 }
                 broadcastComfyCola();
             }
@@ -1654,6 +1657,9 @@ function connectToComfy() {
                 // en rojo (antes quedaba pegada en "ComfyUI" para siempre)
                 const _enEjF = (comfyCola.enEjecucion || [])[0];
                 if (_enEjF && _enEjF.promptId) {
+                    actualizarPedido({ promptId: _enEjF.promptId }, {
+                        estado: 'error', motivo: (message.type === 'execution_interrupted' ? 'interrumpido' : 'error del motor')
+                    });
                     marcarPedidoRed(_enEjF.promptId, {
                         estado: 'error',
                         motivo: (message.type === 'execution_interrupted' ? 'interrumpido'
@@ -1800,6 +1806,12 @@ function connectToComfy() {
 
                             // Si era un pedido de la red, ya terminó: sale del detalle
                             // de "en vuelo" (antes el contador sólo subía).
+                            // el pedido ya volvió: generado en el disco de esta PC
+                            actualizarPedido({ promptId: promptId }, {
+                                estado: (metaToSave.origen === 'web' || metaToSave.origen === 'red') ? 'devuelta' : 'listo',
+                                archivo: filenameOnly,
+                                bytes: (() => { try { return fs.statSync(path.join(__dirname, 'public', targetSubdir, filenameOnly)).size; } catch (e) { return null; } })()
+                            });
                             if (metaToSave.origen === 'red') {
                                 RED.enVuelo = Math.max(0, (RED.enVuelo || 0) - 1);
                                 // Antes se borraba de la lista y en el STAGE local nunca
@@ -1939,9 +1951,167 @@ function connectToComfy() {
 // Generations can run as long as needed. No timeout.
 // Only warnings are sent to frontend (handled client-side).
 
+// ===========================================================================
+// PEDIDOS — registro de TODO lo que se pide (desde la web o desde esta PC) con
+// su estado paso a paso. Es la fuente del BATCH y del REGISTRO del STAGE: así
+// se ve lo que se pidió aunque todavía no se haya generado, y lo cancelado
+// queda como cancelado (cruz) en vez de desaparecer.
+//   pedida -> en_comfy -> devuelta -> (subiendo) -> listo
+//   + cancelada | interrumpida | error | sin_nube
+// ===========================================================================
+const RUTA_PEDIDOS = path.join(__dirname, 'datos', 'pedidos.json');
+let PEDIDOS = [];
+let _tGuardarPedidos = null;
+const PEDIDOS_EN_CURSO = ['pedida', 'en_comfy', 'devuelta', 'subiendo'];
+const PEDIDOS_FINALES = ['listo', 'error', 'cancelada', 'interrumpida', 'sin_nube'];
+
+function cargarPedidos() {
+    try {
+        if (fs.existsSync(RUTA_PEDIDOS)) {
+            const j = JSON.parse(fs.readFileSync(RUTA_PEDIDOS, 'utf8'));
+            PEDIDOS = Array.isArray(j) ? j : (j.pedidos || []);
+        }
+    } catch (e) { PEDIDOS = []; }
+    let huerfanos = 0;
+    PEDIDOS.forEach((p) => {
+        if (PEDIDOS_EN_CURSO.indexOf(p.estado) >= 0) {
+            p.estado = 'interrumpida';
+            p.pasos = p.pasos || {};
+            p.pasos.interrumpida = p.pasos.interrumpida || Date.now();
+            p.actualizado = Date.now();
+            huerfanos++;
+        }
+    });
+    if (huerfanos) {
+        console.log('🧹 [PEDIDOS] ' + huerfanos + ' pedido(s) de la corrida anterior quedaron a medias: marcados como interrumpidos');
+        guardarPedidos(true);
+    }
+    console.log('📋 [PEDIDOS] ' + PEDIDOS.length + ' en el registro');
+}
+
+function guardarPedidos(ya) {
+    clearTimeout(_tGuardarPedidos);
+    const hacer = () => {
+        try {
+            fs.mkdirSync(path.dirname(RUTA_PEDIDOS), { recursive: true });
+            fs.writeFileSync(RUTA_PEDIDOS, JSON.stringify(PEDIDOS.slice(-400)));
+        } catch (e) { console.log('⚠️  [PEDIDOS] no pude guardar: ' + e.message); }
+    };
+    if (ya) { hacer(); return; }
+    _tGuardarPedidos = setTimeout(hacer, 500);
+}
+
+function nuevoPedido(d) {
+    const ahora = Date.now();
+    const origen = (d.origen === 'web' ? 'web' : 'local');
+    const p = {
+        id: String(d.jobId || d.promptId || ('p-' + ahora + '-' + Math.random().toString(36).slice(2, 6))),
+        jobId: d.jobId || null,
+        promptId: d.promptId || null,
+        prompt: String(d.prompt || '').slice(0, 400),
+        modelo: d.modelo || 'ltx2',
+        usuario: d.usuario || '—',
+        displayName: d.displayName || d.usuario || '—',
+        avatar: d.avatar || '',
+        origen: origen,
+        desde: (origen === 'web' ? 'la web' : 'esta app (local)'),
+        computadora: d.computadora || null,
+        estado: 'pedida',
+        archivo: null,
+        url: null,
+        cuando: ahora,
+        actualizado: ahora,
+        pasos: { pedida: ahora }
+    };
+    PEDIDOS.push(p);
+    if (PEDIDOS.length > 400) PEDIDOS = PEDIDOS.slice(-400);
+    guardarPedidos();
+    avisarPedidos();
+    return p;
+}
+
+function buscarPedido(f) {
+    if (!f) return null;
+    for (let i = PEDIDOS.length - 1; i >= 0; i--) {
+        const p = PEDIDOS[i];
+        if (f.id && p.id === f.id) return p;
+        if (f.promptId && p.promptId && p.promptId === f.promptId) return p;
+        if (f.jobId && p.jobId && p.jobId === f.jobId) return p;
+        if (f.archivo && p.archivo && p.archivo === f.archivo) return p;
+    }
+    return null;
+}
+
+function actualizarPedido(filtro, cambios, forzar) {
+    const p = buscarPedido(filtro);
+    if (!p) return null;
+    if (!forzar && PEDIDOS_FINALES.indexOf(p.estado) >= 0) return p;
+    Object.assign(p, cambios || {});
+    p.actualizado = Date.now();
+    p.pasos = p.pasos || {};
+    if (p.estado && !p.pasos[p.estado]) p.pasos[p.estado] = p.actualizado;
+    guardarPedidos();
+    avisarPedidos();
+    return p;
+}
+
+function avisarPedidos() {
+    clearTimeout(avisarPedidos._t);
+    avisarPedidos._t = setTimeout(() => {
+        try { enviarAlFront({ type: 'pedidos', pedidos: PEDIDOS.slice(-80) }); } catch (e) { }
+    }, 300);
+}
+
+async function quitarDeComfy(promptId) {
+    if (!promptId) return false;
+    try {
+        const r = await fetch(COMFY_BASE() + '/queue', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ delete: [promptId] })
+        });
+        return r.ok;
+    } catch (e) { return false; }
+}
+
 // ============================================
 // ENDPOINTS API
 // ============================================
+
+// --- PEDIDOS: registro de lo que se pidió, con su estado -------------------
+// lo usan el BATCH y el REGISTRO del STAGE (local y web).
+app.get('/api/pedidos', (req, res) => {
+    res.json({ success: true, pedidos: PEDIDOS.slice(-150).slice().reverse() });
+});
+
+// limpiar el batch: lo que está en curso pasa a "cancelada" (con su cruz en el
+// registro) y se saca del motor si todavía estaba en la cola de ComfyUI.
+app.post('/api/pedidos/limpiar', async (req, res) => {
+    let cancelados = 0, sacados = 0;
+    const enCurso = PEDIDOS.filter((p) => PEDIDOS_EN_CURSO.indexOf(p.estado) >= 0);
+    for (const p of enCurso) {
+        actualizarPedido({ id: p.id }, { estado: 'cancelada', motivo: 'se limpió el batch' }, true);
+        cancelados++;
+        if (await quitarDeComfy(p.promptId)) sacados++;
+    }
+    if (cancelados > 0 && (comfyCola.enEjecucion || [])[0]) {
+        const ej = comfyCola.enEjecucion[0];
+        const suyo = enCurso.some((p) => p.promptId && p.promptId === ej.promptId);
+        if (suyo) { try { await fetch(COMFY_BASE() + '/interrupt', { method: 'POST' }); } catch (e) { } }
+    }
+    console.log(`🧹 [PEDIDOS] batch limpiado: ${cancelados} cancelado(s), ${sacados} sacado(s) del motor`);
+    res.json({ success: true, cancelados, sacados });
+});
+
+// cancelar uno solo
+app.post('/api/pedidos/:id/cancelar', async (req, res) => {
+    const p = buscarPedido({ id: req.params.id });
+    if (!p) return res.status(404).json({ success: false, message: 'no existe ese pedido' });
+    if (PEDIDOS_FINALES.indexOf(p.estado) >= 0) return res.json({ success: true, ya: true, estado: p.estado });
+    actualizarPedido({ id: p.id }, { estado: 'cancelada', motivo: 'cancelado a mano' }, true);
+    const sacado = await quitarDeComfy(p.promptId);
+    res.json({ success: true, estado: 'cancelada', sacado });
+});
+
 
 app.post('/api/upload-image', upload.single('image'), async (req, res) => {
     try {
@@ -3050,6 +3220,13 @@ async function encolarTrabajoRed(b) {
         archivo: null, urlNube: null, actualizado: Date.now()
     });
     if (RED.enVueloDetalle.length > 20) RED.enVueloDetalle = RED.enVueloDetalle.slice(-20);
+    // queda asentado en el registro de pedidos (aunque todavía no se haya generado)
+    nuevoPedido({
+        jobId: details.red.jobId, promptId: promptId, prompt: prompt, modelo: details.modelo,
+        usuario: pedidoPor.usuario, displayName: pedidoPor.displayName || pedidoPor.usuario,
+        avatar: pedidoPor.avatar, origen: 'web',
+        computadora: { nombre: details.computadora.nombre, peerId: RED.peerId, gpu: details.computadora.gpu }
+    });
     avisarRedATodos({ job: { jobId: details.red.jobId, promptId, modelo: details.modelo, de: details.red.de } });
     console.log(`🌎 [RED] trabajo de ${pedidoPor.displayName} (${pedidoPor.tipo}) recibido del VPS -> encolado acá (${details.modelo})`);
     console.log(`   prompt: ${prompt.slice(0, 70)}`);
@@ -3299,6 +3476,9 @@ process.on('uncaughtException', (e) => {
 // red local, así que cualquier dispositivo de la misma red podía entrar.
 // Si necesitás abrirla a la red, poné HOST=0.0.0.0 en el .env.
 const HOST_ESCUCHA = process.env.HOST || '127.0.0.1';
+// registro de pedidos (BATCH + REGISTRO del STAGE)
+cargarPedidos();
+
 server.listen(port, HOST_ESCUCHA, () => {
     console.log(`🚀 Servidor listo en http://localhost:${port}`);
     try {
@@ -3441,6 +3621,16 @@ wss.on('connection', (ws) => {
                         generationStartTime: Date.now()
                     };
                     promptDetails[promptId] = details;
+                    // pedido hecho desde esta app (queda en el mismo registro que los de la web)
+                    nuevoPedido({
+                        promptId: promptId, prompt: details.prompt, modelo: details.modelo,
+                        usuario: (details.pedidoPor && (details.pedidoPor.usuario || details.pedidoPor.displayName)) || 'vos',
+                        displayName: details.pedidoPor && (details.pedidoPor.displayName || details.pedidoPor.usuario),
+                        avatar: details.pedidoPor && details.pedidoPor.avatar,
+                        origen: details.origen === 'web' ? 'web' : 'local',
+                        computadora: { nombre: details.computadora && details.computadora.nombre, peerId: RED.peerId,
+                                       gpu: details.computadora && details.computadora.gpu }
+                    });
                     lastPromptDetails = details;
                     
                     // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI

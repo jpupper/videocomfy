@@ -124,45 +124,84 @@
         }
 
         if (tab) {
-            var filas = regs.slice(0, 15).map(function (r) {
+            // ---- REGISTRO: primero los PEDIDOS (incluye los que nunca se generaron
+            // y los cancelados, con su estado) y después las imágenes viejas que no
+            // tengan pedido asociado.
+            var ped = (window.CK_PEDIDOS || []).slice(0, 40);
+            var archivosConPedido = {};
+            ped.forEach(function (p) { if (p.archivo) archivosConPedido[p.archivo] = 1; });
+
+            var E_ICONO = { pedida: '⏳', en_comfy: '⚙️', devuelta: '📥', subiendo: '☁️', listo: '✅',
+                            cancelada: '✖', interrumpida: '⚠️', error: '⚠️', sin_nube: '💾' };
+            var E_TEXTO = { pedida: 'pedida · esperando', en_comfy: 'en ComfyUI', devuelta: 'volvió al local',
+                            subiendo: 'subiendo a la nube', listo: 'lista', cancelada: 'cancelada',
+                            interrumpida: 'interrumpida', error: 'error', sin_nube: 'lista (quedó local)' };
+
+            var filasPedidos = ped.map(function (p) {
+                var est = p.estado || 'pedida';
+                var foto = p.avatar ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">' : '👤 ';
+                var maq = (p.maquina && p.maquina.nombre) || (p.computadora && p.computadora.nombre) || '—';
+                var puedeVer = (est === 'listo' || est === 'sin_nube') && (p.url || p.archivo);
+                var ojo = puedeVer
+                    ? '<button class="reg-ojo" data-url="' + esc(p.url || '') + '" data-arch="' + esc(p.archivo || '') + '" title="Ver la imagen">👁️</button>'
+                    : '';
+                return '<tr data-estado="' + esc(est) + '">' +
+                    '<td>' + (E_ICONO[est] || '•') + ' <span class="reg-estado-txt">' + esc(E_TEXTO[est] || est) + '</span></td>' +
+                    '<td>' + esc(p.archivo || '—') + '</td>' +
+                    '<td>' + esc(String(p.prompt || '').slice(0, 40)) + '</td>' +
+                    '<td>' + foto + '@' + esc(p.usuario || '?') + '</td>' +
+                    '<td>' + (p.origen === 'web' ? '🌐 la web' : '🏠 esta app') + '</td>' +
+                    '<td>🖥️ <b>' + esc(maq) + '</b></td>' +
+                    '<td>' + hora(p.cuando) + '</td>' +
+                    '<td>' + ojo + '</td>' +
+                    '</tr>';
+            });
+
+            var filas = regs.filter(function (r) { return !archivosConPedido[r.archivo]; }).slice(0, 15).map(function (r) {
                 var foto = r.avatar ? '<img class="red-avatar" src="' + esc(r.avatar) + '" alt="">' : '👤 ';
                 // '≈' = generación vieja, anotada antes de que el pedido viajara
                 // con cada trabajo: el usuario puede no ser el correcto.
                 var dudoso = '';
-                return '<tr>' +
+                return '<tr data-estado="listo">' +
+                    '<td>✅ <span class="reg-estado-txt">lista</span></td>' +
                     '<td>' + esc(r.archivo) + '</td>' +
                     '<td>' + esc(String(r.prompt || '').slice(0, 40)) + '</td>' +
                     '<td>' + foto + '@' + esc(r.pedidoPorUsuario || r.pedidoPor) + dudoso + '</td>' +
                     '<td>' + (r.pedidoDesde === 'esta app (local)' ? '🏠' : (r.pedidoDesde === 'la web' ? '🌐' : '🖥️')) + ' ' + esc(r.pedidoDesde || '—') + '</td>' +
                     '<td>🖥️ <b>' + esc(r.computadora) + '</b><br><span style="color:var(--text-muted)">dueño: @' + esc(r.dueno) + '</span></td>' +
                     '<td>' + hora(r.fecha) + '</td>' +
+                    '<td><button class="reg-ojo" data-arch="' + esc(r.archivo) + '" title="Ver la imagen">👁️</button></td>' +
                     '</tr>';
             }).join('');
+            filas = filasPedidos.concat(filas).join('');
             tab.innerHTML = '<h3>📋 REGISTRO</h3>' +
                 (filas
-                    ? '<table class="reg-tabla"><thead><tr><th>Archivo</th><th>Prompt</th><th>Lo pidió</th><th>El pedido salió de</th><th>Se hizo en (dueño)</th><th>Cuándo</th></tr></thead><tbody>' + filas + '</tbody></table>'
+                    ? '<table class="reg-tabla"><thead><tr><th>Estado</th><th>Archivo</th><th>Prompt</th><th>Lo pidió</th><th>Salió de</th><th>Se hizo en</th><th>Cuándo</th><th></th></tr></thead><tbody>' + filas + '</tbody></table>'
                     : '<div class="reg-datos"><span>sin registros todavía</span></div>');
         }
     }
 
+    // trae el registro de imágenes Y el de pedidos (que incluye lo que nunca se
+    // generó y lo cancelado: eso es lo que da el ESTADO de cada fila)
+    function traerAmbos(urlRegistro) {
+        return Promise.all([
+            fetch(urlRegistro, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+            fetch(BASE + '/api/pedidos', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+        ]).then(function (res) {
+            var d = res[0], p = res[1];
+            if (p && p.pedidos) window.CK_PEDIDOS = p.pedidos;
+            if (d || p) { if (d) ultimo = d; pintarRegistros(d || { registros: [] }); }
+        });
+    }
+
     function traer() {
-        if (esLocal) {
-            fetch('api/registro').then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
-                .catch(function () { });
-            return;
-        }
+        if (esLocal) { traerAmbos('api/registro'); return; }
         // En la web el registro vive en la PC que generó: se pide por el relay.
         // Si no hay nodo elegido, se usa el principal (así el STAGE se ve igual
         // que en local y no queda vacío).
         var elegido = '';
         try { elegido = localStorage.getItem(CLAVE_NODO) || ''; } catch (e) { }
-        var pedir = function (id) {
-            fetch(BASE + '/api/registro')
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (d) { if (d) { ultimo = d; pintarRegistros(d); } })
-                .catch(function () { });
-        };
+        var pedir = function (id) { traerAmbos(BASE + '/api/registro'); };
         if (elegido) { pedir(elegido); return; }
         fetch(BASE + '/api/red/peers').then(function (r) { return r.ok ? r.json() : null; })
             .then(function (d) {
@@ -185,4 +224,50 @@
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
     else arrancar();
+})();
+
+// ---------------------------------------------------------------------------
+// OJO del REGISTRO: abre la imagen (o el video) de una generación terminada.
+// Sólo aparece en las que se generaron bien (las canceladas tienen cruz y no
+// tienen nada que abrir).
+// ---------------------------------------------------------------------------
+(function () {
+    'use strict';
+    var J = window.JPI || {};
+    var BASE = J.API_BASE || '';
+
+    function urlDe(boton) {
+        var u = boton.getAttribute('data-url');
+        if (u) return u;
+        var arch = boton.getAttribute('data-arch') || '';
+        var esVideo = /\.(mp4|webm|mov|mkv)$/i.test(arch);
+        return BASE + '/' + (esVideo ? 'videos' : 'uploads') + '/' + encodeURIComponent(arch);
+    }
+
+    function abrir(src, esVideo) {
+        cerrar();
+        var capa = document.createElement('div');
+        capa.id = 'regVisor';
+        capa.innerHTML = '<button id="regVisorCerrar" title="Cerrar">✕</button>' +
+            (esVideo ? '<video src="' + src + '" controls autoplay loop></video>'
+                     : '<img src="' + src + '" alt="">');
+        capa.addEventListener('click', function (e) {
+            if (e.target === capa || e.target.id === 'regVisorCerrar') cerrar();
+        });
+        document.body.appendChild(capa);
+        document.addEventListener('keydown', escCerrar);
+    }
+    function escCerrar(e) { if (e.key === 'Escape') cerrar(); }
+    function cerrar() {
+        var v = document.getElementById('regVisor');
+        if (v) v.remove();
+        document.removeEventListener('keydown', escCerrar);
+    }
+
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('.reg-ojo') : null;
+        if (!b) return;
+        var src = urlDe(b);
+        abrir(src, /\.(mp4|webm|mov|mkv)(\?|$)/i.test(src));
+    });
 })();

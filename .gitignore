@@ -58,3 +58,5 @@ temp/
 hub/data/media-map.json
 public/uploads/metadata.json
 public/videos/metadata.json
+# registro de pedidos (estado local, no se versiona)
+datos/

@@ -282,3 +282,85 @@
     .red-tl-paso { font-size: 0.66rem; padding: 3px 6px; }
     .red-tl-paso i { display: none; }
 }
+
+/* ============================================================================
+   BATCH (lista única de pedidos) + REGISTRO con estado + visor del ojo
+   ============================================================================ */
+.batch-pedidos { display: flex; flex-direction: column; gap: 8px; }
+.batch-fila {
+    display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-left: 3px solid #38bdf8;
+    border-radius: 8px; padding: 8px 10px;
+    background: rgba(2, 6, 23, 0.35);
+}
+.batch-fila[data-estado="en_comfy"]  { border-left-color: #f59e0b; }
+.batch-fila[data-estado="devuelta"]  { border-left-color: #a855f7; }
+.batch-fila[data-estado="subiendo"]  { border-left-color: #a855f7; }
+.batch-fila[data-estado="listo"],
+.batch-fila[data-estado="sin_nube"]  { border-left-color: #10b981; }
+.batch-fila[data-estado="cancelada"],
+.batch-fila[data-estado="interrumpida"],
+.batch-fila[data-estado="error"]     { border-left-color: #ef4444; opacity: 0.72; }
+.batch-estado { font-size: 1rem; line-height: 1.2; }
+.batch-cuerpo { flex: 1 1 auto; min-width: 0; }
+.batch-prompt { font-size: 0.82rem; color: #e2e8f0; line-height: 1.3; }
+.batch-meta {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    font-size: 0.7rem; color: #94a3b8; margin-top: 5px;
+}
+.batch-chip {
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 5px; padding: 1px 6px; white-space: nowrap;
+}
+.batch-chip.web   { background: rgba(56, 189, 248, 0.12); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.4); }
+.batch-chip.local { background: rgba(16, 185, 129, 0.10); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.35); }
+.batch-cuando { margin-left: auto; font-variant-numeric: tabular-nums; }
+.batch-estado-txt { font-size: 0.7rem; color: #cbd5e1; margin-top: 4px; }
+.batch-subtitulo {
+    font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #64748b; margin: 8px 0 2px;
+}
+.batch-vacio { font-size: 0.78rem; color: #94a3b8; padding: 6px 2px; }
+
+/* REGISTRO: estado por color + ojo */
+.reg-tabla td .reg-estado-txt { font-size: 0.72rem; }
+.reg-tabla tr[data-estado="cancelada"]     { opacity: 0.6; }
+.reg-tabla tr[data-estado="cancelada"] td:first-child,
+.reg-tabla tr[data-estado="interrumpida"] td:first-child,
+.reg-tabla tr[data-estado="error"] td:first-child { color: #f87171; }
+.reg-tabla tr[data-estado="listo"] td:first-child,
+.reg-tabla tr[data-estado="sin_nube"] td:first-child { color: #34d399; }
+.reg-tabla tr[data-estado="pedida"] td:first-child,
+.reg-tabla tr[data-estado="en_comfy"] td:first-child { color: #fbbf24; }
+.reg-ojo {
+    background: none; border: 0; cursor: pointer; font-size: 1rem;
+    opacity: 0.85; padding: 2px 4px;
+}
+.reg-ojo:hover { opacity: 1; transform: scale(1.12); }
+
+/* visor de la imagen desde el registro */
+#regVisor {
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(2, 6, 23, 0.92);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+#regVisor img, #regVisor video {
+    max-width: 96vw; max-height: 92vh; border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+#regVisorCerrar {
+    position: absolute; top: 14px; right: 16px; width: 38px; height: 38px;
+    border-radius: 50%; border: 1px solid rgba(148, 163, 184, 0.4);
+    background: rgba(15, 23, 42, 0.9); color: #e2e8f0; font-size: 1rem; cursor: pointer;
+}
+@media (max-width: 768px) {
+    .batch-cuando { margin-left: 0; }
+    .batch-fila { padding: 7px 8px; }
+}
+/* la tarjeta del BATCH la controla el registro de pedidos, no la cola vieja:
+   script.js le pone .hidden cuando la cola del navegador está vacía */
+#globalQueueContainer.hidden,
+#globalQueueContainer[style*="display: none"] {
+    display: block !important;
+}
