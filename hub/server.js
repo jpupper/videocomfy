@@ -552,6 +552,18 @@ function esAgente(req) {
 // --- PEDIDOS: el BATCH agregado de TODAS las máquinas conectadas ------------
 // En la web el BATCH no es de una sola PC: se le pide a cada nodo en línea su
 // registro y se junta todo, marcando de qué máquina es cada pedido.
+
+// --- qué nodo está usando este cliente web ---------------------------------
+// El front avisa al elegir una computadora. Sirve para que el panel RED de esa
+// PC muestre cuántos clientes la están usando ("usar esta compu").
+app.post(rutasRed('/api/red/cliente-nodo'), express.json({ limit: '4kb' }), (req, res) => {
+    try {
+        const ip = String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
+        relay.marcarClienteEnNodo(ip, (req.body && req.body.peerId) || '');
+        res.json({ success: true });
+    } catch (e) { res.json({ success: false }); }
+});
+
 app.get(rutasRed('/api/pedidos'), async (req, res) => {
     const peers = relay.listarPeers().filter((p) => p.conectado);
     const pedidos = [];

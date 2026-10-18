@@ -68,6 +68,7 @@
 
     function guardarElegido(id) {
         ESTADO.elegido = id;
+        avisarClienteNodo(id);
         try { localStorage.setItem(CLAVE_ELEGIDO, id || ''); } catch (e) { }
     }
     function leerElegido() {
@@ -287,10 +288,23 @@
         });
     }
 
+    // le dice al hub qué computadora está usando este navegador (para que el
+    // panel RED de esa PC muestre "clientes conectados a esta PC")
+    function avisarClienteNodo(id) {
+        if (esLocal) return;
+        try {
+            fetch(BASE + '/api/red/cliente-nodo', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ peerId: id || '' })
+            }).catch(function () { });
+        } catch (e) { }
+    }
+
     function desconectar() {
         var eraRemoto = !!ESTADO.elegido && !(ESTADO.yo && ESTADO.yo.peerId === ESTADO.elegido);
         guardarElegido('');
         ESTADO.elegido = '';
+        avisarClienteNodo('');
         log(eraRemoto || !esLocal
             ? '🔌 Desconectado. Elegí otra computadora cuando quieras.'
             : '🔌 Soltaste el nodo: en local volvés a generar en esta PC.');
@@ -794,6 +808,8 @@
     function arrancar() {
         montarUI();
         ESTADO.elegido = leerElegido();
+        // si al entrar ya había una computadora elegida, se la vuelve a avisar al hub
+        if (ESTADO.elegido) setTimeout(function () { avisarClienteNodo(ESTADO.elegido); }, 1200);
         // En la WEB se entra SIN computadora conectada (y los botones de generar
         // van grises desde el arranque, sin esperar al estado de la red); en local
         // se elige esta PC. Asi el default no depende de que llegue el WS.

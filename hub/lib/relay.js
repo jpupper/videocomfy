@@ -215,13 +215,15 @@ function avisarClientes() {
 // mostrar "clientes conectados a esta PC" en el panel RED de cada máquina.
 let _tAvisoClientes = null;
 function marcarClienteEnNodo(ip, peerId) {
-    if (!peerId) return;
+    // peerId === '' => el cliente ya no está usando ninguna PC
     const ipLimpia = String(ip || '').split(',')[0].trim();
     if (!ipLimpia) return;
     let cambio = false;
     clientes.forEach((c) => {
-        if (c.ip && c.ip === ipLimpia && c.peerId !== peerId) {
-            c.peerId = peerId; c.peerIdDesde = Date.now(); cambio = true;
+        if (c.ip && c.ip === ipLimpia && c.peerId !== (peerId || undefined)) {
+            if (peerId) { c.peerId = peerId; c.peerIdDesde = Date.now(); }
+            else { delete c.peerId; }
+            cambio = true;
         }
     });
     // avisar a los nodos (para que el panel RED muestre "usando esta PC"),
