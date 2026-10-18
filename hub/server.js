@@ -421,9 +421,9 @@ app.get(['/api/status', BASE_PATH + '/api/status'], (req, res) => {
                 : (!fresco
                     ? `La PC no reporta desde hace ${antiguedad}s`
                     : (!estado.videocomfy
-                        ? 'La PC no tiene el videocomfy levantado (node server.js en D:\\Programacion\\videocomfy)'
+                        ? 'La PC no tiene el videocomfy levantado (node server.js en D:\\Programacion\\comfylatam)'
                         : (!estado.comfy
-                            ? 'ComfyUI esta apagado en la PC (start_comfy.bat en D:\\Programacion\\videocomfy)'
+                            ? 'ComfyUI esta apagado en la PC (start_comfy.bat en D:\\Programacion\\comfylatam)'
                             : 'Todo listo: PC + videocomfy + ComfyUI')))),
         actualizado: new Date().toISOString()
     });

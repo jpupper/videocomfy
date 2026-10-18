@@ -3,7 +3,7 @@
 // sync_front.js — mantiene IGUALES los dos fronts del editor
 // ------------------------------------------------------------
 // El editor vive en dos lugares:
-//   - LOCAL:  D:\Programacion\videocomfy\public        (lo sirve la app :5634)
+//   - LOCAL:  D:\Programacion\comfylatam\public        (lo sirve la app :5634)
 //   - WEB:    <repo>\public                            (se sube al FTP)
 // Cuando se toca la UI hay que actualizar los dos o se desincronizan
 // (eso ya nos pasó: la web tenía los arreglos y el local seguía viejo).
@@ -20,7 +20,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ORIGEN = path.join(__dirname, '..', 'public');
-const VIDEOCOMFY = process.env.VIDEOCOMFY_PUBLIC || 'D:\\Programacion\\videocomfy\\public';
+const VIDEOCOMFY = process.env.VIDEOCOMFY_PUBLIC || 'D:\\Programacion\\comfylatam\\public';
 // Sentido de la copia: por defecto la web (repo) es la fuente; con
 // --desde-videocomfy se copia al reves (cuando el cambio se hizo en la app
 // local, que es lo natural al probar). En los dos casos el destino se respalda.

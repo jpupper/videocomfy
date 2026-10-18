@@ -149,14 +149,30 @@
                 else b.removeAttribute('title');
             });
         });
-        // si la tarjeta activa no se puede usar, pasar a la primera que sí
+        // Si la tarjeta activa no se puede usar: pasar a la primera que sí; y si no hay
+        // NINGUNA disponible, cerrar el menú de generación (antes quedaba abierto el
+        // panel del workflow que ya no se puede usar: se veía todo el menú en gris).
         var activa = document.querySelector('.wf-card.active');
         var activaOk = activa && !activa.classList.contains('ck-no-disp');
-        if (esWeb && !activaOk && primeroOk) {
-            Array.prototype.forEach.call(cards, function (c) { c.classList.remove('active'); });
-            primeroOk.classList.add('active');
-            try { primeroOk.click(); } catch (e) { }
+        if (!activaOk) {
+            if (primeroOk) {
+                Array.prototype.forEach.call(cards, function (c) { c.classList.remove('active'); });
+                primeroOk.classList.add('active');
+                try { primeroOk.click(); } catch (e) { }
+            } else if (esWeb) {
+                cerrarPaneles();
+            }
         }
+    }
+
+    // Sin workflow disponible no se muestra el menú de generación (ni tarjeta activa).
+    function cerrarPaneles() {
+        Array.prototype.forEach.call(document.querySelectorAll('.wf-panel.active'), function (p) {
+            p.classList.remove('active');
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.wf-card.active'), function (c) {
+            c.classList.remove('active');
+        });
     }
 
     // Los botones GENERATE de cada panel (viven fuera de las tarjetas: son
