@@ -1626,8 +1626,11 @@ function connectToComfy() {
                 // queda registrado qué prompt está ejecutando ahora mismo
                 comfyCola.enEjecucion = [Object.assign({ promptId: message.data.prompt_id },
                     quienEsEstePrompt(message.data.prompt_id))];
-                // si es un pedido que vino de la red, la línea de tiempo del STAGE local avanza
-                marcarPedidoRed(message.data.prompt_id, { estado: 'comfy' });
+                // si es un pedido que vino de la red, la línea de tiempo del STAGE local
+                // avanza — pero con node:null ComfyUI avisa que CERRÓ, no que empezó
+                if (message.data.node !== null && message.data.node !== undefined) {
+                    marcarPedidoRed(message.data.prompt_id, { estado: 'comfy' });
+                }
                 broadcastComfyCola();
             }
 
@@ -1646,7 +1649,17 @@ function connectToComfy() {
                 });
             }
 
-            if (message.type === 'execution_error') {
+            if (message.type === 'execution_error' || message.type === 'execution_interrupted') {
+                // si el trabajo era de la red, la línea de tiempo tiene que cerrarse
+                // en rojo (antes quedaba pegada en "ComfyUI" para siempre)
+                const _enEjF = (comfyCola.enEjecucion || [])[0];
+                if (_enEjF && _enEjF.promptId) {
+                    marcarPedidoRed(_enEjF.promptId, {
+                        estado: 'error',
+                        motivo: (message.type === 'execution_interrupted' ? 'interrumpido'
+                            : ((message.data && message.data.exception_message) || 'error del motor')).slice(0, 120)
+                    });
+                }
                 console.error('❌ ComfyUI execution error:', JSON.stringify(message.data).substring(0, 500));
                 const promptId = message.data?.prompt_id;
                 const errorDetail = message.data?.exception_message || message.data?.exception?.message || JSON.stringify(message.data).substring(0, 300);
@@ -2958,6 +2971,9 @@ function marcarPedidoRedPorArchivo(nombre, cambios) {
 }
 function _aplicarPasoRed(j, cambios) {
     const ahora = Date.now();
+    // No se retrocede: si ya falló o terminó, un 'comfy' que llega tarde (ComfyUI
+    // manda 'executing' también al cerrar) no puede devolverlo a "generando".
+    if (cambios && cambios.estado === 'comfy' && (j.estado === 'error' || j.estado === 'listo')) return j;
     Object.assign(j, cambios || {});
     j.actualizado = ahora;
     j.pasos = j.pasos || {};

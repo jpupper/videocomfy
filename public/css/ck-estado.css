@@ -268,6 +268,7 @@
 .red-tl-card[data-estado="subiendo"]  { border-left-color: #a855f7; }
 .red-tl-card[data-estado="listo"]     { border-left-color: #10b981; }
 .red-tl-card[data-estado="sin_nube"]  { border-left-color: #ef4444; }
+.red-tl-card[data-estado="error"]     { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.06); }
 .red-tl-head {
     display: flex;
     align-items: center;

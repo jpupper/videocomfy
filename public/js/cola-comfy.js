@@ -142,6 +142,7 @@
                 else if (est === 'sin_nube') nubeTxt = '☁️ No se pudo subir';
                 else if (est === 'listo' && !j.urlNube) nubeTxt = '💾 Quedó en esta PC';
                 var finTxt = (est === 'listo' && j.urlNube) ? '✅ Ya se ve en la web' : '✅ Terminado';
+                if (est === 'error') finTxt = '❌ No terminó' + (j.motivo ? ': ' + j.motivo : '');
                 return '<div class="red-tl-card" data-estado="' + esc(est) + '">' +
                     '<div class="red-tl-head">' +
                         '<span class="red-tl-origen ' + (web ? 'web' : 'red') + '">' +
