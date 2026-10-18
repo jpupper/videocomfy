@@ -165,6 +165,42 @@ function resolverUsuario(token) {
     } catch (e) { return null; }
 }
 
+// Qué cliente web está usando qué nodo ("usar esta computadora"). Se anota con
+// una clave propia (ip+navegador) y caduca sola, para no depender de que la IP
+// coincida (IPv6 cambia y detrás de nginx no siempre hay x-forwarded-for).
+const usoNodo = new Map();
+const USO_TTL = 3 * 60 * 1000;
+
+let _tUso = null;
+function anotarUsoNodo(clave, peerId, datos = {}) {
+    if (!clave) return;
+    if (!peerId) { usoNodo.delete(clave); }
+    else {
+        usoNodo.set(clave, {
+            peerId, ts: Date.now(),
+            usuario: datos.usuario || '', displayName: datos.displayName || datos.usuario || '',
+            avatar: datos.avatar || ''
+        });
+    }
+    // avisar a los nodos sin spamear (esto corre en cada pedido de la web)
+    if (!_tUso) _tUso = setTimeout(() => { _tUso = null; try { avisarClientes(); } catch (e) { } }, 1500);
+    return;
+}
+
+function porNodoActual() {
+    const ahora = Date.now();
+    const out = {};
+    usoNodo.forEach((v, k) => {
+        if (ahora - v.ts > USO_TTL) { usoNodo.delete(k); return; }
+        const n = out[v.peerId] = out[v.peerId] || { web: 0, usuarios: [] };
+        n.web += 1;
+        if (v.usuario && !n.usuarios.some((u) => u.usuario === v.usuario)) {
+            n.usuarios.push({ usuario: v.usuario, displayName: v.displayName, avatar: v.avatar });
+        }
+    });
+    return out;
+}
+
 function resumenClientes() {
     const lista = [...clientes.values()];
     const usuarios = {};
@@ -176,17 +212,8 @@ function resumenClientes() {
         };
         usuarios[c.usuario][c.origen === 'local' ? 'local' : 'web'] += 1;
     });
-    // cuántos clientes están usando CADA nodo (los que eligieron "usar esta
-    // computadora"): el hub lo sabe por el prefijo /p/<peerId> de sus pedidos
-    const porNodo = {};
-    lista.forEach((c) => {
-        if (!c.peerId) return;
-        const n = porNodo[c.peerId] = porNodo[c.peerId] || { web: 0, usuarios: [] };
-        if (c.origen !== 'local') n.web += 1;
-        if (c.usuario && !n.usuarios.some((u) => u.usuario === c.usuario)) {
-            n.usuarios.push({ usuario: c.usuario, avatar: c.avatar || '' });
-        }
-    });
+    // quién está usando cada nodo (lo anota el front al elegir una PC)
+    const porNodo = porNodoActual();
     return {
         porNodo,
         total: lista.length,
@@ -226,6 +253,7 @@ function marcarClienteEnNodo(ip, peerId) {
             cambio = true;
         }
     });
+    if (ipLimpia) anotarUsoNodo('ip:' + ipLimpia, peerId, {});
     // avisar a los nodos (para que el panel RED muestre "usando esta PC"),
     // con freno: esto corre en cada pedido HTTP que pasa por el túnel
     if (cambio && !_tAvisoClientes) {
@@ -637,7 +665,7 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
 }
 
 module.exports = {
-    anotarCliente, listarClientes, resumenClientes, avisarClientes, setResolutorUsuario, actualizarCliente,
+    anotarUsoNodo, porNodoActual, anotarCliente, listarClientes, resumenClientes, avisarClientes, setResolutorUsuario, actualizarCliente,
     iniciar, estado, enviarAlAgente, enviarA, enviarATodos, alRecibirBroadcast, alCambiarPeers,
     reenviarHttp, reescribirJson, marcarClienteEnNodo, reescribirUrl, reescribirTexto, origenPublico,
     listarPeers, listarPasados, peer, principal, prefijoDe, avisarPeers, publico

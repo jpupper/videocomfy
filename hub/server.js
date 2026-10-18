@@ -559,7 +559,9 @@ function esAgente(req) {
 app.post(rutasRed('/api/red/cliente-nodo'), express.json({ limit: '4kb' }), (req, res) => {
     try {
         const ip = String(req.headers['x-forwarded-for'] || (req.socket && req.socket.remoteAddress) || '').split(',')[0].trim();
-        relay.marcarClienteEnNodo(ip, (req.body && req.body.peerId) || '');
+        const b = req.body || {};
+        const clave = ip + '|' + String(req.headers['user-agent'] || '').slice(0, 60) + '|' + (b.clave || '');
+        relay.anotarUsoNodo(clave, b.peerId || '', b);
         res.json({ success: true });
     } catch (e) { res.json({ success: false }); }
 });

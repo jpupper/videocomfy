@@ -290,12 +290,32 @@
 
     // le dice al hub qué computadora está usando este navegador (para que el
     // panel RED de esa PC muestre "clientes conectados a esta PC")
+    // clave estable de este navegador (para que el hub lo reconozca entre recargas)
+    function claveCliente() {
+        try {
+            var k = localStorage.getItem('ck_cliente_clave');
+            if (!k) {
+                k = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                localStorage.setItem('ck_cliente_clave', k);
+            }
+            return k;
+        } catch (e) { return ''; }
+    }
+
+    // le dice al hub qué computadora está usando este navegador (con quién es),
+    // para que el panel RED de esa PC muestre "clientes conectados a esta PC"
     function avisarClienteNodo(id) {
         if (esLocal) return;
+        var u = {};
+        try { u = JSON.parse(localStorage.getItem('fsc_user_jpi') || 'null') || {}; } catch (e) { }
         try {
             fetch(BASE + '/api/red/cliente-nodo', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ peerId: id || '' })
+                body: JSON.stringify({
+                    peerId: id || '', clave: claveCliente(),
+                    usuario: u.username || u.usuario || '', displayName: u.displayName || '',
+                    avatar: u.avatar || ''
+                })
             }).catch(function () { });
         } catch (e) { }
     }
