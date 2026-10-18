@@ -559,7 +559,8 @@ app.get(rutasRed('/api/pedidos'), async (req, res) => {
     await Promise.all(peers.map(async (p) => {
         try {
             const r = await relay.reenviarHttp({ peerId: p.id, method: 'GET', ruta: '/api/pedidos' });
-            const j = r.jsonReescrito || JSON.parse(r.body.toString('utf8'));
+            // ojo: jsonReescrito viene como TEXTO (JSON.stringify), hay que parsearlo
+            const j = r.jsonReescrito ? JSON.parse(r.jsonReescrito) : JSON.parse(r.body.toString('utf8'));
             const lista = (j && j.pedidos) || [];
             maquinas.push({ id: p.id, nombre: p.nombre, usuario: p.usuario, gpu: p.gpu, pedidos: lista.length });
             lista.forEach((x) => pedidos.push(Object.assign({}, x, {
@@ -582,7 +583,7 @@ app.post(rutasRed('/api/pedidos/limpiar'), express.json({ limit: '1mb' }), async
                 peerId: p.id, method: 'POST', ruta: '/api/pedidos/limpiar',
                 contentType: 'application/json', stream: Readable.from(['{}'])
             });
-            const j = r.jsonReescrito || JSON.parse(r.body.toString('utf8'));
+            const j = r.jsonReescrito ? JSON.parse(r.jsonReescrito) : JSON.parse(r.body.toString('utf8'));
             cancelados += (j && j.cancelados) || 0;
         } catch (e) { }
     }));
