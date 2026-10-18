@@ -213,13 +213,22 @@ function avisarClientes() {
 
 // Marca con qué nodo está trabajando un cliente web (por su IP) para poder
 // mostrar "clientes conectados a esta PC" en el panel RED de cada máquina.
+let _tAvisoClientes = null;
 function marcarClienteEnNodo(ip, peerId) {
     if (!peerId) return;
     const ipLimpia = String(ip || '').split(',')[0].trim();
     if (!ipLimpia) return;
+    let cambio = false;
     clientes.forEach((c) => {
-        if (c.ip && c.ip === ipLimpia) { c.peerId = peerId; c.peerIdDesde = Date.now(); }
+        if (c.ip && c.ip === ipLimpia && c.peerId !== peerId) {
+            c.peerId = peerId; c.peerIdDesde = Date.now(); cambio = true;
+        }
     });
+    // avisar a los nodos (para que el panel RED muestre "usando esta PC"),
+    // con freno: esto corre en cada pedido HTTP que pasa por el túnel
+    if (cambio && !_tAvisoClientes) {
+        _tAvisoClientes = setTimeout(() => { _tAvisoClientes = null; try { avisarClientes(); } catch (e) { } }, 2500);
+    }
 }
 
 function anotarCliente(socket, datos) {
