@@ -262,35 +262,24 @@
     }
 
     // --- 4. COLA DE GENERACIÓN ---
+    // La cola de la IZQUIERDA lee del MISMO store que el BATCH del STAGE
+    // (antes usaba la cola del navegador y mostraba otra cosa).
     function actualizarCola() {
         if (!dom.colaPill) return;
+        var S = window.CKPedidos;
+        if (!S || !S.cargado) return;
 
-        var estado = { pausada: false, generando: false, enCurso: 0, pendientes: 0, total: 0 };
-        if (typeof window.jpiColaEstado === 'function') {
-            try { estado = window.jpiColaEstado(); } catch (e) { }
-        }
+        var c = S.contar();
+        var pausada = false;
+        try { if (typeof window.jpiColaEstado === 'function') pausada = !!window.jpiColaEstado().pausada; } catch (e) { }
+        var totalEnCola = c.enCurso + c.enEspera;
 
-        var colaApp = [];
-        try {
-            if (typeof globalGenerationQueue !== 'undefined' && Array.isArray(globalGenerationQueue)) {
-                colaApp = globalGenerationQueue;
-            }
-        } catch (e) { }
+        // badges
+        if (dom.colaEjecutando) dom.colaEjecutando.textContent = c.enCurso;
+        if (dom.colaPendientes) dom.colaPendientes.textContent = c.enEspera;
+        if (dom.colaCompletados) dom.colaCompletados.textContent = c.hechas;
 
-        var activasApp = colaApp.filter(function (i) { return i.status !== 'completed'; });
-        var completadasApp = colaApp.filter(function (i) { return i.status === 'completed'; });
-
-        var comfyCola = window.JPI_COMFY_COLA || { total: 0, ejecutando: 0, pendientes: 0 };
-        var totalEnCola = Math.max(activasApp.length, Number(comfyCola.total || 0));
-        var enCurso = Math.max(estado.enCurso, Number(comfyCola.ejecutando || 0));
-        var enEspera = Math.max(estado.pendientes, Number(comfyCola.pendientes || 0));
-
-        // Actualizar badges numéricos
-        if (dom.colaEjecutando) dom.colaEjecutando.textContent = enCurso;
-        if (dom.colaPendientes) dom.colaPendientes.textContent = enEspera;
-        if (dom.colaCompletados) dom.colaCompletados.textContent = completadasApp.length;
-
-        // Pill del encabezado de la cola
+        // pill
         if (totalEnCola > 0) {
             dom.colaPill.textContent = '🔥 ' + totalEnCola + ' en cola';
             dom.colaPill.className = 'pi-cola-pill active';
@@ -299,26 +288,29 @@
             dom.colaPill.className = 'pi-cola-pill';
         }
 
-        // Subtítulo de estado
+        // subtítulo
         if (dom.colaSub) {
-            if (estado.pausada) {
-                dom.colaSub.textContent = '⏸ En pausa (' + enEspera + ' listos)';
+            if (pausada) {
+                dom.colaSub.textContent = '⏸ En pausa (' + c.enEspera + ' en espera)';
                 dom.colaSub.style.color = '#fbbf24';
-            } else if (enCurso > 0) {
-                dom.colaSub.textContent = '⚙️ Generando clip en curso...';
+            } else if (c.enCurso > 0) {
+                dom.colaSub.textContent = '⚙️ ' + c.enCurso + ' generando ahora';
                 dom.colaSub.style.color = '#34d399';
-            } else if (enEspera > 0) {
-                dom.colaSub.textContent = '⏳ ' + enEspera + ' en espera';
+            } else if (c.enEspera > 0) {
+                dom.colaSub.textContent = '⏳ ' + c.enEspera + ' en espera';
                 dom.colaSub.style.color = '#93c5fd';
+            } else if (c.canceladas > 0) {
+                dom.colaSub.textContent = '✖ ' + c.canceladas + ' cancelada(s) · ✅ ' + c.hechas + ' hecha(s)';
+                dom.colaSub.style.color = 'var(--text-muted)';
             } else {
-                dom.colaSub.textContent = '⚪ Lista (sin tareas)';
+                dom.colaSub.textContent = '⚪ Lista para generar';
                 dom.colaSub.style.color = 'var(--text-muted)';
             }
         }
 
-        // Botón Pausar / Reanudar
+        // botón pausar/reanudar
         if (dom.btnPausar) {
-            if (estado.pausada) {
+            if (pausada) {
                 dom.btnPausar.className = 'pi-cola-btn resume';
                 dom.btnPausar.textContent = '▶ Reanudar';
             } else {
@@ -327,25 +319,26 @@
             }
         }
 
-        // Lista de items de la cola
+        // detalle: mismo contenido que el BATCH (estado, quién la pidió, de dónde)
         if (dom.colaList) {
-            if (activasApp.length === 0) {
+            var activas = S.activas();
+            if (!activas.length) {
                 dom.colaList.innerHTML = '<div class="pi-cola-empty">No hay generaciones pendientes</div>';
             } else {
-                dom.colaList.innerHTML = activasApp.slice(0, 5).map(function (item, idx) {
-                    var isRunning = item.status === 'generating' || (idx === 0 && enCurso > 0);
-                    var isVid = item.type !== 'storyboard' && !item.type?.includes('image');
-                    var tipoLabel = isVid ? '🎬 Video' : '🖼️ Imagen';
-                    var tipoClass = isVid ? 'video' : 'image';
-                    var promptTxt = item.prompt || (item.params && item.params.prompt) || 'Generación #' + (idx + 1);
-
-                    return '<div class="pi-cola-item ' + (isRunning ? 'running' : '') + '">' +
+                dom.colaList.innerHTML = activas.slice(0, 6).map(function (p) {
+                    var est = p.estado || 'pedida';
+                    var icono = S.ICONO[est] || '•';
+                    var texto = S.TEXTO[est] || est;
+                    var quien = p.usuario ? '@' + p.usuario : '';
+                    var de = p.origen === 'web' ? '🌐 web' : '🏠 acá';
+                    var promptTxt = String(p.prompt || 'Generación').replace(/"/g, '&quot;');
+                    return '<div class="pi-cola-item ' + (est === 'en_comfy' ? 'running' : '') + '">' +
                         '<div class="pi-cola-item-info">' +
-                        '  <div class="pi-cola-item-type ' + tipoClass + '">' +
-                        (isRunning ? '⚙️ GENERANDO · ' : '⏳ ESPERANDO · ') + tipoLabel +
+                        '  <div class="pi-cola-item-type ' + (est === 'en_comfy' ? 'video' : 'image') + '">' +
+                        icono + ' ' + texto.toUpperCase() + (quien ? ' · ' + quien : '') + ' · ' + de +
                         '  </div>' +
-                        '  <div class="pi-cola-item-prompt" title="' + String(promptTxt).replace(/"/g, '&quot;') + '">' +
-                        String(promptTxt).slice(0, 45) + (promptTxt.length > 45 ? '…' : '') +
+                        '  <div class="pi-cola-item-prompt" title="' + promptTxt + '">' +
+                        String(p.prompt || '').slice(0, 45) + (String(p.prompt || '').length > 45 ? '…' : '') +
                         '  </div>' +
                         '</div>' +
                         '</div>';
@@ -371,6 +364,7 @@
     }
 
     function init() {
+        try { if (window.CKPedidos) window.CKPedidos.suscribir(actualizarCola); } catch (e) { }
         initDom();
         actualizarEntorno();
         consultarStatus();

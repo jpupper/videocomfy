@@ -184,13 +184,19 @@
     // trae el registro de imágenes Y el de pedidos (que incluye lo que nunca se
     // generó y lo cancelado: eso es lo que da el ESTADO de cada fila)
     function traerAmbos(urlRegistro) {
+        // los pedidos salen del store ÚNICO (el mismo que usa el panel izquierdo)
+        var pedidosP = (window.CKPedidos && window.CKPedidos.traer())
+            ? window.CKPedidos.traer()
+            : Promise.resolve(null);
         return Promise.all([
             (urlRegistro
                 ? fetch(urlRegistro, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
                 : Promise.resolve(null)),
-            fetch(BASE + '/api/pedidos', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+            pedidosP
         ]).then(function (res) {
-            var d = res[0], p = res[1];
+            var d = res[0];
+            var p = (window.CKPedidos && window.CKPedidos.lista && window.CKPedidos.lista.length)
+                ? { pedidos: window.CKPedidos.lista } : res[1];
             if (p && p.pedidos) window.CK_PEDIDOS = p.pedidos;
             if (d || p) { if (d) ultimo = d; pintarRegistros(d || { registros: [] }); }
         });

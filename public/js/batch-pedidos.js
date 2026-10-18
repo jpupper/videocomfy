@@ -30,8 +30,9 @@
     };
     var EN_CURSO = ['pedida', 'en_comfy', 'devuelta', 'subiendo'];
 
-    var PEDIDOS = [];
-    var MAQUINAS = [];
+    // los datos vienen del store único (js/pedidos-store.js): el panel izquierdo,
+    // el BATCH y el REGISTRO leen SIEMPRE lo mismo
+    function S() { return window.CKPedidos || { lista: [], maquinas: [], ICONO: {}, TEXTO: {}, contar: function () { return { enCurso: 0 }; } }; }
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -97,6 +98,8 @@
     function pintar() {
         var cont = document.getElementById('batchPedidos');
         if (!cont) return;
+        var store = S();
+        var PEDIDOS = store.lista || [];
         var enCurso = PEDIDOS.filter(function (p) { return EN_CURSO.indexOf(p.estado) >= 0; });
         var terminadas = PEDIDOS.filter(function (p) { return EN_CURSO.indexOf(p.estado) < 0; }).slice(0, 6);
         var cuenta = document.getElementById('queueCount');
@@ -107,8 +110,8 @@
             var av = p.avatar ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">' : '👤';
             var est = p.estado || 'pedida';
             return '<div class="batch-fila" data-estado="' + esc(est) + '">' +
-                '<span class="batch-estado" title="' + esc(TEXTO[est] || est) + '">' +
-                    (ICONO[est] || '•') + '</span>' +
+                '<span class="batch-estado" title="' + esc(store.TEXTO[est] || TEXTO[est] || est) + '">' +
+                    (store.ICONO[est] || ICONO[est] || '•') + '</span>' +
                 '<div class="batch-cuerpo">' +
                     '<div class="batch-prompt">“' + esc(String(p.prompt || '').slice(0, 120)) + '”</div>' +
                     '<div class="batch-meta">' +
@@ -119,7 +122,7 @@
                         ' <span class="batch-chip">' + esc(p.modelo || 'auto') + '</span>' +
                         ' <span class="batch-cuando">' + hace(p.cuando) + '</span>' +
                     '</div>' +
-                    '<div class="batch-estado-txt">' + esc(ICONO[est] || '') + ' ' + esc(TEXTO[est] || est) +
+                    '<div class="batch-estado-txt">' + esc(store.ICONO[est] || ICONO[est] || '') + ' ' + esc(store.TEXTO[est] || TEXTO[est] || est) +
                         (p.archivo ? ' · 📄 ' + esc(p.archivo) : '') + '</div>' +
                 '</div>' +
             '</div>';
@@ -136,22 +139,13 @@
 
     // ---------- datos ----------
     function traer() {
-        fetch(BASE + '/api/pedidos', { cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (d) {
-                if (!d) return;
-                PEDIDOS = d.pedidos || [];
-                MAQUINAS = d.maquinas || [];
-                pintar();
-            })
-            .catch(function () { });
+        if (window.CKPedidos) { window.CKPedidos.traer(); return; }
     }
 
     function limpiar() {
         var b = document.getElementById('limpiarBatchBtn');
         if (b) { b.disabled = true; b.textContent = 'limpiando…'; }
-        fetch(BASE + '/api/pedidos/limpiar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-            .then(function (r) { return r.ok ? r.json() : null; })
+        (window.CKPedidos ? window.CKPedidos.limpiar() : Promise.resolve(null))
             .then(function (d) {
                 // también se vacía la cola del navegador (si quedaba algo sin enviar)
                 try { localStorage.setItem('globalGenerationQueue', '[]'); } catch (e) { }
@@ -166,10 +160,8 @@
 
     function arrancar() {
         montar();
-        traer();
+        if (window.CKPedidos) window.CKPedidos.suscribir(function () { montar(); pintar(); });
         setInterval(function () { montar(); }, 3000);
-        setInterval(traer, 4000);
-        window.addEventListener('jpi-generado', function () { setTimeout(traer, 800); });
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
