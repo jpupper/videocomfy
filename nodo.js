@@ -76,7 +76,7 @@ function arrancar(opciones) {
     let encolados = 0;
     let ultimoConectado = false;
 
-    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [] };
+    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], publicarGpu: true };
 
     // ------------------------------ utilidades ------------------------------
     async function pedir(ruta, opciones) {
@@ -96,6 +96,8 @@ function arrancar(opciones) {
             identidad.modelos = Array.isArray(d.modelos) ? d.modelos : identidad.modelos;
             identidad.usuario = d.usuario || identidad.usuario || null;
             identidad.workflows = Array.isArray(d.workflows) ? d.workflows : (identidad.workflows || []);
+            // switch de MI EQUIPO: si el dueño lo apagó, la placa NO se publica
+            identidad.publicarGpu = d.publicarGpu !== false;
             if (!CFG.COMFY && d.comfyAddress) CFG.COMFY = String(d.comfyAddress).replace(/\/+$/, '');
             return antes !== (identidad.peerId + '|' + identidad.nombre + '|' + identidad.compartir);
         } catch (e) { return false; }
@@ -195,7 +197,7 @@ function arrancar(opciones) {
                 nombre: identidad.nombre,
                 host: os.hostname(),
                 platform: os.platform() + ' ' + os.release(),
-                gpu: gpuDetectada,
+                gpu: (identidad.publicarGpu === false ? '' : gpuDetectada),
                 modelos: identidad.modelos,
                 principal: CFG.PRINCIPAL,
                 compartir: identidad.compartir,

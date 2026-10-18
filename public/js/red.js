@@ -452,7 +452,7 @@
                 id: yoId,
                 nombre: ESTADO.yo.nombre,
                 host: 'esta PC',
-                gpu: '',
+                gpu: ESTADO.yo.gpu || '',
                 modelos: ESTADO.yo.modelos || [],
                 compartir: !!ESTADO.yo.compartir,
                 comfy: true,
@@ -490,7 +490,8 @@
         var activo = document.activeElement;
         var escribiendoNombre = !!(activo && activo.id === 'redNombre');
         var firmaYo = (esLocal && ESTADO.yo)
-            ? [ESTADO.yo.peerId, ESTADO.yo.nombre, ESTADO.yo.compartir, ESTADO.yo.conectado].join('|')
+            ? [ESTADO.yo.peerId, ESTADO.yo.nombre, ESTADO.yo.compartir, ESTADO.yo.conectado,
+               ESTADO.yo.gpu || '', ESTADO.yo.publicarGpu !== false].join('|')
             : '';
         if (esLocal && ESTADO.yo && !escribiendoNombre && firmaYo !== ultimaFirmaYo) {
             ultimaFirmaYo = firmaYo;
@@ -512,6 +513,10 @@
                 '  </div>',
                 '  <label class="red-switch"><input type="checkbox" id="redCompartir"' + (ESTADO.yo.compartir ? ' checked' : '') + '>',
                 '    <span class="pista"></span><span>🌐 Transmitir mi Comfy a la red (que otros generen en esta PC)</span></label>',
+                '  <label class="red-switch"><input type="checkbox" id="redPublicarGpu"' +
+                    (ESTADO.yo.publicarGpu !== false ? ' checked' : '') + '>',
+                '    <span class="pista"></span><span>🎮 Publicar el nombre de mi placa de video' +
+                    (ESTADO.yo.gpu ? ' (' + esc(ESTADO.yo.gpu) + ')' : '') + '</span></label>',
                 '</div>'
             ].join('\n');
             var bc = document.getElementById('redConectar');
@@ -535,6 +540,16 @@
                     api('/api/red/compartir', { json: { nombre: nuevo } }).then(function (r) {
                         if (r.ok) log('✏️ Listo, en la red te ven como "' + nuevo + '"');
                         else log('⚠️ No pude guardar el nombre');
+                        refrescar(true);
+                    });
+                });
+            }
+            var chkGpu = document.getElementById('redPublicarGpu');
+            if (chkGpu) {
+                chkGpu.addEventListener('change', function () {
+                    log(chkGpu.checked ? '🎮 Publicando la placa de video...' : '🎮 Ocultando la placa de video...');
+                    api('/api/red/compartir', { json: { publicarGpu: chkGpu.checked } }).then(function () {
+                        log(chkGpu.checked ? '✅ La red ya ve tu placa de video' : '🔒 La placa de video quedó oculta');
                         refrescar(true);
                     });
                 });
@@ -702,7 +717,9 @@
                     nombre: r.datos.nombre,
                     compartir: !!r.datos.compartir,
                     conectado: !!r.datos.conectado,
-                    modelos: r.datos.modelos || []
+                    modelos: r.datos.modelos || [],
+                    gpu: r.datos.gpu || (r.datos.computadora && r.datos.computadora.gpu) || '',
+                    publicarGpu: r.datos.publicarGpu !== false
                 };
                 ESTADO.peers = r.datos.nodos || [];
                 ESTADO.pasados = r.datos.pasados || [];
@@ -773,7 +790,9 @@
                         ESTADO.yo = {
                             peerId: m.red.peerId, nombre: m.red.nombre,
                             compartir: !!m.red.compartir, conectado: !!m.red.conectado,
-                            modelos: m.red.modelos || []
+                            modelos: m.red.modelos || [],
+                            gpu: m.red.gpu || (m.red.computadora && m.red.computadora.gpu) || '',
+                            publicarGpu: m.red.publicarGpu !== false
                         };
                         ESTADO.peers = m.red.nodos || [];
                         ESTADO.pasados = m.red.pasados || [];

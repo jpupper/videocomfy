@@ -137,6 +137,14 @@
                             subiendo: 'subiendo a la nube', listo: 'lista', cancelada: 'cancelada',
                             interrumpida: 'interrumpida', error: 'error', sin_nube: 'lista (quedó local)' };
 
+            // dueño de la computadora del pedido (para la columna SE HIZO EN)
+            var duenoDe = function (p) {
+                var c = p.computadora || {};
+                var m = p.maquina || {};
+                return c.dueno || c.duenoNombre || m.dueno || m.duenoNombre || m.usuario ||
+                       p.dueno || p.duenoNombre || '';
+            };
+
             var filasPedidos = ped.map(function (p) {
                 var est = p.estado || 'pedida';
                 var foto = p.avatar ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">' : '👤 ';
@@ -151,7 +159,8 @@
                     '<td>' + esc(String(p.prompt || '').slice(0, 40)) + '</td>' +
                     '<td>' + foto + '@' + esc(p.usuario || '?') + '</td>' +
                     '<td>' + (p.origen === 'web' ? '🌐 la web' : '🏠 esta app') + '</td>' +
-                    '<td>🖥️ <b>' + esc(maq) + '</b></td>' +
+                    '<td>🖥️ <b>' + esc(maq) + '</b>' +
+                        (duenoDe(p) ? '<br><span style="color:var(--text-muted)">dueño: @' + esc(duenoDe(p)) + '</span>' : '') + '</td>' +
                     '<td>' + hora(p.cuando) + '</td>' +
                     '<td>' + ojo + '</td>' +
                     '</tr>';

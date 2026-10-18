@@ -57,6 +57,10 @@ let comfyExterno = { url: '', activo: false };
                 comfyAddress = c.comfyAddress.trim();
                 console.log(`📌 Dirección de ComfyUI tomada de config-local.json: ${comfyAddress}`);
             }
+            if (c && c.red && c.red.publicarGpu !== undefined) {
+                RED.publicarGpu = !!c.red.publicarGpu;
+                console.log(`📌 Placa de video en la red: ${RED.publicarGpu ? 'se publica' : 'OCULTA'}`);
+            }
             if (c && c.comfyExterno && typeof c.comfyExterno.url === 'string') {
                 comfyExterno = { url: c.comfyExterno.url.trim(), activo: !!c.comfyExterno.activo };
                 if (comfyExterno.url) console.log(`📌 Comfy externo (RunPod): ${comfyExterno.url} ${comfyExterno.activo ? '· ACTIVO' : '· apagado'}`);
@@ -74,6 +78,7 @@ function guardarConfigLocal() {
             comfyExterno: { url: comfyExterno.url || '', activo: !!comfyExterno.activo },
             red: {
                 peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir,
+                publicarGpu: RED.publicarGpu !== false,
                 nombreManual: RED.nombreManual, usuario: RED.usuario, propietario: RED.propietario,
                 workflowsCompartidos: RED.workflowsCompartidos || {}
             }
@@ -2004,6 +2009,15 @@ function guardarPedidos(ya) {
 function nuevoPedido(d) {
     const ahora = Date.now();
     const origen = (d.origen === 'web' ? 'web' : 'local');
+    // la computadora del pedido SIEMPRE lleva el dueño: el REGISTRO muestra
+    // "SE HIZO EN: JPIA / dueño: @jpupper" también en los pedidos nuevos.
+    const pcAhora = datosDeEstaPC() || {};
+    const pcPedido = Object.assign({}, d.computadora || {});
+    if (!pcPedido.dueno) pcPedido.dueno = pcAhora.dueno || 'local';
+    if (!pcPedido.duenoNombre) pcPedido.duenoNombre = pcAhora.duenoNombre || pcPedido.dueno;
+    if (!pcPedido.nombre) pcPedido.nombre = pcAhora.nombre || RED.nombre;
+    if (!pcPedido.peerId) pcPedido.peerId = RED.peerId;
+    if (pcPedido.gpu === undefined) pcPedido.gpu = pcAhora.gpu || '';
     const p = {
         id: String(d.jobId || d.promptId || ('p-' + ahora + '-' + Math.random().toString(36).slice(2, 6))),
         jobId: d.jobId || null,
@@ -2015,7 +2029,9 @@ function nuevoPedido(d) {
         avatar: d.avatar || '',
         origen: origen,
         desde: (origen === 'web' ? 'la web' : 'esta app (local)'),
-        computadora: d.computadora || null,
+        computadora: pcPedido,
+        dueno: pcPedido.dueno,
+        duenoNombre: pcPedido.duenoNombre,
         estado: 'pedida',
         archivo: null,
         url: null,
@@ -2080,7 +2096,19 @@ async function quitarDeComfy(promptId) {
 // --- PEDIDOS: registro de lo que se pidió, con su estado -------------------
 // lo usan el BATCH y el REGISTRO del STAGE (local y web).
 app.get('/api/pedidos', (req, res) => {
-    res.json({ success: true, pedidos: PEDIDOS.slice(-150).slice().reverse() });
+    // Los pedidos viejos se anotaron sin el dueño de la computadora: se completa
+    // acá (con el dueño actual de esta PC) para que el REGISTRO muestre siempre
+    // "SE HIZO EN: JPIA / dueño: @jpupper".
+    const pcAhora = datosDeEstaPC() || {};
+    const lista = PEDIDOS.slice(-150).slice().reverse().map((p) => {
+        const c = Object.assign({}, p.computadora || {});
+        if (!c.dueno) c.dueno = p.dueno || pcAhora.dueno || 'local';
+        if (!c.duenoNombre) c.duenoNombre = p.duenoNombre || c.dueno;
+        if (!c.nombre) c.nombre = pcAhora.nombre || RED.nombre;
+        if (!c.peerId) c.peerId = RED.peerId;
+        return Object.assign({}, p, { computadora: c, dueno: c.dueno, duenoNombre: c.duenoNombre });
+    });
+    res.json({ success: true, pedidos: lista });
 });
 
 // limpiar el batch: lo que está en curso pasa a "cancelada" (con su cruz en el
@@ -2903,6 +2931,8 @@ const RED = {
     peerId: '',
     nombre: '',
     compartir: false,
+    // ¿se publica el nombre de la placa de video en la red? (por defecto sí)
+    publicarGpu: true,
     nodos: [],
     pasados: [],
     usuario: null,
@@ -2950,6 +2980,9 @@ function estadoRed() {
         usuario: RED.usuario,
         email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,
+        // switch de MI EQUIPO: si está apagado, la placa no se publica
+        publicarGpu: RED.publicarGpu !== false,
+        gpu: (RED.publicarGpu === false) ? '' : (((RED.nodos || []).find((n) => n && n.id === RED.peerId) || {}).gpu || ''),
         computadora: datosDeEstaPC(),
         // clientes conectados a ESTA PC:
         //  · localAca = navegadores abiertos contra esta app (wss.clients)
@@ -3005,6 +3038,11 @@ app.post('/api/red/compartir', async (req, res) => {
     const b = req.body || {};
     const nombreAntes = RED.nombre;
     if (b.compartir !== undefined) RED.compartir = !!b.compartir;
+    var cambioGpu = false;
+    if (b.publicarGpu !== undefined) {
+        cambioGpu = (RED.publicarGpu !== false) !== !!b.publicarGpu;
+        RED.publicarGpu = !!b.publicarGpu;
+    }
     if (b.nombre) { RED.nombre = String(b.nombre).slice(0, 40); RED.nombreManual = true; }
     guardarConfigLocal();
     let hub = null;
@@ -3012,6 +3050,14 @@ app.post('/api/red/compartir', async (req, res) => {
     // Si cambió el nombre hay que REINDEXAR YA en la red (si no, en
     // fullscreencode/comfylatam se sigue viendo el nombre viejo hasta que
     // el nodo se reconecte solo, ~15 s después).
+    if (cambioGpu) {
+        console.log(`🎮 Placa de video: ${RED.publicarGpu ? 'se publica en la red' : 'OCULTA'}`);
+        try {
+            if (global.__comfylatamNodo && typeof global.__comfylatamNodo.reconectar === 'function') {
+                setTimeout(() => { try { global.__comfylatamNodo.reconectar(); } catch (e) { } }, 300);
+            }
+        } catch (e) { }
+    }
     if (RED.nombre !== nombreAntes) {
         console.log(`✏️  Nombre de la computadora: "${nombreAntes}" -> "${RED.nombre}" — reindexando en la red`);
         try {
@@ -3125,6 +3171,8 @@ function datosDeEstaPC() {
         peerId: RED.peerId,
         nombre: RED.nombre,
         // el hostname NO se publica: la red muestra el nombre de la computadora
+        // GPU: la que el hub ya conoce de este nodo (el switch decide si se publica)
+        gpu: (RED.publicarGpu === false) ? '' : (((RED.nodos || []).find((n) => n && n.id === RED.peerId) || {}).gpu || ''),
         dueno: pr.usuario || u.username || u.displayName || 'local',
         duenoNombre: pr.displayName || pr.usuario || u.displayName || u.username || 'local',
         // el EMAIL es el identificador universal del ecosistema (skillmaestro)
@@ -3605,6 +3653,19 @@ wss.on('connection', (ws) => {
                 console.log(`   Prompt  : ${message.prompt}`);
                 console.log(`   Imagen  : ${message.imageFilename || 'ninguna'}`);
                 console.log(`   Params  : steps=${message.params?.samplerSteps} cfg=${message.params?.cfgScale} size=${message.params?.videoWidth}x${message.params?.videoHeight}`);
+                // El pedido queda anotado ANTES de mandarlo al motor: así aparece en
+                // el BATCH y en el REGISTRO como "pedida" aunque ComfyUI tarde o falle
+                // (antes sólo se registraba si el envío a ComfyUI salía bien).
+                const ppPrevio = datosDelPedido(message);
+                const pedidoPrevio = nuevoPedido({
+                    prompt: message.prompt,
+                    modelo: modeloImagen || 'ltx2',
+                    usuario: (ppPrevio && (ppPrevio.usuario || ppPrevio.displayName)) || 'vos',
+                    displayName: ppPrevio && (ppPrevio.displayName || ppPrevio.usuario),
+                    avatar: ppPrevio && ppPrevio.avatar,
+                    origen: (message.origen === 'web' || (message.pedidoPor && message.pedidoPor.tipo === 'web')) ? 'web' : 'local',
+                    computadora: { nombre: (datosDeEstaPC() || {}).nombre, peerId: RED.peerId, gpu: (datosDeEstaPC() || {}).gpu }
+                });
                 try {
                     const promptId = modeloImagen
                         ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
@@ -3634,15 +3695,10 @@ wss.on('connection', (ws) => {
                         generationStartTime: Date.now()
                     };
                     promptDetails[promptId] = details;
-                    // pedido hecho desde esta app (queda en el mismo registro que los de la web)
-                    nuevoPedido({
-                        promptId: promptId, prompt: details.prompt, modelo: details.modelo,
-                        usuario: (details.pedidoPor && (details.pedidoPor.usuario || details.pedidoPor.displayName)) || 'vos',
-                        displayName: details.pedidoPor && (details.pedidoPor.displayName || details.pedidoPor.usuario),
-                        avatar: details.pedidoPor && details.pedidoPor.avatar,
-                        origen: details.origen === 'web' ? 'web' : 'local',
-                        computadora: { nombre: details.computadora && details.computadora.nombre, peerId: RED.peerId,
-                                       gpu: details.computadora && details.computadora.gpu }
+                    // el pedido previo ahora sí tiene su prompt_id de ComfyUI
+                    actualizarPedido({ id: pedidoPrevio.id }, {
+                        promptId: promptId, estado: 'en_comfy', modelo: details.modelo,
+                        computadora: details.computadora
                     });
                     lastPromptDetails = details;
                     
@@ -3653,6 +3709,8 @@ wss.on('connection', (ws) => {
                         queueItemId: message.queueItemId || null
                     }));
                 } catch (e) {
+                    // el pedido NO desaparece: queda en el registro como error con motivo
+                    actualizarPedido({ id: pedidoPrevio.id }, { estado: 'error', motivo: e.message }, true);
                     console.error(`❌ Error generando video: ${e.message}`);
                     ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando video: ${e.message}` }));
                 }
@@ -3662,6 +3720,16 @@ wss.on('connection', (ws) => {
                 console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
                 console.log(`   Prompt  : ${message.prompt}`);
                 console.log(`   Params  : steps=${message.params?.storyboardSteps || 'default'}`);
+                const ppPrevS = datosDelPedido(message);
+                const pedidoPrevS = nuevoPedido({
+                    prompt: message.prompt,
+                    modelo: 'flux',
+                    usuario: (ppPrevS && (ppPrevS.usuario || ppPrevS.displayName)) || 'vos',
+                    displayName: ppPrevS && (ppPrevS.displayName || ppPrevS.usuario),
+                    avatar: ppPrevS && ppPrevS.avatar,
+                    origen: (message.origen === 'web' || (message.pedidoPor && message.pedidoPor.tipo === 'web')) ? 'web' : 'local',
+                    computadora: { nombre: (datosDeEstaPC() || {}).nombre, peerId: RED.peerId, gpu: (datosDeEstaPC() || {}).gpu }
+                });
                 try {
                     const promptId = await generarStoryboard(message.prompt, message.params, message.storyboardIndex, message.batchId);
                     console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
@@ -3680,7 +3748,8 @@ wss.on('connection', (ws) => {
                     };
                     promptDetails[promptId] = details;
                     lastPromptDetails = details;
-                    
+                    actualizarPedido({ id: pedidoPrevS.id }, { promptId: promptId, estado: 'en_comfy' });
+
                     // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI
                     ws.send(JSON.stringify({
                         type: 'prompt_queued',
@@ -3688,6 +3757,7 @@ wss.on('connection', (ws) => {
                         queueItemId: message.queueItemId || null
                     }));
                 } catch (e) {
+                    actualizarPedido({ id: pedidoPrevS.id }, { estado: 'error', motivo: e.message }, true);
                     console.error(`❌ Error generando storyboard: ${e.message}`);
                     ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando storyboard: ${e.message}` }));
                 }
