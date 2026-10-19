@@ -158,6 +158,8 @@ app.get('/api/status', (req, res) => {
 // algo en cola o ejecutando, no terminó nada.
 // ============================================================================
 const comfyCola = { pendientes: 0, ejecutando: 0, actualizado: 0 };
+// Paso x/N del trabajo que ComfyUI está ejecutando (llega por WebSocket).
+let comfyProgreso = { promptId: null, paso: 0, total: 0, actualizado: 0 };
 
 function broadcastComfyCola() {
     const msg = JSON.stringify({
@@ -1371,6 +1373,107 @@ setInterval(() => { leerCatalogoComfy().catch(() => { }); }, 3000);
 setTimeout(() => { leerCatalogoComfy().catch(() => { }); }, 2000);
 
 // ============================================================================
+// COMFYSTAGE: estado del motor + consola (solo local)
+// ----------------------------------------------------------------------------
+// Mapea el recorrido real de ComfyUI: apagado -> arrancando (catálogo de nodos)
+// -> listo -> cargando modelo -> generando (paso x/N) -> listo. Todo sale del
+// log interno (/internal/logs/raw) y de lo que ComfyUI manda por WebSocket.
+// ============================================================================
+const RE_ANSI = /\x1b\[[0-9;]*m/g;
+// Señales de que ComfyUI está pasando pesos a la VRAM (varían según la versión):
+// "Requested to load X", "Model storage policy: ... paths=['...safetensors']",
+// "VAE load device: ...". Y de que terminó: "loaded completely/partially".
+const RE_PESOS = /(Requested to load\s+(.+))|(Model storage policy:.*paths=\[[^\]]*['"]([^'"]+)['"]\])|(VAE load device:)/i;
+const RE_PESOS_OK = /(loaded (completely|partially))|(Prompt executed)/i;
+
+app.get('/api/comfy/consola', async (req, res) => {
+    const limite = Math.min(Math.max(Number(req.query.limite) || 220, 50), 500);
+    let lineas = [], vivo = false, motivo = '';
+    try {
+        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        lineas = (d.entries || []).map((e, i) => ({
+            i, t: e.t || '', m: String(e.m || '').replace(RE_ANSI, '').replace(/\s+$/, '')
+        })).filter((x) => x.m.trim());
+        vivo = true;
+    } catch (e) { motivo = e.message; }
+
+    // ¿está cargando un modelo AHORA? (marca de carga sin un "terminó" posterior
+    // y cerca del final del log: si no, quedó vieja de un trabajo anterior)
+    let pide = -1, cargo = -1, modelo = '';
+    lineas.forEach((l, k) => {
+        const m = l.m.match(RE_PESOS);
+        if (m) {
+            pide = k;
+            const nombre = (m[2] || m[4] || '').trim();
+            if (nombre) modelo = nombre.split(/[\\/]/).pop();
+            else if (/VAE load device/i.test(l.m)) modelo = 'VAE';
+        }
+        if (RE_PESOS_OK.test(l.m)) cargo = k;
+    });
+    // la barra de progreso (tqdm) que ComfyUI escribe en el log: ' 25%|██ | 2/8 [..]'
+    // la barra de progreso (tqdm) que ComfyUI escribe en el log: ' 25%|██ | 2/8 [..]'.
+    // Se queda con la de MÁS pasos (el sampler), no con cualquier 0/1 de un loader.
+    let tqdm = null;
+    lineas.forEach((l, k) => {
+        const m = l.m.match(/(\d+)\s*\/\s*(\d+)\s*\[/);
+        if (!m) return;
+        const total = Number(m[2]);
+        if (total < 2) return;                       // 0/1, 1/1: no es el sampler
+        if (!tqdm || total > tqdm.total) tqdm = { paso: Number(m[1]), total, k };
+    });
+    const reciente = pide >= 0 && (lineas.length - pide) <= 12;
+    // si ya arrancó el sampler, no está 'cargando modelo' aunque la marca siga cerca
+    const cargandoModelo = vivo && reciente && pide > cargo && !(tqdm && tqdm.k > pide);
+
+    const ej = (comfyCola.enEjecucion || [])[0] || null;
+    let progVigente = { paso: 0, total: 0 };
+    if (comfyProgreso && comfyProgreso.total >= 2 && (Date.now() - comfyProgreso.actualizado) < 30000) {
+        progVigente = { paso: comfyProgreso.paso, total: comfyProgreso.total };
+    } else if (tqdm) {
+        progVigente = { paso: tqdm.paso, total: tqdm.total };
+    }
+
+    let fase = 'apagado', detalle = motivo || '';
+    if (vivo) {
+        if (comfyCatalogo.estado === 'cargando') {
+            fase = 'arrancando';
+            detalle = 'catalogo de nodos ' + (comfyCatalogo.progreso || '...');
+        } else if (cargandoModelo) {
+            // pasando pesos a la VRAM: es una fase distinta de "generando"
+            fase = 'modelo';
+            detalle = modelo || 'cargando pesos';
+        } else if (ej && ej.promptId) {
+            fase = 'generando';
+            detalle = ej.prompt || '';
+        } else {
+            fase = 'listo';
+            detalle = 'esperando trabajo';
+        }
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        success: true,
+        comfy: vivo,
+        fase, detalle,
+        modelo: { cargando: cargandoModelo, nombre: modelo },
+        catalogo: comfyCatalogo,
+        cola: {
+            ejecutando: ej ? 1 : 0,
+            pendientes: Number(comfyCola.pendientes || 0),
+            total: (ej ? 1 : 0) + Number(comfyCola.pendientes || 0)
+        },
+        trabajo: ej ? {
+            promptId: ej.promptId, prompt: ej.prompt || '', de: ej.de || '',
+            origen: ej.origen || '', paso: Number(progVigente.paso || 0), total: Number(progVigente.total || 0)
+        } : null,
+        lineas: lineas.slice(-limite)
+    });
+});
+
+// ============================================================================
 // REINICIAR COMFYUI (sólo local): cierra la instancia que está corriendo y la
 // vuelve a abrir con la MISMA línea de comandos con la que estaba andando.
 // Lo usa el botón ⟳ RESTART del panel de servidores. Nunca desde la web.
@@ -1835,7 +1938,34 @@ function connectToComfy() {
             const message = JSON.parse(messageString);
 
             // Enviar progreso al cliente
+            // ComfyUI nuevo manda 'progress_state' (todos los nodos juntos) y sólo
+            // al cliente que encoló el prompt. Se toma el nodo con más pasos.
+            if (message.type === 'progress_state' && message.data && message.data.nodes) {
+                let mejor = null;
+                Object.keys(message.data.nodes).forEach((k) => {
+                    const nd = message.data.nodes[k] || {};
+                    if (Number(nd.max) > 1 && (!mejor || Number(nd.max) > Number(mejor.max))) mejor = nd;
+                });
+                if (mejor) {
+                    comfyProgreso = {
+                        promptId: message.data.prompt_id || comfyProgreso.promptId,
+                        paso: Number(mejor.value || 0), total: Number(mejor.max || 0),
+                        actualizado: Date.now()
+                    };
+                    enviarAlFront({ type: 'progress', value: Number(mejor.value || 0), max: Number(mejor.max || 0) });
+                    const _ejPS = (comfyCola.enEjecucion || [])[0];
+                    if (_ejPS && _ejPS.promptId) {
+                        marcarPedidoRed(_ejPS.promptId, { estado: 'comfy', paso: Number(mejor.value || 0), total: Number(mejor.max || 0) });
+                    }
+                }
+            }
             if (message.type === 'progress') {
+                const _ejProg = (comfyCola.enEjecucion || [])[0];
+                comfyProgreso = {
+                    promptId: (_ejProg && _ejProg.promptId) || comfyProgreso.promptId,
+                    paso: Number(message.data.value || 0), total: Number(message.data.max || 0),
+                    actualizado: Date.now()
+                };
                 // el progreso es lo que más se repite: si un navegador está atrasado
                 // se saltea (su buffer no crece y no se come la memoria)
                 enviarAlFront({
@@ -1864,6 +1994,10 @@ function connectToComfy() {
                 // queda registrado qué prompt está ejecutando ahora mismo
                 comfyCola.enEjecucion = [Object.assign({ promptId: message.data.prompt_id },
                     quienEsEstePrompt(message.data.prompt_id))];
+                // trabajo nuevo: el paso vuelve a cero (si no, muestra el del anterior)
+                if (comfyProgreso.promptId !== message.data.prompt_id) {
+                    comfyProgreso = { promptId: message.data.prompt_id, paso: 0, total: 0, actualizado: Date.now() };
+                }
                 // si es un pedido que vino de la red, la línea de tiempo del STAGE local
                 // avanza — pero con node:null ComfyUI avisa que CERRÓ, no que empezó
                 if (message.data.node !== null && message.data.node !== undefined) {

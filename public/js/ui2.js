@@ -46,16 +46,32 @@
             (b.tipo === 'community' ? community : batch).appendChild(b.nodo);
         });
 
+        // COMFYSTAGE: consola + estado del motor. SOLO en la app local (la web
+        // no tiene ComfyUI propio: ahí no se muestra la pestaña).
+        var esWebAqui = (function () {
+            try {
+                var h = location.hostname;
+                return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1;
+            } catch (e) { return false; }
+        })();
+
         var barra = document.createElement('div');
         barra.id = 'stageSubTabs';
         barra.className = 'sub-tabs-container';
         barra.innerHTML =
             '<button class="sub-tab-btn sub-tab-btn-std active" data-sub="stageCommunity">🌎 COMMUNITY</button>' +
-            '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🏠 BATCH</button>';
+            '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🏠 BATCH</button>' +
+            (esWebAqui ? '' : '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>');
 
         stage.appendChild(barra);
         stage.appendChild(community);
         stage.appendChild(batch);
+        if (!esWebAqui) {
+            var comfy = document.createElement('div');
+            comfy.id = 'stageComfy';
+            comfy.className = 'sub-tab-content';
+            stage.appendChild(comfy);
+        }
         enganchar(barra);
     }
 
