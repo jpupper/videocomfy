@@ -366,7 +366,9 @@ async function anotarGeneracion(g) {
             modelo: g.modelo || '', tipo: g.tipo || 'imagen',
             email, username: d.username, displayName: d.displayName, avatar: d.avatar,
             computadoraPeerId: comp.peerId || '', computadoraNombre: comp.nombre || '',
-            emailDueno: String(comp.duenoEmail || comp.dueno || '').toLowerCase(),
+            // el dueño va por EMAIL (identificador universal): antes se guardaba el
+            // username y el ranking no podía cruzarlo con las cuentas.
+            emailDueno: String(comp.emailDueno || comp.duenoEmail || comp.email || comp.dueno || '').toLowerCase(),
             duenoNombre: comp.duenoNombre || comp.dueno || '',
             origen: g.origen || 'local',
             cuando: g.cuando ? new Date(g.cuando) : new Date()
@@ -546,100 +548,92 @@ async function ranking(orden) {
     const cual = ['tiempo', 'generaciones', 'fierros'].includes(orden) ? orden : 'tiempo';
     try {
         const vivo = await segundosEnVivo();
-        if (cual === 'generaciones') {
-            // generaciones que SALIERON de los fierros de cada dueño
-            const filas = await Generacion.aggregate([
-                { $match: { emailDueno: { $ne: '' } } },
-                {
-                    $group: {
-                        _id: '$emailDueno', generaciones: { $sum: 1 },
-                        usuario: { $last: '$duenoNombre' }, computadoras: { $addToSet: '$computadoraPeerId' }
-                    }
-                },
-                { $sort: { generaciones: -1 } }, { $limit: 25 }
-            ]);
-            // las que pidió cada uno (para el detalle)
-            const pedidas = await Generacion.aggregate([
-                { $match: { email: { $ne: '' } } }, { $group: { _id: '$email', pidio: { $sum: 1 } } }
-            ]);
-            const mapaPedidas = Object.fromEntries(pedidas.map((x) => [x._id, x.pidio]));
-            // último latido por cuenta (para saber si tiene un fierro conectado)
-            const comps = await Computadora.find({}, { email: 1, ultimoVisto: 1 }).lean();
-            const mapaUltimo = {};
-            for (const c of comps) {
-                const k = String(c.email || '').toLowerCase();
-                if (!k) continue;
-                const t = new Date(c.ultimoVisto || 0).getTime();
-                if (!mapaUltimo[k] || t > mapaUltimo[k]) mapaUltimo[k] = t;
-            }
-            const segundos = await Computadora.aggregate([{ $group: { _id: '$email', segundos: { $sum: '$segundosTotal' } } }]);
-            const mapaSeg = Object.fromEntries(segundos.map((x) => [x._id, x.segundos]));
-            return {
-                orden: cual,
-                filas: filas.map((f, i) => ({
-                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '', avatar: f.avatar || '',
-                    generacionesProvistas: f.generaciones, generacionesPedidas: mapaPedidas[f._id] || 0,
-                    enLinea: enLineaDe(f._id, mapaUltimo[String(f._id || '').toLowerCase()], vivo),
-                    computadoras: f.computadoras.filter(Boolean).length,
-                    segundosComputadora: (mapaSeg[f._id] || 0) + (vivo.porEmail[f._id] || 0),
-                    enLinea: enLineaDe(f._id, f.ultimoVisto, vivo)
-                }))
+
+        // ---- alias: cualquier clave (email o username) -> email canónico ----
+        // Esto es lo que faltaba: las generaciones viejas guardaron el USERNAME
+        // como dueño y el ranking las perdía. Ahora se cruzan las dos formas.
+        const users = await Usuario.find({}, { email: 1, username: 1, displayName: 1, avatar: 1 }).lean();
+        const canónico = {};   // 'jpupper' | 'julian@puppo...' -> 'julian@puppo...'
+        const info = {};       // email canónico -> { email, username, displayName, avatar }
+        for (const u of users) {
+            const email = String(u.email || '').toLowerCase();
+            const user = String(u.username || '').toLowerCase();
+            const clave = email || user;
+            if (!clave) continue;
+            if (email) canónico[email] = clave;
+            if (user) canónico[user] = clave;
+            info[clave] = {
+                email: u.email || '', username: u.username || '',
+                displayName: u.displayName || u.username || '', avatar: u.avatar || ''
             };
         }
+        const can = (v) => canónico[String(v || '').toLowerCase()] || String(v || '').toLowerCase();
 
-        if (cual === 'fierros') {
-            const filas = await Computadora.aggregate([
-                { $match: { email: { $ne: '' } } },
-                {
-                    $group: {
-                        _id: '$email', computadoras: { $sum: 1 }, segundos: { $sum: '$segundosTotal' },
-                        usuario: { $last: '$nombre' }, ultimo: { $max: '$ultimoVisto' }
-                    }
-                },
-                { $sort: { computadoras: -1, segundos: -1 } }, { $limit: 25 }
-            ]);
-            const gen = await Generacion.aggregate([{ $group: { _id: '$emailDueno', total: { $sum: 1 } } }]);
-            const mapaGen = Object.fromEntries(gen.map((x) => [x._id, x.total]));
-            return {
-                orden: cual,
-                filas: filas.map((f, i) => ({
-                    puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '', avatar: f.avatar || '',
-                    computadoras: f.computadoras, segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
-                    enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
-                    seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
-                    generacionesProvistas: mapaGen[f._id] || 0, ultimoVisto: f.ultimo
-                }))
-            };
-        }
-
-        // tiempo (por defecto): el fierro que más tiempo estuvo prendido
-        const filas = await Computadora.aggregate([
-            { $match: { email: { $ne: '' } } },
-            {
-                $group: {
-                    _id: '$email', segundos: { $sum: '$segundosTotal' },
-                    computadoras: { $sum: 1 }, sesiones: { $sum: '$sesiones' },
-                    usuario: { $last: '$nombre' }, avatar: { $last: '$avatar' }, ultimoVisto: { $max: '$ultimoVisto' }
-                }
-            },
-            { $sort: { segundos: -1 } }, { $limit: 25 }
+        const [comps, gens] = await Promise.all([
+            Computadora.find({}).lean(),
+            Generacion.find({}, { email: 1, emailDueno: 1, computadoraPeerId: 1 }).lean()
         ]);
-        const gen = await Generacion.aggregate([{ $group: { _id: '$emailDueno', total: { $sum: 1 } } }]);
-        const mapaGen = Object.fromEntries(gen.map((x) => [x._id, x.total]));
-        const ped = await Generacion.aggregate([{ $group: { _id: '$email', total: { $sum: 1 } } }]);
-        const mapaPed = Object.fromEntries(ped.map((x) => [x._id, x.total]));
-        return {
-            orden: cual,
-            filas: filas.map((f, i) => ({
-                puesto: i + 1, email: f._id, usuario: f.usuario || f._id, avatar: f.avatar || '',
-                segundosComputadora: f.segundos + (vivo.porEmail[f._id] || 0),
-                seguido: (vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(f._id||'').toLowerCase()]) || 0,
-                computadoras: f.computadoras, sesiones: f.sesiones,
-                enLinea: enLineaDe(f._id, f.ultimoVisto, vivo),
-                generacionesProvistas: mapaGen[f._id] || 0, generacionesPedidas: mapaPed[f._id] || 0,
-                ultimoVisto: f.ultimoVisto
-            }))
+
+        const filasPorDueno = {};
+        const fila = (k) => (filasPorDueno[k] = filasPorDueno[k] || {
+            clave: k, computadoras: new Set(), segundos: 0, sesiones: 0,
+            provistas: 0, pedidas: 0, ultimoVisto: 0
+        });
+
+        for (const c of comps) {
+            const k = can(c.email);
+            if (!k) continue;
+            const f = fila(k);
+            f.computadoras.add(c.peerId || String(c._id));
+            f.segundos += Number(c.segundosTotal || 0);
+            f.sesiones += Number(c.sesiones || 0);
+            f.ultimoVisto = Math.max(f.ultimoVisto, new Date(c.ultimoVisto || 0).getTime());
+            if (!info[k] && c.username) {
+                info[k] = { email: c.email || '', username: c.username || '', displayName: c.username || '', avatar: c.avatar || '' };
+            }
+        }
+        for (const g of gens) {
+            const kd = can(g.emailDueno);
+            if (kd) {
+                const f = fila(kd);
+                f.provistas++;
+                if (g.computadoraPeerId) f.computadoras.add(g.computadoraPeerId);
+            }
+            const kp = can(g.email);
+            if (kp) fila(kp).pedidas++;
+        }
+        // tiempo en vivo (sesiones abiertas) al dueño que corresponde
+        for (const [em, seg] of Object.entries(vivo.porEmail || {})) {
+            const k = can(em);
+            if (filasPorDueno[k]) filasPorDueno[k].segundos += Number(seg || 0);
+        }
+
+        const filas = Object.values(filasPorDueno).map((f) => {
+            const i = info[f.clave] || {};
+            const emailReal = i.email || f.clave;
+            return {
+                email: emailReal,
+                usuario: i.username || f.clave,
+                displayName: i.displayName || i.username || '',
+                avatar: i.avatar || '',
+                computadoras: f.computadoras.size,
+                segundosComputadora: f.segundos,
+                seguido: Number((vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(emailReal).toLowerCase()]) || 0),
+                sesiones: f.sesiones,
+                generacionesProvistas: f.provistas,
+                generacionesPedidas: f.pedidas,
+                enLinea: enLineaDe(emailReal, f.ultimoVisto, vivo),
+                ultimoVisto: f.ultimoVisto ? new Date(f.ultimoVisto).toISOString() : null
+            };
+        });
+
+        const ordenar = {
+            tiempo: (a, b) => b.segundosComputadora - a.segundosComputadora,
+            generaciones: (a, b) => (b.generacionesProvistas - a.generacionesProvistas) || (b.segundosComputadora - a.segundosComputadora),
+            fierros: (a, b) => (b.computadoras - a.computadoras) || (b.segundosComputadora - a.segundosComputadora)
         };
+        filas.sort(ordenar[cual]);
+        return { orden: cual, filas: filas.slice(0, 25).map((f, i) => Object.assign({ puesto: i + 1 }, f)) };
     } catch (e) { console.log('⚠️  IACOMFY ranking: ' + e.message); return null; }
 }
 
