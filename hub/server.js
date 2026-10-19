@@ -764,7 +764,11 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     }
     // Si esa PC tiene el motor apagado, el trabajo iba a fallar seguro: se corta
     // acá con el motivo, en vez de encolarlo y que reviente en el registro.
-    if (!destino.comfy) {
+    // OJO: p.comfy (crudo) queda en false desde que se crea el peer; el estado
+    // real del motor llega en p.estado.comfy (tunnel:estado). Antes miraba el
+    // crudo y rechazaba trabajos de una PC que estaba perfecta.
+    const comfyVivo = !!(destino.estado && destino.estado.comfy);
+    if (!comfyVivo) {
         return res.status(409).json({
             success: false,
             motivo: 'comfy-apagado',

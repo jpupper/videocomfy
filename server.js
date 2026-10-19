@@ -449,10 +449,22 @@ async function subirArchivoAR2(carpeta, nombre) {
         if (!st.isFile() || st.size === 0) return false;
         marcarPedidoRedPorArchivo(nombre, { estado: 'subiendo' });   // línea de tiempo: "subiendo a Cloudflare"
         actualizarPedido({ archivo: nombre }, { estado: 'subiendo' });
-        const r = await r2lib.subirArchivo(ruta, {
-            tipo: 'comfylatam', sub: carpeta, filename: nombre,
-            mime: mimeDe(nombre), size: st.size
-        });
+        // Tope de tiempo: con una conexión lenta o un hipo de red el upload se
+        // quedaba colgado para siempre ("Guardando en Cloudflare… 2 minutos").
+        // Si no termina en 90 s, se marca sin_nube: la imagen YA existe y se ve,
+        // y el barrido la reintenta después.
+        const t0 = Date.now();
+        const r = await Promise.race([
+            r2lib.subirArchivo(ruta, {
+                tipo: 'comfylatam', sub: carpeta, filename: nombre,
+                mime: mimeDe(nombre), size: st.size
+            }),
+            new Promise((res) => setTimeout(() => {
+                console.log('⏱️  [R2] timeout subiendo ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB): sigo sin esperar más');
+                res(null);
+            }, 90000))
+        ]);
+        const segs = ((Date.now() - t0) / 1000).toFixed(1);
         if (!r) { r2Estado.errores++; marcarPedidoRedPorArchivo(nombre, { estado: 'sin_nube' }); return false; }
         marcarPedidoRedPorArchivo(nombre, { estado: 'listo', urlNube: r.url });
         actualizarPedido({ archivo: nombre }, { estado: 'listo', url: r.url });
@@ -464,7 +476,7 @@ async function subirArchivoAR2(carpeta, nombre) {
             mimetype: mimeDe(nombre)
         });
         r2Estado.subidos++; r2Estado.bytes += st.size; r2Estado.ultimo = nombre;
-        console.log('☁️  [R2] subido ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB) -> ' + r.url);
+        console.log('☁️  [R2] subido ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB en ' + segs + 's) -> ' + r.url);
         registrarAsset(nombre, r.url, st.size).catch(() => { });
         return true;
     } catch (e) {

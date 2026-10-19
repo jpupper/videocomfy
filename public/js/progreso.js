@@ -120,7 +120,7 @@
                 break;
             case 'nube':
                 clase = 'ck-prog-normal';
-                t = '☁️ Guardando el resultado en Cloudflare…';
+                t = '☁️ Subiendo el resultado a Cloudflare… (según tu conexión puede tardar)' + (S.bytes ? ' · ' + (S.bytes / 1048576).toFixed(1) + ' MB' : '');
                 break;
             case 'listo':
                 clase = 'ck-prog-ok';
