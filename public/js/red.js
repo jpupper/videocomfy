@@ -812,8 +812,16 @@
     function generar() {
         var prompt = (document.getElementById('redPrompt').value || '').trim();
         if (!prompt) { log('⚠️ Falta el prompt'); return; }
-        var destino = document.getElementById('redDestino').value || ESTADO.elegido;
-        if (!destino) { log('⚠️ No hay ningún nodo para generar'); return; }
+        // SÓLO la PC elegida en la lista. Antes, si el select quedaba vacío, se
+        // usaba la última guardada y el trabajo podía irse a otra computadora.
+        var selDestino = document.getElementById('redDestino');
+        var destino = (selDestino && selDestino.value) || '';
+        if (!destino) { log('⚠️ Elegí una computadora en la lista (no hay ninguna seleccionada)'); return; }
+        var peerDestino = (ESTADO.peers || []).filter(function (x) { return x.id === destino; })[0] || null;
+        if (peerDestino && peerDestino.comfy === false) {
+            log('⚠️ ' + (peerDestino.nombre || 'Esa PC') + ' tiene el ComfyUI apagado: elegí otra computadora.');
+            return;
+        }
         var modelo = document.getElementById('redModelo').value;
         var steps = parseInt(document.getElementById('redSteps').value) || 10;
         var ancho = parseInt(document.getElementById('redAncho').value) || 1024;

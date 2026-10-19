@@ -119,7 +119,10 @@ function principal() {
 }
 
 function peer(id) {
-    if (id && state.peers.has(id)) return state.peers.get(id);
+    // OJO: si viene un id, tiene que ser ESE nodo o nada. Antes caía en
+    // principal() y un id viejo/inexistente mandaba el trabajo a OTRA PC
+    // (se generó en la PC equivocada sin avisar).
+    if (id) return state.peers.get(id) || null;
     return principal();
 }
 

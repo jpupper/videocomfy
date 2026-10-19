@@ -743,12 +743,33 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
         });
     }
     const b = req.body || {};
-    const destino = b.peerId ? relay.peer(String(b.peerId)) : relay.principal();
+    const pedido = String(b.peerId || '');
+    const destino = pedido ? relay.peer(pedido) : relay.principal();
     if (!destino || !destino.socket || !destino.socket.connected) {
-        return res.status(503).json({ success: false, message: 'Ese nodo no está conectado.' });
+        // NUNCA elegir otra PC por atrás: se avisa y se listan las que hay.
+        const vivas = (relay.listarPeers ? relay.listarPeers() : [])
+            .filter((p) => p && p.socket && p.socket.connected)
+            .map((p) => ({ id: p.id, nombre: p.nombre, comfy: !!p.comfy }));
+        return res.status(409).json({
+            success: false,
+            motivo: pedido ? 'ese-nodo-no-esta' : 'elegi-una-pc',
+            message: pedido
+                ? `La computadora que elegiste no está conectada ahora. Elegí otra (no mando el trabajo a una PC distinta sin avisarte).`
+                : 'Elegí en qué computadora generar.',
+            pcs: vivas
+        });
     }
     if (!destino.compartir) {
         return res.status(403).json({ success: false, message: `El nodo ${destino.nombre} no está compartiendo su Comfy.` });
+    }
+    // Si esa PC tiene el motor apagado, el trabajo iba a fallar seguro: se corta
+    // acá con el motivo, en vez de encolarlo y que reviente en el registro.
+    if (!destino.comfy) {
+        return res.status(409).json({
+            success: false,
+            motivo: 'comfy-apagado',
+            message: `La computadora "${destino.nombre}" está conectada pero su ComfyUI no responde. Elegí otra PC o pedile que lo abra.`
+        });
     }
 
     // ¿Ese fierro tiene y comparte el workflow que se pide? Si no, se corta acá:
@@ -776,7 +797,11 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     const quienEs = quien.usuario
         ? (await perfilDe(tokenDe(req))) || quien.usuario
         : {};
-    const de = (quienEs.username || quienEs.displayName) || 'local';
+    // si el perfil no vino, al menos el usuario del token (antes quedaba "local"
+    // y el registro decía que lo pidió @local en vez de la cuenta)
+    const de = (quienEs.username || quienEs.displayName
+        || (quien.usuario && (quien.usuario.username || quien.usuario.email))
+        || 'local');
     const pedidoPor = {
         usuario: quienEs.username || de,
         displayName: quienEs.displayName || quienEs.username || de,
