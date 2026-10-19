@@ -404,3 +404,56 @@
         init();
     }
 })();
+
+// ---------------------------------------------------------------------------
+// ⟳ RESTART de ComfyUI (sólo local): cierra la instancia y la vuelve a abrir.
+// ---------------------------------------------------------------------------
+(function () {
+    function enganchar() {
+        var btn = document.getElementById('piComfyRestartBtn');
+        if (!btn) return;
+        var esWeb = false;
+        try {
+            var h = location.hostname;
+            esWeb = h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1;
+        } catch (e) { }
+        if (esWeb) { btn.style.display = 'none'; return; }
+        var textoOriginal = btn.textContent;
+        btn.addEventListener('click', function () {
+            if (btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = '⟳ Reiniciando…';
+            btn.classList.add('reiniciando');
+            var avisar = function (t) {
+                if (typeof window.appendConsoleLine === 'function') { try { window.appendConsoleLine(t, 'system'); } catch (e) { } }
+                console.log('[comfy]', t);
+            };
+            avisar('⟳ Cerrando ComfyUI y volviéndolo a abrir…');
+            fetch('/api/comfy/reiniciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.success) {
+                        avisar('✅ ComfyUI volvió a arrancar en ' + d.segundos + 's');
+                        btn.textContent = '✅ Listo';
+                    } else {
+                        avisar('⚠️ No arrancó: ' + (d.motivo || 'sin respuesta'));
+                        btn.textContent = '⚠️ Revisá la consola';
+                    }
+                })
+                .catch(function (e) {
+                    avisar('⚠️ Error: ' + e.message);
+                    btn.textContent = '⚠️ Error';
+                })
+                .then(function () {
+                    setTimeout(function () {
+                        btn.textContent = textoOriginal;
+                        btn.disabled = false;
+                        btn.classList.remove('reiniciando');
+                    }, 5000);
+                });
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enganchar);
+    else enganchar();
+    setTimeout(enganchar, 1500);
+})();

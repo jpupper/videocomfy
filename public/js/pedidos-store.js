@@ -105,7 +105,7 @@
         arrancar: function () {
             if (store._t) return;
             store.traer();
-            store._t = setInterval(function () { store.traer(); }, 4000);
+            store._t = setInterval(function () { store.traer(); }, 2500);
             window.addEventListener('jpi-generado', function () { setTimeout(store.traer, 800); });
         }
     };

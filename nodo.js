@@ -330,6 +330,7 @@ function arrancar(opciones) {
             // El túnel sólo apunta a la app (127.0.0.1:5634), nunca a ComfyUI.
             // ---------------------------------------------------------------
             const RUTAS_PROHIBIDAS = [
+        '/api/comfy/reiniciar',
                 /^\/api\/config/i,                       // cambiar a qué ComfyUI apunta
                 // /api/comfy/cola/limpiar SÍ se permite: es el botón "Vaciar cola"
                 // del panel de STAGE, y desde la web quedaba bloqueado sin avisar.

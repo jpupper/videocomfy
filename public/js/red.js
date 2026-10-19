@@ -634,6 +634,8 @@
                 estado = (p.visto ? 'conexión pasada' : 'sin conexión') + hace;
             }
         }
+        var lineaPc = [p.gpu ? esc(p.gpu) : '', p.usuario ? 'de @' + esc(p.usuario) : '']
+            .filter(Boolean).join(' · ');
         return [
             '<div class="red-nodo' + (elegido ? ' elegido' : '') + (puede ? '' : ' apagado') + '">',
             '  <div class="nombre">' + (p.avatar
@@ -644,7 +646,9 @@
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
             sello,
             '  </div>',
-            '  <div class="linea">' + (p.gpu ? esc(p.gpu) : 'sin GPU') + (p.usuario ? ' · de @' + esc(p.usuario) : '') + '</div>',
+            // Si no hay GPU publicada NO se escribe nada (ni "sin GPU" ni la palabra
+            // GPU): la línea se arma sólo con lo que hay, y si queda vacía no se pinta.
+            lineaPc ? '  <div class="linea">' + lineaPc + '</div>' : '',
             '  <div class="linea">' + esc(modelos) + '</div>',
             '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
             '  <div class="red-accion">' + boton + '</div>',

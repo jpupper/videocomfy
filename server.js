@@ -1296,6 +1296,151 @@ app.get('/api/comfy/cola', async (req, res) => {
 
 // Vaciar la cola de ComfyUI (para las sobras de corridas viejas) o cortar lo
 // que está ejecutando ahora.
+// ============================================================================
+// REINICIAR COMFYUI (sólo local): cierra la instancia que está corriendo y la
+// vuelve a abrir con la MISMA línea de comandos con la que estaba andando.
+// Lo usa el botón ⟳ RESTART del panel de servidores. Nunca desde la web.
+// ============================================================================
+function procesosComfy() {
+    return new Promise((resolve) => {
+        if (process.platform !== 'win32') {
+            execFile('bash', ['-lc', "ps -eo pid,args | grep -i 'main\\.py' | grep -v grep"],
+                { timeout: 15000 }, (err, out) => {
+                    if (err || !out) return resolve([]);
+                    resolve(String(out).split(/\r?\n/).filter(Boolean).map((l) => {
+                        const m = l.trim().match(/^(\d+)\s+(.*)$/);
+                        return m ? { pid: Number(m[1]), cmd: m[2], exe: (m[2].split(' ')[0] || '') } : null;
+                    }).filter((x) => x && /main\.py/i.test(x.cmd)));
+                });
+            return;
+        }
+        execFile('wmic', ['process', 'where', "name='python.exe'", 'get',
+            'ProcessId,ExecutablePath,CommandLine', '/format:list'],
+            { timeout: 20000 }, (err, out) => {
+                if (err || !out) return resolve([]);
+                // /format:list => bloques KEY=VALOR separados por línea vacía
+                const bloques = String(out).split(/\r?\n\s*\r?\n/);
+                const lista = [];
+                for (const b of bloques) {
+                    const o = {};
+                    b.split(/\r?\n/).forEach((l) => {
+                        const i = l.indexOf('=');
+                        if (i > 0) o[l.slice(0, i).trim()] = l.slice(i + 1).trim();
+                    });
+                    if (o.ProcessId && /main\.py/i.test(o.CommandLine || '')) {
+                        lista.push({ pid: Number(o.ProcessId), cmd: o.CommandLine || '', exe: o.ExecutablePath || '' });
+                    }
+                }
+                resolve(lista);
+            });
+    });
+}
+
+function esperar(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// parte la línea de comandos respetando las comillas
+function partirComando(cmd) {
+    const partes = [];
+    let actual = '', entreComillas = false;
+    for (let i = 0; i < cmd.length; i++) {
+        const c = cmd[i];
+        if (c === '"') { entreComillas = !entreComillas; continue; }
+        if (c === ' ' && !entreComillas) { if (actual) { partes.push(actual); actual = ''; } continue; }
+        actual += c;
+    }
+    if (actual) partes.push(actual);
+    return partes;
+}
+
+async function comfyResponde(timeout) {
+    try {
+        const r = await fetch(comfyBase() + '/system_stats', { signal: AbortSignal.timeout(timeout || 3000) });
+        return r.ok;
+    } catch (e) { return false; }
+}
+
+async function reiniciarComfy() {
+    const t0 = Date.now();
+    const procesos = await procesosComfy();
+    console.log(`⟳ [RESTART COMFY] procesos encontrados: ${procesos.length}`);
+    let exe = '', args = [], cwd = '';
+
+    if (procesos.length) {
+        const primero = procesos[0];
+        const partes = partirComando(primero.cmd || '');
+        exe = primero.exe || partes[0] || '';
+        args = partes.slice(1);
+        // cwd: si main.py viene con ruta absoluta, esa carpeta; si no,
+        // venv/Scripts/python.exe -> dos niveles arriba = raíz de ComfyUI
+        const mainArg = args.find((a) => /main\.py$/i.test(a));
+        if (mainArg && /^[a-zA-Z]:[\\/]/.test(mainArg)) cwd = require('path').dirname(mainArg);
+        else if (exe) cwd = require('path').resolve(require('path').dirname(exe), '..', '..');
+    } else {
+        // no hay nada corriendo: se usa la ruta conocida
+        const dir = process.env.COMFY_DIR || String(comfyAddress || '').trim() || '';
+        const base = process.env.COMFY_DIR ? process.env.COMFY_DIR : 'D:/IA/comfynew/ComfyUI';
+        exe = require('path').join(base, 'venv', 'Scripts', 'python.exe');
+        cwd = base;
+        args = ['-E', '-u', 'main.py', '--listen', '0.0.0.0', '--port', '8188',
+            '--temp-directory', require('path').join(base, 'temp'),
+            '--disable-cuda-malloc', '--reserve-vram', '1'];
+        console.log(`   no había proceso: arranco con ${exe} (${dir || 'ruta por defecto'})`);
+    }
+
+    // cerrar
+    for (const p of procesos) {
+        try {
+            await new Promise((res) => {
+                require('child_process').execFile('taskkill', ['/PID', String(p.pid), '/F'], { timeout: 15000 },
+                    () => res());
+            });
+        } catch (e) { }
+    }
+    // esperar que el puerto deje de responder
+    for (let i = 0; i < 20; i++) {
+        if (!(await comfyResponde(2000))) break;
+        await esperar(1000);
+    }
+    console.log('   cerrado, esperando que libere el puerto…');
+
+    // abrir de nuevo
+    let hijo = null;
+    try {
+        const { spawn } = require('child_process');
+        hijo = spawn(exe, args, {
+            cwd: cwd || undefined, detached: true, stdio: 'ignore', windowsHide: true
+        });
+        hijo.unref();
+        console.log(`   relanzado pid ${hijo.pid} · cwd ${cwd}`);
+    } catch (e) {
+        return { ok: false, motivo: 'no pude relanzarlo: ' + e.message, segundos: 0 };
+    }
+
+    // esperar a que responda (ComfyUI tarda ~10-20 s en levantar)
+    const limite = Date.now() + 120000;
+    let arriba = false;
+    while (Date.now() < limite) {
+        if (await comfyResponde(2500)) { arriba = true; break; }
+        await esperar(2000);
+    }
+    const segundos = Math.round((Date.now() - t0) / 1000);
+    console.log(`${arriba ? '✅' : '⚠️'} [RESTART COMFY] ${arriba ? 'arriba' : 'no respondió'} en ${segundos}s`);
+    return { ok: arriba, pid: hijo && hijo.pid, segundos, cerrados: procesos.length, exe, cwd };
+}
+
+app.post('/api/comfy/reiniciar', bodyParser.json(), async (req, res) => {
+    // es una acción sobre ESTA máquina: nunca se acepta un pedido de la web
+    if (esPedidoDeLaWeb(req)) {
+        return res.status(403).json({ success: false, message: 'Sólo se puede reiniciar ComfyUI desde la app local.' });
+    }
+    try {
+        const r = await reiniciarComfy();
+        res.json({ success: !!r.ok, ...r, comfy: await comfyResponde(3000) });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 app.post('/api/comfy/cola/limpiar', bodyParser.json(), async (req, res) => {
     const que = String((req.body && req.body.que) || 'pendientes');
     try {

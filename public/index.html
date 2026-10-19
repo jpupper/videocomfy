@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="css/red.css?v=30">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=9">
     <link rel="stylesheet" href="css/ideogram4.css?v=1">
-    <link rel="stylesheet" href="css/ck-estado.css?v=10">
+    <link rel="stylesheet" href="css/ck-estado.css?v=11">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -102,6 +102,8 @@
                             <div class="pi-server-detail" id="piComfyDetail">
                                 <span><code>127.0.0.1:8188</code></span>
                                 <button type="button" class="pi-server-action-btn" id="piComfyConfigBtn">⚙️ Ajustes</button>
+                                <!-- sólo en local: cierra ComfyUI y lo vuelve a abrir -->
+                                <button type="button" class="pi-server-action-btn pi-comfy-restart" id="piComfyRestartBtn" title="Cerrar ComfyUI y volver a abrirlo">⟳ RESTART</button>
                             </div>
                         </div>
                         <div class="pi-server-alert" id="piComfyAlert" style="display:none"></div>
@@ -1131,13 +1133,13 @@
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
     <script src="js/cola-pausa.js?v=2"></script>
-    <script src="js/pedidos-store.js?v=1"></script>
+    <script src="js/pedidos-store.js?v=2"></script>
 <script src="js/cola-comfy.js?v=6"></script>
     <script src="js/registro.js?v=6"></script>
 <script src="js/batch-pedidos.js?v=4"></script>
     <script src="js/version.js?v=3"></script>
     <script src="js/ranking.js?v=5"></script>
-    <script src="js/workflows-red.js?v=35"></script>
+    <script src="js/workflows-red.js?v=36"></script>
     <script src="js/create-workflows.js?v=1"></script>
     <script src="js/ui-ajustes.js?v=1"></script>
     <script src="js/ui2.js?v=10"></script>
@@ -1147,10 +1149,10 @@
     <script src="js/ideogram4.js?v=1"></script>
     <script src="js/entorno-jpi.js?v=4"></script>
     <script src="vendor/socket.io.min.js"></script>
-    <script src="js/red.js?v=35"></script>
+    <script src="js/red.js?v=36"></script>
     <script src="js/paneles.js?v=1"></script>
     <script src="js/sidebar-collapse.js?v=1"></script>
-    <script src="js/panel-izquierdo.js?v=11"></script>
+    <script src="js/panel-izquierdo.js?v=12"></script>
     <script src="js/conexion.js?v=6"></script>
     <script src="js/modelos-estado.js?v=2"></script>
     <script src="js/progreso.js?v=1"></script>

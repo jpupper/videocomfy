@@ -584,6 +584,19 @@ app.get(rutasRed('/api/pedidos'), async (req, res) => {
             maquinas.push({ id: p.id, nombre: p.nombre, usuario: p.usuario, error: e.message });
         }
     }));
+    // --- pedidos anotados en el hub (lado web) -----------------------------
+    // Se suman a los de las máquinas; si el nodo ya reportó el mismo pedido
+    // (mismo prompt, pocos minutos de diferencia), el del hub se descarta.
+    const ahora = Date.now();
+    for (let i = PEDIDOS_HUB.length - 1; i >= 0; i--) {
+        if (ahora - PEDIDOS_HUB[i].cuando > 6 * 60 * 60 * 1000) PEDIDOS_HUB.splice(i, 1);
+    }
+    const delHub = PEDIDOS_HUB.filter((p) => {
+        const gemelo = pedidos.find((x) => x.prompt === p.prompt &&
+            Math.abs(Number(x.cuando || 0) - Number(p.cuando || 0)) < 3 * 60 * 1000);
+        return !gemelo;
+    });
+    for (const p of delHub) pedidos.push(Object.assign({}, p));
     pedidos.sort((a, b) => (b.cuando || 0) - (a.cuando || 0));
     res.json({ success: true, agregado: true, maquinas, pedidos: pedidos.slice(0, 200) });
 });
@@ -591,6 +604,12 @@ app.get(rutasRed('/api/pedidos'), async (req, res) => {
 // limpiar el batch: se les pide a todas las máquinas
 app.post(rutasRed('/api/pedidos/limpiar'), express.json({ limit: '1mb' }), async (req, res) => {
     let cancelados = 0;
+    for (const p of PEDIDOS_HUB) {
+        if (p.estado === 'pedida') {
+            p.estado = 'cancelada'; p.actualizado = Date.now(); p.motivo = 'se limpió el batch';
+            p.pasos = p.pasos || {}; p.pasos.cancelada = p.actualizado; cancelados++;
+        }
+    }
     await Promise.all(relay.listarPeers().filter((p) => p.conectado).map(async (p) => {
         try {
             const r = await relay.reenviarHttp({
@@ -1030,6 +1049,59 @@ setInterval(() => { try { relay.avisarPeers(); } catch (e) { } }, 10000);
 const wss = new WebSocketServer({ noServer: true });
 const clientesWs = new Set();
 let wsSeq = 0;
+
+
+// ---------------------------------------------------------------------------
+// PEDIDOS DEL LADO WEB: cuando un navegador manda un trabajo por el /ws, el
+// hub lo anota ACÁ MISMO antes de reenviarlo. Así el pedido aparece en el
+// BATCH y el REGISTRO apenas apretás generar, aunque la PC tarde o falle.
+// Los pedidos que después reporta el nodo se reconocen por prompt+tiempo y
+// reemplazan a estos (no se duplican).
+// ---------------------------------------------------------------------------
+const PEDIDOS_HUB = [];
+let pedidoHubSeq = 0;
+
+function anotarPedidoHub(msg, clientId) {
+    try {
+        const tipo = String(msg.type || '');
+        if (tipo !== 'generarImagen' && tipo !== 'generarStoryboard' && tipo !== 'generarWan22') return null;
+        const pp = msg.pedidoPor || {};
+        const ahora = Date.now();
+        const prompt = String(msg.prompt || '').slice(0, 400);
+        // si el mismo navegador repite el mismo prompt en <90s, no se duplica
+        const dup = PEDIDOS_HUB.find((p) => p.prompt === prompt && p.cliente === clientId && (ahora - p.cuando) < 90000);
+        if (dup) return dup;
+        const destino = relay.principal();
+        const p = {
+            id: 'hub-' + (++pedidoHubSeq) + '-' + ahora.toString(36),
+            jobId: null, promptId: null,
+            prompt,
+            modelo: (msg.params && msg.params.modelo) || (tipo === 'generarStoryboard' ? 'flux' : 'ltx2'),
+            usuario: pp.usuario || 'anónimo',
+            displayName: pp.displayName || pp.usuario || 'anónimo',
+            avatar: pp.avatar || '',
+            origen: 'web',
+            desde: 'la web',
+            estado: 'pedida',
+            archivo: null, url: null,
+            cuando: ahora, actualizado: ahora,
+            pasos: { pedida: ahora },
+            cliente: clientId,
+            hubPedido: true,
+            computadora: {
+                nombre: (destino && destino.nombre) || '—',
+                peerId: (destino && destino.id) || null,
+                dueno: (destino && destino.usuario) || '',
+                gpu: (destino && destino.gpu) || ''
+            }
+        };
+        p.dueno = p.computadora.dueno;
+        PEDIDOS_HUB.push(p);
+        if (PEDIDOS_HUB.length > 200) PEDIDOS_HUB.splice(0, PEDIDOS_HUB.length - 200);
+        console.log(`📝 Pedido web anotado en el hub: "${prompt.slice(0, 40)}" · @${p.usuario} · ${p.computadora.nombre}`);
+        return p;
+    } catch (e) { return null; }
+}
 
 wss.on('connection', (ws, req) => {
     const clientId = 'c' + (++wsSeq);

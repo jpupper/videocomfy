@@ -365,3 +365,8 @@
     display: block !important;
 }
 .batch-ojo { margin-left: 4px; align-self: center; font-size: 1.05rem; }
+
+/* ⟳ RESTART del motor ComfyUI: sólo en la app local */
+.pi-comfy-restart { margin-left: 6px; }
+body.es-web .pi-comfy-restart, .es-web #piComfyRestartBtn { display: none !important; }
+.pi-comfy-restart.reiniciando { opacity: .7; cursor: progress; }
