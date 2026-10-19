@@ -82,10 +82,16 @@
         Array.prototype.forEach.call(barra.children, function (b) {
             if (!esBotonPestania(b)) return;
             if (esSub) sacarIcono(b);
-            b.classList.add('ck-tab');
+            // OJO: escribir una clase/atributo que YA está igual dispara un
+            // MutationObserver y, con él, cualquier recentrado del scroll: esta
+            // función corre cada 2 s sobre TODAS las barras, así que reescribir
+            // de más sacaba la fila del celular de donde la había puesto el
+            // usuario. Sólo se escribe lo que falta.
+            if (!b.classList.contains('ck-tab')) b.classList.add('ck-tab');
             if (!b.getAttribute('role')) b.setAttribute('role', 'tab');
             // el estado accesible se sincroniza siempre (lo usa también el CSS)
-            b.setAttribute('aria-selected', b.classList.contains('active') ? 'true' : 'false');
+            var aria = b.classList.contains('active') ? 'true' : 'false';
+            if (b.getAttribute('aria-selected') !== aria) b.setAttribute('aria-selected', aria);
         });
     }
 
@@ -94,12 +100,25 @@
         return Array.prototype.filter.call(barra.children, esBotonPestania);
     }
 
+    // El usuario arrastrando una barra horizontal manda: si el dedo está abajo
+    // (o acaba de estar), NO se le toca el scroll. Sin esto, el recentrado
+    // devolvía la fila al botón activo y en el celular no se podía llegar a los
+    // últimos botones (bug reportado).
+    var ultimoToque = 0;
+    ['touchstart', 'touchmove', 'touchend', 'touchcancel',
+     'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel'].forEach(function (ev) {
+        document.addEventListener(ev, function () { ultimoToque = Date.now(); }, { passive: true, capture: true });
+    });
+
     function activar(barra, boton, opciones) {
         var opts = opciones || {};
+        var yaEraActivo = boton.classList.contains('active') &&
+            botonesDe(barra).filter(function (b) { return b.classList.contains('active'); }).length === 1;
         botonesDe(barra).forEach(function (b) {
             var esEste = (b === boton);
-            b.classList.toggle('active', esEste);
-            b.setAttribute('aria-selected', esEste ? 'true' : 'false');
+            if (b.classList.contains('active') !== esEste) b.classList.toggle('active', esEste);
+            var aria = esEste ? 'true' : 'false';
+            if (b.getAttribute('aria-selected') !== aria) b.setAttribute('aria-selected', aria);
         });
         // paneles: sólo si TODOS los botones apuntan a destinos distintos
         var destinos = botonesDe(barra).map(function (b) { return b.getAttribute('data-sub'); });
@@ -128,10 +147,14 @@
         }
         // si la barra se desplaza, la elegida tiene que quedar a la vista.
         // OJO: scrollIntoView también mueve en VERTICAL y sacaba la fila de la
-        // vista (el botón quedaba con y negativo). Se mueve sólo en horizontal.
+        // vista (el botón quedaba con y negativo). Se mueve sólo en horizontal,
+        // y sólo cuando la pestaña activa CAMBIA de verdad: recentrar la misma
+        // en cada verificación (cada 2 s) le sacaba la fila de las manos al que
+        // la estaba arrastrando en el celular.
         try {
-            barra.scrollTop = 0;
-            if (barra.scrollWidth > barra.clientWidth + 4) {
+            var sinDedo = (Date.now() - ultimoToque) > 700;
+            if (!yaEraActivo && sinDedo && barra.scrollWidth > barra.clientWidth + 4) {
+                barra.scrollTop = 0;
                 var izq = boton.offsetLeft - (barra.clientWidth - boton.offsetWidth) / 2;
                 barra.scrollLeft = Math.max(0, izq);
             }
