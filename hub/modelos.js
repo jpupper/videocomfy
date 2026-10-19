@@ -601,7 +601,9 @@ async function ranking(orden) {
         });
 
         for (const c of comps) {
-            const k = can(c.email);
+            // una PC puede no tener email (se conectó sin sesión, o se recuperó de
+            // los logs): en ese caso se cuenta por username, si no desaparece.
+            const k = can(c.email || c.username);
             if (!k) continue;
             const f = fila(k);
             f.computadoras.add(c.peerId || String(c._id));
