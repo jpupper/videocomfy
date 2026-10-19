@@ -448,6 +448,8 @@ async function listarUsuarios() {
         us.forEach((u) => {
             const nombre = String(u.username || u.email || '').trim();
             if (!nombre) return;
+            // no son cuentas: es el cajón de los pedidos anónimos
+            if (/^(sin sesi[oó]n|an[oó]nimo|anonimo|desconocido|local|undefined|null)$/i.test(nombre)) return;
             const k = nombre.toLowerCase();
             const previo = out[k] || {};
             out[k] = {

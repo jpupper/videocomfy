@@ -70,7 +70,9 @@
             ' data-acc-modo="' + esc(w.archivo) + '" data-modo="' + (a.modo === 'todos' ? 'lista' : 'todos') + '"' +
             ' title="' + (a.modo === 'todos' ? 'Habilitarlo sólo a algunos usuarios' : 'Habilitarlo para todos otra vez') + '">' +
             etiqueta + '</button>' +
-            (a.modo === 'lista' && abierto ? '<div class="red-acc-lista">' + chips +
+            // el selector se muestra al tocar TODOS (para poder elegir) o si ya
+            // está restringido: si no, el primer clic no hacía nada visible
+            ((a.modo === 'lista' || abierto) ? '<div class="red-acc-lista">' + chips +
                 '<span class="red-acc-pista">tocá los usuarios que SÍ pueden usar este workflow</span></div>' : '') +
             '</div>';
     }
