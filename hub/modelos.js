@@ -233,9 +233,24 @@ function datosDe(input) {
 async function anotarUsuario(input) {
     if (!conectado) return null;
     const d = datosDe(input);
-    const clave = d.email || d.username;
+    const emailReal = (d.email && d.email.indexOf('@') > 0) ? d.email : '';
+    const clave = emailReal || d.username;
     if (!clave) return null;
     try {
+        // Si ya existe ese username (aunque tenga el email "pseudo"), se completa
+        // en vez de crear una cuenta duplicada que después parte el ranking.
+        if (d.username) {
+            const ya = await Usuario.findOne({ username: d.username });
+            if (ya) {
+                ya.displayName = d.displayName || ya.displayName;
+                ya.avatar = d.avatar || ya.avatar;
+                ya.ultimaVez = new Date();
+                if (emailReal) ya.email = emailReal;
+                ya.vistas = (ya.vistas || 0) + 1;
+                await ya.save();
+                return ya;
+            }
+        }
         return await Usuario.findOneAndUpdate(
             { email: clave },
             {
@@ -558,13 +573,18 @@ async function ranking(orden) {
         for (const u of users) {
             const email = String(u.email || '').toLowerCase();
             const user = String(u.username || '').toLowerCase();
-            const clave = email || user;
+            // La clave es el USERNAME: en la base hay cuentas duplicadas (una con el
+            // email real y otra con el username como email) y así se muestran una sola vez.
+            const clave = user || email;
             if (!clave) continue;
             if (email) canónico[email] = clave;
             if (user) canónico[user] = clave;
+            const previo = info[clave] || {};
+            const emailReal = (email.indexOf('@') > 0) ? u.email : (previo.email || '');
             info[clave] = {
-                email: u.email || '', username: u.username || '',
-                displayName: u.displayName || u.username || '', avatar: u.avatar || ''
+                email: emailReal || previo.email || '', username: u.username || previo.username || '',
+                displayName: u.displayName || previo.displayName || u.username || '',
+                avatar: u.avatar || previo.avatar || ''
             };
         }
         const can = (v) => canónico[String(v || '').toLowerCase()] || String(v || '').toLowerCase();
