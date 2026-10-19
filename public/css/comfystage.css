@@ -1,3 +1,5 @@
+/* COMFYSTAGE · usa los tokens de tema.css (var(--ck-*) con respaldo).
+   Ver css/GUIA-DE-ESTILOS.md: ningun color a mano en contenedores nuevos. */
 /* ============================================================
    COMFYSTAGE — estado del motor + consola de ComfyUI (sólo local)
    ============================================================ */
@@ -13,9 +15,9 @@
 
 /* ---------- estado ---------- */
 .cfs-estado {
-    border: 1px solid var(--border, #2a2f3a);
+    border: 1px solid var(--ck-borde, #2a2f3a);
     border-radius: 8px;
-    background: var(--card, #12151c);
+    background: var(--ck-panel, #12151c);
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
@@ -23,13 +25,13 @@
 }
 
 .cfs-fase-fila { display: flex; align-items: center; gap: 8px; }
-.cfs-dot { width: 10px; height: 10px; border-radius: 50%; background: #6b7280; flex: 0 0 auto; }
+.cfs-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ck-texto-2, #6b7280); flex: 0 0 auto; }
 .cfs-fase { font-weight: 800; letter-spacing: .06em; font-size: .95rem; }
-.cfs-hace { margin-left: auto; font-size: .72rem; color: var(--muted-foreground, #94a3b8); }
+.cfs-hace { margin-left: auto; font-size: .72rem; color: var(--ck-texto-2, #94a3b8); }
 
 .cfs-detalle {
     font-size: .82rem;
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--ck-texto-2, #94a3b8);
     line-height: 1.35;
     min-height: 32px;
     word-break: break-word;
@@ -56,7 +58,7 @@
     border-radius: 6px;
     padding: 6px 8px;
 }
-.cfs-datos span { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground, #94a3b8); }
+.cfs-datos span { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ck-texto-2, #94a3b8); }
 .cfs-datos b { font-size: .86rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cfs-trabajo {
@@ -64,18 +66,18 @@
     flex-direction: column;
     gap: 2px;
     font-size: .76rem;
-    border-top: 1px solid var(--border, #2a2f3a);
+    border-top: 1px solid var(--ck-borde, #2a2f3a);
     padding-top: 8px;
 }
 .cfs-trabajo b { font-weight: 600; }
-.cfs-trabajo span { color: var(--muted-foreground, #94a3b8); font-size: .72rem; }
-.cfs-trabajo code { color: var(--muted-foreground, #94a3b8); font-size: .7rem; }
+.cfs-trabajo span { color: var(--ck-texto-2, #94a3b8); font-size: .72rem; }
+.cfs-trabajo code { color: var(--ck-texto-2, #94a3b8); font-size: .7rem; }
 
 /* ---------- consola ---------- */
 .cfs-consola {
-    border: 1px solid var(--border, #2a2f3a);
+    border: 1px solid var(--ck-borde, #2a2f3a);
     border-radius: 8px;
-    background: #0b0e14;
+    background: var(--ck-bg-2, #0b0e14);
     display: flex;
     flex-direction: column;
     min-height: 220px;
@@ -86,11 +88,11 @@
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--border, #2a2f3a);
+    border-bottom: 1px solid var(--ck-borde, #2a2f3a);
     font-size: .72rem;
     font-weight: 800;
     letter-spacing: .07em;
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--ck-texto-2, #94a3b8);
 }
 .cfs-lineas { font-weight: 500; letter-spacing: 0; opacity: .7; }
 .cfs-seguir { margin-left: auto; display: flex; align-items: center; gap: 5px; font-weight: 500; letter-spacing: 0; cursor: pointer; }
@@ -104,17 +106,17 @@
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-size: 11.5px;
     line-height: 1.45;
-    color: #c9d4e3;
+    color: var(--ck-texto, #c9d4e3);
     white-space: pre-wrap;
     word-break: break-word;
 }
 .cfs-ln { display: block; }
 .cfs-ln i { color: #4b5563; font-style: normal; margin-right: 8px; }
-.cfs-ln.warn { color: #fbbf24; }
-.cfs-ln.err { color: #f87171; }
-.cfs-ln.ok { color: #34d399; }
-.cfs-ln.pesos { color: #60a5fa; }
-.cfs-ln.pedido { color: #c084fc; }
+.cfs-ln.warn { color: var(--ck-aviso, #fbbf24); }
+.cfs-ln.err { color: var(--ck-error, #f87171); }
+.cfs-ln.ok { color: var(--ck-ok, #34d399); }
+.cfs-ln.pesos { color: var(--ck-acento, #60a5fa); }
+.cfs-ln.pedido { color: var(--ck-acento-2, #c084fc); }
 .cfs-ln.mg { color: #64748b; }
 
 @media (max-width: 860px) {

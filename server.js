@@ -118,8 +118,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 // jpiassets, asi el editor se ve igual en local y en la web).
 //   - En local, esta app ES el videocomfy: agente/videocomfy siempre true.
 //   - comfy: si la conexion websocket con ComfyUI esta abierta.
-app.get('/api/status', (req, res) => {
-    const comfyOk = !!(wsComfy && wsComfy.readyState === 1);
+app.get('/api/status', async (req, res) => {
+    let comfyOk = !!(wsComfy && wsComfy.readyState === 1);
+    // Si el socket se cayó, se prueba en el momento: Comfy puede estar vivo y el
+    // ws haber quedado colgado (antes se quedaba en "apagado" para siempre).
+    if (!comfyOk) {
+        try {
+            const r = await fetch(comfyBase() + '/system_stats', { signal: AbortSignal.timeout(2500) });
+            comfyOk = r.ok;
+            if (comfyOk) { try { connectToComfy(); } catch (e) { } }
+        } catch (e) { comfyOk = false; }
+    }
     res.set('Cache-Control', 'no-store');
     res.json({
         ok: comfyOk,
@@ -127,6 +136,11 @@ app.get('/api/status', (req, res) => {
         videocomfy: true,
         comfy: comfyOk,
         comfyTexto: comfyOk ? 'connected' : 'disconnected',
+        // Cuando Comfy tarda (cargando pesos) el ws puede cortarse: se informa la
+        // última fase real y hace cuánto que no contesta, en vez de "apagado".
+        comfyFase: comfyUltimoEstado.fase || '',
+        comfyDetalle: comfyUltimoEstado.detalle || '',
+        comfySilencioSegundos: comfyUltimoEstado.ts ? Math.round((Date.now() - comfyUltimoEstado.ts) / 1000) : null,
         // 'cargando' = el motor responde pero el Manager sigue bajando el catálogo
         comfyCatalogo: comfyCatalogo,
         comfyAddress: comfyAddress,
@@ -140,7 +154,9 @@ app.get('/api/status', (req, res) => {
         datoFresco: true,
         mensaje: comfyOk
             ? 'Todo listo: videocomfy + ComfyUI'
-            : `ComfyUI no responde en ${comfyBase()} (revisá SETTINGS → COMFY)`,
+            : (comfyUltimoEstado.ts && (Date.now() - comfyUltimoEstado.ts) < 900000
+                ? `ComfyUI sin respuesta hace ${Math.round((Date.now() - comfyUltimoEstado.ts) / 1000)}s (puede estar cargando pesos)`
+                : `ComfyUI no responde en ${comfyBase()} (revisá SETTINGS → COMFY)`),
         actualizado: new Date().toISOString()
     });
 });
@@ -1311,6 +1327,10 @@ app.get('/api/comfy/cola', async (req, res) => {
 // completed") pasa a listo.
 // ============================================================================
 let comfyCatalogo = { estado: 'desconocido', progreso: '', actualizado: 0 };
+// Último estado REAL que dio Comfy (fase + cuándo). Cuando Comfy tarda en
+// contestar (mientras pasa pesos a la VRAM puede tardar mucho) NO está apagado:
+// sigue con la última fase y se informa "sin respuesta desde hace Xs".
+let comfyUltimoEstado = { fase: '', detalle: '', ts: 0 };
 
 // Marca literal que imprime ComfyUI-Manager cuando TERMINÓ de arrancar:
 //   [INFO] [ComfyUI-Manager] All startup tasks have been completed.
@@ -1322,7 +1342,7 @@ const RE_DONE = /FETCH ComfyRegistry Data \[DONE\]/i;
 
 async function leerCatalogoComfy() {
     try {
-        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(6000) });
+        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(20000) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const d = await r.json();
         const entradas = d.entries || [];
@@ -1390,7 +1410,7 @@ app.get('/api/comfy/consola', async (req, res) => {
     const limite = Math.min(Math.max(Number(req.query.limite) || 220, 50), 500);
     let lineas = [], vivo = false, motivo = '';
     try {
-        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(6000) });
+        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(20000) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const d = await r.json();
         lineas = (d.entries || []).map((e, i) => ({
@@ -1435,7 +1455,7 @@ app.get('/api/comfy/consola', async (req, res) => {
         progVigente = { paso: tqdm.paso, total: tqdm.total };
     }
 
-    let fase = 'apagado', detalle = motivo || '';
+    let fase = 'apagado', detalle = '';
     if (vivo) {
         if (comfyCatalogo.estado === 'cargando') {
             fase = 'arrancando';
@@ -1450,6 +1470,20 @@ app.get('/api/comfy/consola', async (req, res) => {
         } else {
             fase = 'listo';
             detalle = 'esperando trabajo';
+        }
+        comfyUltimoEstado = { fase: fase, detalle: detalle, ts: Date.now() };
+    } else {
+        // No contestó: puede estar cargando pesos (tarda muchísimo) y no es que
+        // esté apagado. Se conserva la última fase y se dice desde cuándo no hay
+        // respuesta — nunca se muestra el error crudo del fetch.
+        const desde = comfyUltimoEstado.ts || 0;
+        const segs = desde ? Math.round((Date.now() - desde) / 1000) : 0;
+        if (desde && segs < 900) {
+            fase = 'sin_respuesta';
+            detalle = 'sin respuesta desde hace ' + segs + 's';
+        } else {
+            fase = 'apagado';
+            detalle = 'el motor no responde';
         }
     }
 

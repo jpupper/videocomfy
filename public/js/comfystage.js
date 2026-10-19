@@ -12,6 +12,9 @@
 
     var FASES = {
         apagado:    { txt: 'APAGADO',          color: '#ef4444', pista: 'ComfyUI no responde' },
+        // Comfy puede tardar muchísimo mientras pasa pesos a la VRAM: NO es que
+        // esté caído, así que se informa cuánto hace que no contesta.
+        sin_respuesta: { txt: 'SIN RESPUESTA',  color: '#f0b429', pista: 'puede estar cargando pesos' },
         arrancando: { txt: 'ARRANCANDO',       color: '#f59e0b', pista: 'el motor responde, carga el catálogo de nodos' },
         listo:      { txt: 'LISTO',            color: '#10b981', pista: 'esperando trabajo' },
         modelo:     { txt: 'CARGANDO MODELO',  color: '#3b82f6', pista: 'pasando pesos a la VRAM' },

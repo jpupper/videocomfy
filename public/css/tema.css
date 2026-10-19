@@ -1,0 +1,272 @@
+/* ============================================================================
+   COMFYLATAM · TEMA.CSS  —  LA ÚNICA FUENTE DE ESTILO
+   ----------------------------------------------------------------------------
+   TODO contenedor nuevo (COMFYSTAGE, paneles, tarjetas, tablas, botones) tiene
+   que usar estas variables y estas clases. No se escribe un color a mano en
+   ningún otro lado: si hace falta un color nuevo, se agrega acá como token y
+   se define en cada tema.
+
+   Tokens:
+     --ck-bg        fondo de la página
+     --ck-bg-2      fondo de zonas hundidas (consola, inputs)
+     --ck-panel     fondo de tarjeta / panel
+     --ck-panel-2   fondo de tarjeta secundaria / fila alterna
+     --ck-borde     línea divisoria
+     --ck-texto     texto principal
+     --ck-texto-2   texto secundario / pistas
+     --ck-acento    color de marca (botones, foco, links)
+     --ck-acento-2  segundo acento (púrpura)
+     --ck-ok        verde (listo)
+     --ck-aviso     ámbar (en curso / atención)
+     --ck-error     rojo
+     --ck-radio     radio de esquinas
+     --ck-sombra    sombra de tarjeta
+     --ck-fuente    familia tipográfica
+     --ck-velo      opacidad del velo sobre el fondo animado
+
+   Reglas de la casa (no se negocian):
+     · submenús SIN border-radius (rectos, pegados, gap 0)
+     · botones pegados, sin iconitos decorativos
+     · un solo indicador por estado (un punto, no punto + emoji)
+     · el gris de WORKFLOWS no se toca
+   ========================================================================== */
+
+:root,
+[data-tema="noche"] {
+    --ck-bg: #04121a;
+    --ck-bg-2: #061a24;
+    --ck-panel: #08161f;
+    --ck-panel-2: #0b1e2a;
+    --ck-borde: #1b2a36;
+    --ck-texto: #e2e8f0;
+    --ck-texto-2: #94a3b8;
+    --ck-acento: #00ffd5;
+    --ck-acento-2: #a855f7;
+    --ck-ok: #10b981;
+    --ck-aviso: #f59e0b;
+    --ck-error: #ef4444;
+    --ck-radio: 10px;
+    --ck-sombra: 0 6px 20px rgba(0, 0, 0, .35);
+    --ck-fuente: ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    --ck-velo: .62;
+}
+
+/* verde fósforo, negro puro */
+[data-tema="matrix"] {
+    --ck-bg: #000000;
+    --ck-bg-2: #030a05;
+    --ck-panel: #05100a;
+    --ck-panel-2: #071a10;
+    --ck-borde: #12351f;
+    --ck-texto: #d8ffe4;
+    --ck-texto-2: #6fbf8a;
+    --ck-acento: #39ff88;
+    --ck-acento-2: #0affd0;
+    --ck-ok: #39ff88;
+    --ck-aviso: #b6ff3a;
+    --ck-error: #ff4d5e;
+    --ck-sombra: 0 0 18px rgba(57, 255, 136, .10);
+    --ck-velo: .55;
+}
+
+/* negro absoluto, para OLED */
+[data-tema="amoled"] {
+    --ck-bg: #000000;
+    --ck-bg-2: #070707;
+    --ck-panel: #0c0c0c;
+    --ck-panel-2: #121212;
+    --ck-borde: #232323;
+    --ck-texto: #f5f5f5;
+    --ck-texto-2: #9a9a9a;
+    --ck-acento: #7c9cff;
+    --ck-acento-2: #c084fc;
+    --ck-ok: #22c55e;
+    --ck-aviso: #eab308;
+    --ck-error: #ef4444;
+    --ck-sombra: none;
+    --ck-velo: .72;
+}
+
+/* magenta/cian, onda synth */
+[data-tema="cyber"] {
+    --ck-bg: #0b0616;
+    --ck-bg-2: #120a22;
+    --ck-panel: #150c26;
+    --ck-panel-2: #1d1133;
+    --ck-borde: #34204f;
+    --ck-texto: #f3e8ff;
+    --ck-texto-2: #b39ddb;
+    --ck-acento: #ff2fd0;
+    --ck-acento-2: #22d3ee;
+    --ck-ok: #34d399;
+    --ck-aviso: #fbbf24;
+    --ck-error: #fb7185;
+    --ck-sombra: 0 0 22px rgba(255, 47, 208, .12);
+    --ck-velo: .58;
+}
+
+/* rojo/naranja, horno */
+[data-tema="brasa"] {
+    --ck-bg: #140a06;
+    --ck-bg-2: #1c0d07;
+    --ck-panel: #21100a;
+    --ck-panel-2: #2b150d;
+    --ck-borde: #472417;
+    --ck-texto: #fdeee6;
+    --ck-texto-2: #c9a193;
+    --ck-acento: #ff7a1a;
+    --ck-acento-2: #ffd166;
+    --ck-ok: #4ade80;
+    --ck-aviso: #fbbf24;
+    --ck-error: #ff5252;
+    --ck-sombra: 0 6px 20px rgba(255, 122, 26, .10);
+    --ck-velo: .6;
+}
+
+/* claro, para trabajar de día */
+[data-tema="hielo"] {
+    --ck-bg: #eef2f7;
+    --ck-bg-2: #ffffff;
+    --ck-panel: #ffffff;
+    --ck-panel-2: #f4f7fb;
+    --ck-borde: #d3dce6;
+    --ck-texto: #0f172a;
+    --ck-texto-2: #5b6b7c;
+    --ck-acento: #0f766e;
+    --ck-acento-2: #6d28d9;
+    --ck-ok: #15803d;
+    --ck-aviso: #b45309;
+    --ck-error: #b91c1c;
+    --ck-sombra: 0 4px 14px rgba(15, 23, 42, .08);
+    --ck-velo: .82;
+}
+
+/* ---------------------------------------------------------------- base ---- */
+html { background: var(--ck-bg); }
+body {
+    background: var(--ck-bg);
+    color: var(--ck-texto);
+    font-family: var(--ck-fuente);
+}
+
+/* --------------------------------------------------- contenedores base ---- */
+/* Toda tarjeta nueva: class="ck-caja" */
+.ck-caja {
+    background: var(--ck-panel);
+    border: 1px solid var(--ck-borde);
+    border-radius: var(--ck-radio);
+    box-shadow: var(--ck-sombra);
+    color: var(--ck-texto);
+    padding: 12px 14px;
+    margin: 0 0 10px;
+}
+.ck-caja-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin: 0 0 8px;
+}
+.ck-titulo { font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--ck-texto); margin: 0; text-transform: uppercase; }
+.ck-sub { font-size: 12px; color: var(--ck-texto-2); margin: 2px 0 0; line-height: 1.35; }
+.ck-sep { height: 1px; background: var(--ck-borde); border: 0; margin: 10px 0; }
+
+/* botón */
+.ck-btn {
+    background: var(--ck-panel-2);
+    border: 1px solid var(--ck-borde);
+    color: var(--ck-texto);
+    font: inherit; font-size: 12px; font-weight: 600;
+    padding: 7px 11px; border-radius: 6px; cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.ck-btn:hover { border-color: var(--ck-acento); color: var(--ck-acento); }
+.ck-btn.ck-fuerte { background: var(--ck-acento); border-color: var(--ck-acento); color: #04121a; }
+.ck-btn:disabled { opacity: .5; cursor: default; }
+
+/* chip / etiqueta */
+.ck-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--ck-panel-2); border: 1px solid var(--ck-borde);
+    color: var(--ck-texto-2); font-size: 11px; padding: 3px 8px; border-radius: 999px;
+}
+.ck-chip.ok { color: var(--ck-ok); border-color: color-mix(in srgb, var(--ck-ok) 45%, var(--ck-borde)); }
+.ck-chip.aviso { color: var(--ck-aviso); border-color: color-mix(in srgb, var(--ck-aviso) 45%, var(--ck-borde)); }
+.ck-chip.error { color: var(--ck-error); border-color: color-mix(in srgb, var(--ck-error) 45%, var(--ck-borde)); }
+
+/* input / select */
+.ck-campo {
+    background: var(--ck-bg-2); border: 1px solid var(--ck-borde);
+    color: var(--ck-texto); font: inherit; font-size: 12px;
+    padding: 7px 9px; border-radius: 6px; width: 100%;
+}
+.ck-campo:focus { outline: none; border-color: var(--ck-acento); }
+
+/* tabla */
+.ck-tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ck-tabla th { text-align: left; color: var(--ck-texto-2); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--ck-borde); }
+.ck-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--ck-borde); color: var(--ck-texto); }
+
+/* barra de progreso */
+.ck-barra { height: 6px; background: var(--ck-bg-2); border-radius: 4px; overflow: hidden; }
+.ck-barra > i { display: block; height: 100%; background: var(--ck-acento); transition: width .3s; }
+
+/* ------------------------------------------------- fondo animado (shader) ---
+   El include pinta un canvas con z-index:-1. Para que se vea, html lleva el
+   color y el body queda transparente; los paneles siguen opacos.            */
+html.ck-shader { background: var(--ck-bg); }
+html.ck-shader body { background: transparent; }
+/* Las superficies grandes se vuelven translúcidas para que el fondo se vea.
+   El VELO es el alfa del panel: más velo = más opaco (más legible, menos shader). */
+html.ck-shader .main-workspace,
+html.ck-shader .workspace-content,
+html.ck-shader .tabs-container,
+html.ck-shader .tab-content,
+html.ck-shader .panel-izquierdo,
+html.ck-shader .sidebar,
+html.ck-shader .stage-panel {
+    background-color: color-mix(in srgb, var(--ck-panel) calc(var(--ck-velo) * 100%), transparent) !important;
+}
+/* las tarjetas chicas siguen opacas: ahí se lee */
+html.ck-shader .ck-caja,
+html.ck-shader .red-nodo,
+html.ck-shader .red-mio,
+html.ck-shader .cfs-consola { background-color: var(--ck-panel); }
+.ck-shader-nota { font-size: 11px; color: var(--ck-texto-2); }
+
+/* ------------------------------------------------ panel de THEMES (modal) --- */
+#ckTemaModal {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0, 0, 0, .62);
+    display: none; align-items: center; justify-content: center; padding: 24px;
+}
+#ckTemaModal.abierto { display: flex; }
+#ckTemaCaja {
+    width: min(880px, 96vw); max-height: 88vh; overflow: auto;
+    background: var(--ck-panel); border: 1px solid var(--ck-borde);
+    border-radius: var(--ck-radio); box-shadow: var(--ck-sombra); color: var(--ck-texto);
+    font-family: var(--ck-fuente);
+}
+#ckTemaCaja .ck-tema-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid var(--ck-borde);
+    position: sticky; top: 0; background: var(--ck-panel); z-index: 2;
+}
+#ckTemaCaja .ck-tema-body { padding: 14px; }
+#ckTemaGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.ck-tema-card {
+    border: 1px solid var(--ck-borde); border-radius: 8px; overflow: hidden;
+    cursor: pointer; background: var(--ck-panel-2); text-align: left;
+}
+.ck-tema-card.activo { border-color: var(--ck-acento); box-shadow: 0 0 0 1px var(--ck-acento) inset; }
+.ck-tema-muestra { height: 62px; display: flex; }
+.ck-tema-muestra i { flex: 1; }
+.ck-tema-nombre { display: block; padding: 7px 9px; font-size: 12px; font-weight: 600; }
+.ck-tema-desc { display: block; padding: 0 9px 9px; font-size: 11px; color: var(--ck-texto-2); }
+
+/* submenús rectos y pegados (regla de la casa) */
+.ck-subtabs { display: flex; gap: 0; border: 1px solid var(--ck-borde); border-radius: 0; overflow: hidden; }
+.ck-subtabs button {
+    flex: 0 0 auto; border: 0; border-right: 1px solid var(--ck-borde); border-radius: 0;
+    background: var(--ck-panel-2); color: var(--ck-texto-2);
+    font: inherit; font-size: 11px; letter-spacing: .04em; padding: 7px 12px; cursor: pointer;
+}
+.ck-subtabs button:last-child { border-right: 0; }
+.ck-subtabs button.activo { background: var(--ck-acento); color: #04121a; font-weight: 700; }

@@ -5,6 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/style.css?v=2">
+    <!-- TEMA: los colores de toda la app (ver css/GUIA-DE-ESTILOS.md) -->
+    <link rel="stylesheet" href="css/tema.css?v=1">
+    <!-- el tema guardado se aplica ANTES de pintar, para que no haya flash -->
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('ck_tema') || 'noche';
+                document.documentElement.setAttribute('data-tema', t);
+                var v = localStorage.getItem('ck_tema_velo');
+                if (v) document.documentElement.style.setProperty('--ck-velo', v);
+            } catch (e) { }
+        })();
+    </script>
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/sidebar-collapse.css?v=1">
     <link rel="stylesheet" href="css/estado.css?v=1">
@@ -15,7 +28,7 @@
     <link rel="stylesheet" href="css/red.css?v=31">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=9">
     <link rel="stylesheet" href="css/ideogram4.css?v=1">
-    <link rel="stylesheet" href="css/comfystage.css?v=2">
+    <link rel="stylesheet" href="css/comfystage.css?v=3">
     <link rel="stylesheet" href="css/ck-estado.css?v=12">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1128,6 +1141,7 @@
   <!-- Token del ecosistema en todas las llamadas a la API de la app -->
   <script src="js/fsc-token-fetch.js?v=2"></script>
     <script src="js/auth-jpi.js?v=17"></script>
+    <script src="js/temas.js?v=1"></script>
     <script src="js/script.js?v=108"></script>
     <script src="js/mobile.js?v=1"></script>
     <script src="js/estado.js?v=6"></script>

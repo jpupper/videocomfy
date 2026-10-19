@@ -35,6 +35,10 @@
             } else if (d.comfy) {
                 btn.className = 'jpi-estado bien';
                 btn.textContent = '🟢 Comfy ready';
+            } else if (d.comfySilencioSegundos != null && d.comfySilencioSegundos < 900) {
+                // el motor puede tardar muchísimo cargando pesos: no está apagado
+                btn.className = 'jpi-estado cargando';
+                btn.textContent = '⏳ Comfy sin respuesta · hace ' + d.comfySilencioSegundos + 's';
             } else {
                 btn.className = 'jpi-estado mal';
                 btn.textContent = '🔴 ComfyUI apagado';
