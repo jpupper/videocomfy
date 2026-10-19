@@ -2867,7 +2867,11 @@ app.get('/api/examples', (req, res) => {
                 const esImagen = /\.(png|jpe?g|webp)$/i.test(file);
                 return {
                     filename: file,
-                    url: `/examples/${file}`,
+                    // RELATIVA a propósito (sin la barra del inicio): la web sirve este
+                    // front en /comfylatam/, así que "/examples/x" daba 404 en producción.
+                    // Sin barra, el navegador la resuelve contra la carpeta de la página:
+                    // local -> /examples/x · web -> /comfylatam/examples/x
+                    url: `examples/${file}`,
                     mtime: stats.mtime.getTime(),
                     timestamp: meta.timestamp || stats.mtime.getTime(),
                     prompt: meta.prompt || '',
