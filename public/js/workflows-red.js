@@ -4,6 +4,8 @@
 // 1) Muestra qué workflows tiene esta PC y cuáles NO se pueden usar porque
 //    faltan modelos (lo detecta la app preguntándole a ComfyUI /object_info).
 // 2) Deja elegir con un tilde cuáles compartís con la red.
+// 3) ACCESOS: cada workflow se puede dejar para TODOS o habilitarlo sólo a
+//    algunas cuentas. El que no está habilitado no lo ve ni lo puede pedir.
 // Lo que no compartís (o no tenés instalado) NO se ofrece: nadie desde la web
 // ni desde otra PC puede mandar un trabajo con ese workflow a este fierro.
 // ============================================================
@@ -12,6 +14,10 @@
 
     var J = window.JPI || {};
     var esLocal = !!J.esServidor;
+
+    var ACCESO = {};      // { archivo: { modo: 'todos'|'lista', usuarios: [] } }
+    var USUARIOS = [];    // [{ usuario, displayName, avatar }]
+    var abiertos = {};    // qué workflow tiene el selector de usuarios desplegado
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -36,6 +42,39 @@
         return caja;
     }
 
+    function accesoDe(archivo) {
+        var a = ACCESO[archivo] || {};
+        return {
+            modo: a.modo === 'lista' ? 'lista' : 'todos',
+            usuarios: Array.isArray(a.usuarios) ? a.usuarios : []
+        };
+    }
+
+    // ---- fila de accesos de un workflow ------------------------------------
+    function filaAcceso(w) {
+        var a = accesoDe(w.archivo);
+        var abierto = !!abiertos[w.archivo];
+        var cuantos = a.usuarios.length;
+        var etiqueta = a.modo === 'todos'
+            ? '👥 TODOS'
+            : ('🔒 SÓLO ' + cuantos + (cuantos === 1 ? ' USUARIO' : ' USUARIOS'));
+        var chips = USUARIOS.map(function (u) {
+            var marcado = a.usuarios.some(function (x) { return String(x).toLowerCase() === String(u.usuario).toLowerCase(); });
+            return '<button type="button" class="red-acc-user' + (marcado ? ' on' : '') + '"' +
+                ' data-acc-user="' + esc(w.archivo) + '" data-user="' + esc(u.usuario) + '">' +
+                (marcado ? '✓ ' : '') + '@' + esc(u.usuario) + '</button>';
+        }).join('') || '<span class="red-acc-vacio">todavía no hay usuarios registrados</span>';
+
+        return '<div class="red-wf-acceso" data-acc-caja="' + esc(w.archivo) + '">' +
+            '<button type="button" class="red-acc-modo' + (a.modo === 'lista' ? ' lista' : '') + '"' +
+            ' data-acc-modo="' + esc(w.archivo) + '" data-modo="' + (a.modo === 'todos' ? 'lista' : 'todos') + '"' +
+            ' title="' + (a.modo === 'todos' ? 'Habilitarlo sólo a algunos usuarios' : 'Habilitarlo para todos otra vez') + '">' +
+            etiqueta + '</button>' +
+            (a.modo === 'lista' && abierto ? '<div class="red-acc-lista">' + chips +
+                '<span class="red-acc-pista">tocá los usuarios que SÍ pueden usar este workflow</span></div>' : '') +
+            '</div>';
+    }
+
     function pintar(d) {
         var caja = contenedor();
         if (!caja) return;
@@ -53,12 +92,15 @@
             // El tilde SIEMPRE se puede tocar (pedido explícito): así podés dejar
             // apagado un workflow aunque hoy no lo tengas instalado, para que la
             // web no lo use cuando lo instales.
-            return '<label class="red-wf' + (noInstalado ? ' deshabilitado' : '') + '">' +
+            return '<div class="red-wf-bloque">' +
+                '<label class="red-wf' + (noInstalado ? ' deshabilitado' : '') + '">' +
                 '<input type="checkbox" data-wf="' + esc(w.archivo) + '"' + (w.compartido ? ' checked' : '') + '>' +
                 '<span class="red-wf-nombre">' + esc(w.nombre) + '</span>' +
                 '<span class="red-wf-archivo">' + esc(w.archivo) + '</span>' +
                 estado +
-                '</label>';
+                '</label>' +
+                (w.compartido ? filaAcceso(w) : '') +
+                '</div>';
         }).join('');
         var compartidos = lista.filter(function (w) { return w.compartido && w.disponible !== false; }).length;
         var rotos = lista.filter(function (w) { return w.disponible === false; }).length;
@@ -66,12 +108,13 @@
             '<span class="red-badge">' + compartidos + ' de ' + lista.length + '</span>' +
             '<button class="red-btn secundario" id="redWfRefrescar" style="margin-left:8px">Revisar</button></h3>' +
             '<div class="red-aviso">Tildá los que querés ofrecer a la red. Destildado = la web NO lo puede usar en tu PC. ' +
-            'Los que dicen <b>NO instalado</b> igual se pueden destildar (para que no se usen cuando los instales).</div>' +
+            'Con <b>👥 TODOS / 🔒 SÓLO N</b> elegís quién puede usarlo: el resto no lo ve ni lo puede pedir.</div>' +
             '<div class="red-wf-lista">' + filas + '</div>' +
             (rotos ? '<div class="red-aviso">⚠️ ' + rotos + ' workflow(s) no se pueden usar todavía en esta PC (falta un modelo o un nodo): quedan fuera de la red hasta que los instales.</div>' : '');
 
         var ref = document.getElementById('redWfRefrescar');
         if (ref) ref.addEventListener('click', function () { traer(true); });
+
         caja.querySelectorAll('input[data-wf]').forEach(function (chk) {
             chk.addEventListener('change', function () {
                 var archivo = chk.getAttribute('data-wf');
@@ -81,6 +124,52 @@
                     .catch(function () { chk.disabled = false; });
             });
         });
+
+        // cambiar TODOS <-> SÓLO ALGUNOS
+        caja.querySelectorAll('[data-acc-modo]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var archivo = b.getAttribute('data-acc-modo');
+                var modo = b.getAttribute('data-modo');
+                if (modo === 'lista') {
+                    abiertos[archivo] = true;
+                    pintar(d);   // despliega la lista de usuarios
+                    return;
+                }
+                guardar(archivo, 'todos', []);
+            });
+        });
+
+        // tildar/destildar un usuario
+        caja.querySelectorAll('[data-acc-user]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var archivo = b.getAttribute('data-acc-user');
+                var user = b.getAttribute('data-user');
+                var a = accesoDe(archivo);
+                var lista = a.usuarios.slice();
+                var i = lista.findIndex(function (x) { return String(x).toLowerCase() === user.toLowerCase(); });
+                if (i >= 0) lista.splice(i, 1); else lista.push(user);
+                if (!lista.length) {
+                    // sin nadie elegido vuelve a TODOS (no se puede dejar vacío)
+                    guardar(archivo, 'todos', []);
+                    return;
+                }
+                guardar(archivo, 'lista', lista);
+            });
+        });
+    }
+
+    function guardar(archivo, modo, usuarios) {
+        api('/api/wf/acceso', { method: 'POST', json: { archivo: archivo, modo: modo, usuarios: usuarios } })
+            .then(function (r) {
+                if (r && r.success && r.acceso) {
+                    ACCESO = r.acceso;
+                    if (modo === 'todos') abiertos[archivo] = false;
+                    traer(false);
+                } else {
+                    alert('No pude guardar: ' + ((r && r.message) || 'error'));
+                }
+            })
+            .catch(function (e) { alert('No pude guardar: ' + e.message); });
     }
 
     function api(ruta, opciones) {
@@ -96,9 +185,15 @@
             if (c) c.innerHTML = '';
             return;
         }
-        api('/api/red/workflows' + (forzar ? '?forzar=1' : ''))
-            .then(pintar)
-            .catch(function () { });
+        Promise.all([
+            api('/api/red/workflows' + (forzar ? '?forzar=1' : '')),
+            api('/api/wf/acceso').catch(function () { return {}; }),
+            api('/api/wf/usuarios').catch(function () { return {}; })
+        ]).then(function (r) {
+            ACCESO = (r[1] && r[1].acceso) || {};
+            USUARIOS = (r[2] && r[2].usuarios) || [];
+            pintar(r[0]);
+        }).catch(function () { });
     }
 
     function arrancar() {

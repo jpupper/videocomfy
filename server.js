@@ -122,12 +122,30 @@ app.get('/api/status', async (req, res) => {
     let comfyOk = !!(wsComfy && wsComfy.readyState === 1);
     // Si el socket se cayó, se prueba en el momento: Comfy puede estar vivo y el
     // ws haber quedado colgado (antes se quedaba en "apagado" para siempre).
+    let arrancando = false;
     if (!comfyOk) {
         try {
             const r = await fetch(comfyBase() + '/system_stats', { signal: AbortSignal.timeout(2500) });
             comfyOk = r.ok;
             if (comfyOk) { try { connectToComfy(); } catch (e) { } }
         } catch (e) { comfyOk = false; }
+    }
+    if (!comfyOk) {
+        // ¿el proceso de ComfyUI existe? Entonces está arrancando o cargando
+        // modelos: NUNCA "apagado". (En la PC de un usuario nuevo el motor puede
+        // tardar minutos y el chip decía apagado aunque los botones anduvieran.)
+        try {
+            const procs = await procesosComfy();
+            arrancando = procs.length > 0;
+            if (arrancando) {
+                const ts = comfyUltimoEstado.ts || Date.now();
+                comfyUltimoEstado = {
+                    fase: comfyUltimoEstado.fase || 'arrancando',
+                    detalle: comfyUltimoEstado.detalle || 'arrancando',
+                    ts: ts
+                };
+            }
+        } catch (e) { }
     }
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -138,8 +156,9 @@ app.get('/api/status', async (req, res) => {
         comfyTexto: comfyOk ? 'connected' : 'disconnected',
         // Cuando Comfy tarda (cargando pesos) el ws puede cortarse: se informa la
         // última fase real y hace cuánto que no contesta, en vez de "apagado".
-        comfyFase: comfyUltimoEstado.fase || '',
-        comfyDetalle: comfyUltimoEstado.detalle || '',
+        comfyFase: arrancando ? (comfyUltimoEstado.fase || 'arrancando') : (comfyUltimoEstado.fase || ''),
+        comfyDetalle: arrancando ? 'arrancando (el proceso existe, todavía no responde)' : (comfyUltimoEstado.detalle || ''),
+        comfyArrancando: arrancando,
         comfySilencioSegundos: comfyUltimoEstado.ts ? Math.round((Date.now() - comfyUltimoEstado.ts) / 1000) : null,
         // 'cargando' = el motor responde pero el Manager sigue bajando el catálogo
         comfyCatalogo: comfyCatalogo,
@@ -154,6 +173,8 @@ app.get('/api/status', async (req, res) => {
         datoFresco: true,
         mensaje: comfyOk
             ? 'Todo listo: videocomfy + ComfyUI'
+            : arrancando
+            ? 'ComfyUI está arrancando (el proceso existe, todavía no responde)'
             : (comfyUltimoEstado.ts && (Date.now() - comfyUltimoEstado.ts) < 900000
                 ? `ComfyUI sin respuesta hace ${Math.round((Date.now() - comfyUltimoEstado.ts) / 1000)}s (puede estar cargando pesos)`
                 : `ComfyUI no responde en ${comfyBase()} (revisá SETTINGS → COMFY)`),
@@ -964,6 +985,43 @@ function comparteWorkflow(archivo) {
 }
 
 // Lo que se publica en la red: sólo los que comparte Y tiene instalados.
+// ============================================================================
+// ACCESO POR USUARIO A CADA WORKFLOW
+// ----------------------------------------------------------------------------
+// Cada workflow comparte por defecto con TODOS. El dueño de la PC puede
+// restringirlo a una lista: en ese caso sólo esos usuarios lo ven y lo pueden
+// pedir desde la web. El archivo vive en datos/ (no se versiona).
+// ============================================================================
+const ARCHIVO_ACCESO = path.join(__dirname, 'datos', 'workflows-acceso.json');
+let ACCESO_WF = {};
+function leerAccesoWf() {
+    try { ACCESO_WF = JSON.parse(fs.readFileSync(ARCHIVO_ACCESO, 'utf8')) || {}; } catch (e) { ACCESO_WF = {}; }
+    return ACCESO_WF;
+}
+function guardarAccesoWf() {
+    try {
+        fs.mkdirSync(path.dirname(ARCHIVO_ACCESO), { recursive: true });
+        fs.writeFileSync(ARCHIVO_ACCESO, JSON.stringify(ACCESO_WF, null, 2));
+        return true;
+    } catch (e) { console.log('⚠️ no pude guardar workflows-acceso.json:', e.message); return false; }
+}
+leerAccesoWf();
+
+function accesoDeWf(archivo) {
+    const a = ACCESO_WF[archivo] || {};
+    return {
+        modo: (a.modo === 'lista') ? 'lista' : 'todos',
+        usuarios: Array.isArray(a.usuarios) ? a.usuarios.map(String) : []
+    };
+}
+function puedeUsarWf(archivo, usuario) {
+    const a = accesoDeWf(archivo);
+    if (a.modo !== 'lista') return true;
+    const u = String(usuario || '').trim().toLowerCase();
+    if (!u) return false;                       // restringido y sin sesión: no
+    return a.usuarios.some((x) => String(x).trim().toLowerCase() === u);
+}
+
 async function workflowsPublicables(forzar) {
     try {
         // `forzar` = recalcular AHORA (después de un tilde): con el estado cacheado
@@ -985,10 +1043,53 @@ setInterval(() => { refrescarWorkflowsRed(); }, 2 * 60 * 1000);
 
 app.get('/api/red/workflows', async (req, res) => {
     try {
-        res.json({ success: true, workflows: await estadoDeWorkflows(!!req.query.forzar), carpeta: 'workflows/' });
+        let lista = await estadoDeWorkflows(!!req.query.forzar);
+        // `x-fsc-usuario` lo pone el hub cuando el pedido viene de la WEB: ahí se
+        // ocultan los workflows restringidos a otras cuentas. En local se ven todos.
+        const usuario = String(req.headers['x-fsc-usuario'] || '').trim();
+        const desdeWeb = !!usuario || !!req.headers['x-fsc-web'];
+        lista = lista.map((w) => Object.assign({}, w, { acceso: accesoDeWf(w.archivo) }));
+        if (desdeWeb) lista = lista.filter((w) => puedeUsarWf(w.archivo, usuario));
+        res.json({ success: true, workflows: lista, carpeta: 'workflows/', usuario: usuario || '' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
+});
+
+// --- ACCESOS: leer / guardar quién puede usar cada workflow -----------------
+// Los usuarios conocidos los sabe el hub (IACOMFY): se los pedimos con el token.
+app.get('/api/wf/usuarios', async (req, res) => {
+    try {
+        const r = await fetch(RED.hub + '/api/red/usuarios', {
+            headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(8000)
+        });
+        const d = await r.json().catch(() => ({}));
+        res.json({ success: !!d.success, usuarios: d.usuarios || [], motivo: d.message || '' });
+    } catch (e) {
+        res.json({ success: false, usuarios: [], motivo: e.message });
+    }
+});
+
+app.get('/api/wf/acceso', (req, res) => {
+    res.json({ success: true, acceso: ACCESO_WF });
+});
+
+app.post('/api/wf/acceso', bodyParser.json(), async (req, res) => {
+    const b = req.body || {};
+    const archivo = String(b.archivo || '').trim();
+    if (!archivo) return res.status(400).json({ success: false, message: 'falta el archivo' });
+    const modo = (b.modo === 'lista') ? 'lista' : 'todos';
+    let usuarios = Array.isArray(b.usuarios) ? b.usuarios : [];
+    usuarios = usuarios.map((u) => String(u || '').trim().replace(/^@/, '')).filter(Boolean);
+    // sin duplicados y en orden
+    usuarios = usuarios.filter((u, i, arr) => arr.findIndex((x) => x.toLowerCase() === u.toLowerCase()) === i);
+    if (modo === 'lista' && !usuarios.length) {
+        return res.status(400).json({ success: false, message: 'elegí al menos un usuario (o ponelo en TODOS)' });
+    }
+    ACCESO_WF[archivo] = { modo: modo, usuarios: modo === 'lista' ? usuarios : [] };
+    guardarAccesoWf();
+    await refrescarWorkflowsRed(true).catch(() => { });
+    res.json({ success: true, acceso: ACCESO_WF, archivo: archivo, modo: modo, usuarios: ACCESO_WF[archivo].usuarios });
 });
 
 // OJO: el bodyParser global se registra MUCHO más abajo (línea ~1290). Toda ruta
@@ -1052,6 +1153,16 @@ async function validarPedidoDeRed(b) {
     if (!w) return { ok: false, motivo: `este fierro no tiene el workflow "${archivo}"` };
     if (!w.compartido) return { ok: false, motivo: `el dueño de esta computadora NO comparte el workflow "${w.nombre}"` };
     if (w.disponible === false) return { ok: false, motivo: `en esta computadora faltan modelos para "${w.nombre}": ${w.falta.join(', ')}` };
+    // ACCESO POR USUARIO: el dueño puede limitar este workflow a una lista.
+    const quien = (b && (b.pedidoPor || b.usuario || b.de || b.email)) || '';
+    if (!puedeUsarWf(archivo, quien)) {
+        const a = accesoDeWf(archivo);
+        return {
+            ok: false,
+            restringido: true,
+            motivo: `el workflow "${w.nombre}" está habilitado sólo para: ${a.usuarios.join(', ')}`
+        };
+    }
     return { ok: true, workflow: archivo };
 }
 
@@ -1936,6 +2047,7 @@ function connectToComfy() {
 
     wsComfy.on('open', () => {
         console.log('✅ Conexión establecida con ComfyUI');
+        comfyUltimoEstado = { fase: 'listo', detalle: 'esperando trabajo', ts: Date.now() };
         broadcastComfyStatus('connected');
     });
 
@@ -3385,6 +3497,7 @@ function estadoRed() {
         modelos: modelosDeLaRed(),
         // workflows que este fierro ofrece a la red (compartidos Y con modelos instalados)
         workflows: RED.workflowsRed || [],
+        accesoWf: ACCESO_WF,
         usuario: RED.usuario,
         email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,

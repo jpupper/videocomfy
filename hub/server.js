@@ -695,6 +695,20 @@ app.get(rutasRed('/api/red/confirmado'), async (req, res) => {
     }
 });
 
+// Lista de usuarios conocidos (para elegir a quién habilitarle un workflow).
+// Sale de IACOMFY: cuentas que ya generaron o se conectaron alguna vez.
+app.get(rutasRed('/api/red/usuarios'), async (req, res) => {
+    if (!tokenDeNodoValido(req) && !usuarioDe(tokenDe(req))) {
+        return res.status(401).json({ success: false, message: 'token inválido' });
+    }
+    try {
+        const lista = await db.listarUsuarios();
+        res.json({ success: true, usuarios: lista });
+    } catch (e) {
+        res.json({ success: false, usuarios: [], message: e.message });
+    }
+});
+
 // Historial de nodos (quién se conectó, cuándo, desde qué fierro). Sale del
 // archivo datos/nodos.log, así que sobrevive a caídas de Mongo y a reinstalos.
 app.get(rutasRed('/api/red/historial'), (req, res) => {
@@ -1057,6 +1071,17 @@ app.use((req, res, next) => {
         origen: (req.get('x-forwarded-proto') || req.protocol) + '://' + req.get('host'),
         contentType: req.headers['content-type'] || '',
         range: req.headers.range || '',
+        // quién está pidiendo: el nodo esconde los workflows que ese usuario no
+        // tiene habilitados y rechaza el pedido si no le corresponde.
+        usuario: (function () {
+            try {
+                const q = autorizadoRed(req);
+                const u = q && q.usuario;
+                if (!u) return '';
+                if (typeof u === 'string') return u;
+                return String(u.username || u.user || u.email || '');
+            } catch (e) { return ''; }
+        })(),
         // LA SESIÓN VIAJA: sin esto la app local recibe los pedidos de la web
         // SIN token, contesta 401 y la web queda vacía (listas y foto incluidos).
         authorization: req.headers.authorization || '',

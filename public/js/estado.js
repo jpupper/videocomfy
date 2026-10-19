@@ -35,6 +35,11 @@
             } else if (d.comfy) {
                 btn.className = 'jpi-estado bien';
                 btn.textContent = '🟢 Comfy ready';
+            } else if (d.comfyArrancando) {
+                // el PROCESO de ComfyUI existe pero todavía no contesta: está
+                // arrancando o cargando modelos (nunca "apagado")
+                btn.className = 'jpi-estado cargando';
+                btn.textContent = '⏳ ComfyUI arrancando…';
             } else if (d.comfySilencioSegundos != null && d.comfySilencioSegundos < 900) {
                 // el motor puede tardar muchísimo cargando pesos: no está apagado
                 btn.className = 'jpi-estado cargando';

@@ -439,6 +439,28 @@ async function segundosEnVivo() {
 
 // ¿Está conectada ahora? Sí si tiene una sesión abierta o si latió hace menos
 // de 2 minutos (el hub actualiza ultimoVisto cada 30 s).
+// Usuarios conocidos (para el selector de permisos de cada workflow).
+async function listarUsuarios() {
+    if (!conectado) return [];
+    try {
+        const us = await Usuario.find({}, { username: 1, email: 1, displayName: 1, avatar: 1 }).lean();
+        const out = {};
+        us.forEach((u) => {
+            const nombre = String(u.username || u.email || '').trim();
+            if (!nombre) return;
+            const k = nombre.toLowerCase();
+            const previo = out[k] || {};
+            out[k] = {
+                usuario: previo.usuario || nombre,
+                displayName: previo.displayName || u.displayName || u.username || nombre,
+                email: (String(u.email || '').indexOf('@') > 0 ? u.email : previo.email) || '',
+                avatar: u.avatar || previo.avatar || ''
+            };
+        });
+        return Object.values(out).sort((a, b) => String(a.usuario).localeCompare(String(b.usuario)));
+    } catch (e) { return []; }
+}
+
 // ¿La PC quedó registrada en la base? (para confirmar que la WEB la ve, no sólo
 // que el socket del hub la escucha)
 async function estadoDeComputadora(peerId) {
@@ -698,7 +720,7 @@ async function resumen() {
 
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
-    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora,
+    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora, listarUsuarios,
     leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
     rolEnElEcosistema, esAdminDelEcosistema,
     estadisticasDe, ranking, resumen,

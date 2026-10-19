@@ -216,6 +216,18 @@
                 }
             }
             if (dom.comfyAlert) dom.comfyAlert.style.display = 'none';
+        } else if (d && d.comfyArrancando) {
+            // el proceso de ComfyUI EXISTE pero todavía no contesta (arrancando
+            // o cargando modelos): no está apagado y no hay que asustar a nadie
+            if (dom.comfyDot) dom.comfyDot.className = 'pi-dot cargando';
+            if (dom.comfyStatus) {
+                dom.comfyStatus.className = 'pi-server-status cargando';
+                dom.comfyStatus.textContent = '⏳ ComfyUI arrancando…';
+            }
+            if (dom.comfyAlert) {
+                dom.comfyAlert.style.display = 'flex';
+                dom.comfyAlert.innerHTML = '<span>⏳ <b>ComfyUI está arrancando</b> en <code>' + comfyDir + '</code> (el proceso existe, todavía no responde). No hace falta hacer nada.</span>';
+            }
         } else {
             if (dom.comfyDot) dom.comfyDot.className = 'pi-dot offline';
             if (dom.comfyStatus) {

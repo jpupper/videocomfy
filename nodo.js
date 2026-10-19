@@ -77,7 +77,7 @@ function arrancar(opciones) {
     let ultimoConectado = false;
     let ultimoMsgError = '';
 
-    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], publicarGpu: true };
+    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], accesoWf: {}, publicarGpu: true };
 
     // ------------------------------ utilidades ------------------------------
     async function pedir(ruta, opciones) {
@@ -97,6 +97,8 @@ function arrancar(opciones) {
             identidad.modelos = Array.isArray(d.modelos) ? d.modelos : identidad.modelos;
             identidad.usuario = d.usuario || identidad.usuario || null;
             identidad.workflows = Array.isArray(d.workflows) ? d.workflows : (identidad.workflows || []);
+            // permisos por usuario de cada workflow (los decide el dueño)
+            if (d.accesoWf && typeof d.accesoWf === 'object') identidad.accesoWf = d.accesoWf;
             // switch de MI EQUIPO: si el dueño lo apagó, la placa NO se publica
             identidad.publicarGpu = d.publicarGpu !== false;
             if (!CFG.COMFY && d.comfyAddress) CFG.COMFY = String(d.comfyAddress).replace(/\/+$/, '');
@@ -129,6 +131,8 @@ function arrancar(opciones) {
             compartir: identidad.compartir,
             // workflows que ofrece a la red (los que comparte y tiene instalados)
             workflows: identidad.workflows || [],
+            // quién puede usar cada workflow (lo decide el dueño en MI EQUIPO)
+            accesoWf: identidad.accesoWf || {},
             ts: Date.now()
         });
     }
@@ -201,6 +205,7 @@ function arrancar(opciones) {
                 platform: os.platform() + ' ' + os.release(),
                 gpu: (identidad.publicarGpu === false ? '' : gpuDetectada),
                 modelos: identidad.modelos,
+                accesoWf: identidad.accesoWf || {},
                 principal: CFG.PRINCIPAL,
                 compartir: identidad.compartir,
                 avatar: (identidad.usuario && identidad.usuario.avatar) || '',
@@ -338,6 +343,7 @@ function arrancar(opciones) {
                 // /api/comfy/cola/limpiar SÍ se permite: es el botón "Vaciar cola"
                 // del panel de STAGE, y desde la web quedaba bloqueado sin avisar.
                 /^\/api\/actualizar/i,                    // traer código nuevo (git pull)
+                /^\/api\/wf\/acceso/i,                    // permisos de workflows: sólo el dueño local
                 /^\/api\/generate-avatar/i,               // escribía archivos
                 /^\/api\/red\/(agente|nodos|perfil|job)/i, // identidad y trabajos internos
                 /^\/api\/(mo|entorno|salud-memoria)/i

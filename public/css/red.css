@@ -756,3 +756,24 @@ body.ck-sin-computadora #confirmRegenBtn {
 .red-pub-estado.no { color: #f0b429; }
 .red-pub-estado b { font-weight: 700; }
 .red-pub-n { opacity: .7; font-size: 11px; }
+
+/* --- ACCESO POR USUARIO a cada workflow (MI EQUIPO) --- */
+.red-wf-bloque { border-bottom: 1px solid var(--ck-borde, #1b2a36); padding-bottom: 6px; margin-bottom: 6px; }
+.red-wf-bloque:last-child { border-bottom: 0; }
+.red-wf-acceso { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 0 24px; margin-top: -2px; }
+.red-acc-modo {
+    background: var(--ck-panel-2, #0b1e2a); border: 1px solid var(--ck-borde, #1b2a36);
+    color: var(--ck-texto-2, #94a3b8); font: inherit; font-size: 11px; cursor: pointer;
+    padding: 3px 8px; border-radius: 4px;
+}
+.red-acc-modo:hover { border-color: var(--ck-acento, #00ffd5); color: var(--ck-acento, #00ffd5); }
+.red-acc-modo.lista { color: var(--ck-aviso, #f59e0b); border-color: color-mix(in srgb, var(--ck-aviso, #f59e0b) 45%, var(--ck-borde, #1b2a36)); }
+.red-acc-lista { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 0 0; }
+.red-acc-user {
+    background: var(--ck-bg-2, #061a24); border: 1px solid var(--ck-borde, #1b2a36);
+    color: var(--ck-texto-2, #94a3b8); font: inherit; font-size: 11px; cursor: pointer;
+    padding: 3px 7px; border-radius: 999px;
+}
+.red-acc-user.on { background: color-mix(in srgb, var(--ck-acento, #00ffd5) 18%, transparent); border-color: var(--ck-acento, #00ffd5); color: var(--ck-acento, #00ffd5); }
+.red-acc-pista, .red-acc-vacio { font-size: 11px; color: var(--ck-texto-2, #94a3b8); }
+.red-acc-pista { flex: 1 1 100%; opacity: .8; }
