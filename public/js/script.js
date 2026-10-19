@@ -148,10 +148,20 @@ function handleWsMessage(event) {
         if (window.CKProgreso) { try { window.CKProgreso.msg(message); } catch (e) { } }
         // No se registran los mensajes que llegan todo el tiempo (estado de la red,
 // clientes, progreso): antes llenaban la consola con bloques enormes.
-      var TIPOS_MUDOS = ['red_estado', 'red_clientes', 'clientes', 'estado', 'progress', 'comfy_cola', 'latido', 'red_vuelo'];
-      if (TIPOS_MUDOS.indexOf(message.type) < 0) console.log('Mensaje del servidor:', message.type, message);
-
-        appendConsoleLine(`[${message.type.toUpperCase()}] ${JSON.stringify(message)}`, 'debug');
+      // NADA de volcados automáticos: el estado de la red, la cola y el latido
+      // llegan cada segundo y llenaban la CONSOLA de bloques enormes.
+      var TIPOS_MUDOS = [
+        'red_estado', 'red_clientes', 'clientes', 'estado', 'estado_red', 'latido', 'red_vuelo',
+        'progress', 'progress_state', 'executing', 'executed', 'execution_start', 'execution_success',
+        'comfy_cola', 'comfy_status', 'queue_state', 'queue_remaining', 'status', 'system_stats',
+        'preview', 'comfy_preview', 'nodo_estado', 'ping', 'pong'
+      ];
+      var MUDO = TIPOS_MUDOS.indexOf(message.type) >= 0;
+      // Para depurar a mano: localStorage.setItem('ck_debug_ws', '1') y recargar.
+      var DEPURAR = false;
+      try { DEPURAR = localStorage.getItem('ck_debug_ws') === '1'; } catch (e) { }
+      if (!MUDO || DEPURAR) appendConsoleLine(`[${message.type.toUpperCase()}] ${JSON.stringify(message)}`, 'debug');
+      if (DEPURAR) console.log('Mensaje del servidor:', message.type, message);
 
         // Cualquier señal del motor cuenta como "está vivo" (lo usa js/cola-comfy.js
         // para distinguir un trabajo colgado de uno que avanza).
