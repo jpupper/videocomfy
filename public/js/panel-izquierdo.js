@@ -190,7 +190,13 @@
         var comfyDir = (d && (d.comfyAddress || d.comfyBase)) || '127.0.0.1:8188';
         var comfyOk = !!(d && d.comfy);
 
-        if (dom.comfyDetail) dom.comfyDetail.innerHTML = '<span><code>' + comfyDir + '</code></span>';
+        if (dom.comfyDetail) {
+            // El refresco reescribe este bloque: los botones tienen que ir acá,
+            // si no el ⟳ RESTART del HTML desaparece en el primer refresco.
+            dom.comfyDetail.innerHTML = '<span><code>' + comfyDir + '</code></span>' +
+                '<button type="button" class="pi-server-action-btn" id="piComfyConfigBtn">⚙️ Ajustes</button>' +
+                (esWeb ? '' : '<button type="button" class="pi-server-action-btn pi-comfy-restart" id="piComfyRestartBtn" title="Cerrar ComfyUI y volver a abrirlo">⟳ RESTART</button>');
+        }
 
         if (comfyOk) {
             if (dom.comfyDot) dom.comfyDot.className = 'pi-dot online';
@@ -407,53 +413,49 @@
 
 // ---------------------------------------------------------------------------
 // ⟳ RESTART de ComfyUI (sólo local): cierra la instancia y la vuelve a abrir.
+// Va por delegación porque el panel se repinta cada pocos segundos.
 // ---------------------------------------------------------------------------
 (function () {
-    function enganchar() {
-        var btn = document.getElementById('piComfyRestartBtn');
-        if (!btn) return;
-        var esWeb = false;
+    function esWebAhora() {
         try {
             var h = location.hostname;
-            esWeb = h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1;
-        } catch (e) { }
-        if (esWeb) { btn.style.display = 'none'; return; }
-        var textoOriginal = btn.textContent;
-        btn.addEventListener('click', function () {
-            if (btn.disabled) return;
-            btn.disabled = true;
-            btn.textContent = '⟳ Reiniciando…';
-            btn.classList.add('reiniciando');
-            var avisar = function (t) {
-                if (typeof window.appendConsoleLine === 'function') { try { window.appendConsoleLine(t, 'system'); } catch (e) { } }
-                console.log('[comfy]', t);
-            };
-            avisar('⟳ Cerrando ComfyUI y volviéndolo a abrir…');
-            fetch('/api/comfy/reiniciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
-                    if (d.success) {
-                        avisar('✅ ComfyUI volvió a arrancar en ' + d.segundos + 's');
-                        btn.textContent = '✅ Listo';
-                    } else {
-                        avisar('⚠️ No arrancó: ' + (d.motivo || 'sin respuesta'));
-                        btn.textContent = '⚠️ Revisá la consola';
-                    }
-                })
-                .catch(function (e) {
-                    avisar('⚠️ Error: ' + e.message);
-                    btn.textContent = '⚠️ Error';
-                })
-                .then(function () {
-                    setTimeout(function () {
-                        btn.textContent = textoOriginal;
-                        btn.disabled = false;
-                        btn.classList.remove('reiniciando');
-                    }, 5000);
-                });
-        });
+            return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1;
+        } catch (e) { return false; }
     }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enganchar);
-    else enganchar();
-    setTimeout(enganchar, 1500);
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('#piComfyRestartBtn') : null;
+        if (!btn || btn.disabled || esWebAhora()) return;
+        ev.preventDefault();
+        btn.disabled = true;
+        var textoOriginal = btn.getAttribute('data-texto') || btn.textContent;
+        btn.textContent = '⟳ Reiniciando…';
+        btn.classList.add('reiniciando');
+        var avisar = function (t) {
+            if (typeof window.appendConsoleLine === 'function') { try { window.appendConsoleLine(t, 'system'); } catch (e) { } }
+            console.log('[comfy]', t);
+        };
+        avisar('⟳ Cerrando ComfyUI y volviéndolo a abrir… (puede tardar ~1 minuto)');
+        fetch('/api/comfy/reiniciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.success) {
+                    avisar('✅ ComfyUI volvió a arrancar en ' + d.segundos + 's');
+                    btn.textContent = '✅ Listo';
+                } else {
+                    avisar('⚠️ No arrancó: ' + (d.motivo || 'sin respuesta'));
+                    btn.textContent = '⚠️ No arrancó';
+                }
+            })
+            .catch(function (e) {
+                avisar('⚠️ Error: ' + e.message);
+                btn.textContent = '⚠️ Error';
+            })
+            .then(function () {
+                setTimeout(function () {
+                    btn.textContent = textoOriginal;
+                    btn.disabled = false;
+                    btn.classList.remove('reiniciando');
+                }, 6000);
+            });
+    }, true);
 })();

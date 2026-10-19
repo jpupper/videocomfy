@@ -589,7 +589,16 @@ app.get(rutasRed('/api/pedidos'), async (req, res) => {
     // (mismo prompt, pocos minutos de diferencia), el del hub se descarta.
     const ahora = Date.now();
     for (let i = PEDIDOS_HUB.length - 1; i >= 0; i--) {
-        if (ahora - PEDIDOS_HUB[i].cuando > 6 * 60 * 60 * 1000) PEDIDOS_HUB.splice(i, 1);
+        const p = PEDIDOS_HUB[i];
+        // nadie lo tomó en 10 minutos: no queda "pedida" para siempre
+        if (p.estado === 'pedida' && ahora - p.cuando > 10 * 60 * 1000) {
+            p.estado = 'error';
+            p.motivo = 'la computadora no respondió (no llegó a tomarlo)';
+            p.actualizado = ahora;
+            p.pasos = p.pasos || {};
+            p.pasos.error = ahora;
+        }
+        if (ahora - p.cuando > 6 * 60 * 60 * 1000) PEDIDOS_HUB.splice(i, 1);
     }
     const delHub = PEDIDOS_HUB.filter((p) => {
         const gemelo = pedidos.find((x) => x.prompt === p.prompt &&
