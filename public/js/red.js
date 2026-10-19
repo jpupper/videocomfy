@@ -526,9 +526,22 @@
                     bc.textContent = '⏳ Conectando...';
                     log('🔌 Arrancando el agente del nodo...');
                     api('/api/red/agente', { json: {} }).then(function (r) {
-                        if (r.ok) log(r.datos.ya ? '✅ Ya estabas publicado' : '✅ Agente lanzado, en unos segundos aparecés en la red');
-                        else log('⚠️ ' + (r.datos.message || 'No pude arrancarlo'));
-                        setTimeout(function () { refrescar(true); }, 6000);
+                        // el endpoint contesta 200 con success:false cuando el nodo
+                        // no logró publicarse: hay que mirar success, no el HTTP.
+                        var d = (r && r.datos) || {};
+                        if (d.success === false) {
+                            log('⚠️ ' + (d.message || 'No me pude conectar a la red'));
+                            bc.disabled = false;
+                            bc.textContent = '🔌 Conectar a la red';
+                        } else {
+                            log(d.ya ? '✅ Ya estabas publicado en la red' : '✅ Publicado en la red');
+                            bc.textContent = '✅ Publicado';
+                        }
+                        setTimeout(function () { refrescar(true); }, 3000);
+                    }).catch(function (e) {
+                        log('⚠️ No pude conectar: ' + e.message);
+                        bc.disabled = false;
+                        bc.textContent = '🔌 Conectar a la red';
                     });
                 });
             }

@@ -75,6 +75,7 @@ function arrancar(opciones) {
     let ultimoComfyCheck = 0;
     let encolados = 0;
     let ultimoConectado = false;
+    let ultimoMsgError = '';
 
     const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], publicarGpu: true };
 
@@ -191,6 +192,7 @@ function arrancar(opciones) {
             log(`   esta PC: ${identidad.nombre} (${identidad.peerId})`);
             log('═'.repeat(62));
             ultimoConectado = true;
+            ultimoMsgError = '';
             await leerIdentidad().catch(() => { });
             socket.emit('agent:hello', {
                 peerId: identidad.peerId,
@@ -217,6 +219,7 @@ function arrancar(opciones) {
         socket.on('connect_error', (e) => {
             intentos++;
             const msg = String((e && e.message) || '');
+            ultimoMsgError = msg;
             if (intentos === 1 || intentos % 6 === 0) {
                 logErr(`⚠️  no pude conectar al VPS (intento ${intentos}): ${msg}`);
                 if (/token/i.test(msg)) {
@@ -499,6 +502,7 @@ function arrancar(opciones) {
 
     return {
         estado: () => ({ conectado: ultimoConectado, peerId: identidad.peerId, nombre: identidad.nombre, comfy: estComfy, compartir: identidad.compartir }),
+        ultimoError: () => ultimoMsgError,
         reconectar: () => { try { socket.disconnect(); socket.connect(); } catch (e) { } },
         // Empujar YA el estado al hub (lo usa la app cuando cambian los workflows
         // compartidos, para que la web se entere sin esperar los 15 s).

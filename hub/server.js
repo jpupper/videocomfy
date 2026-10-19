@@ -308,9 +308,17 @@ const r2 = require('./lib/r2');
 const mediaMap = require('./lib/media-map');
 const subidaMedia = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
 
+// Token del nodo: el PRIVADO del dueño o el PÚBLICO del repo (el que usa
+// cualquiera que clona la app, igual que en el socket /agent).
+const NODO_TOKEN = process.env.RED_NODO_TOKEN || 'comfylatam-nodo-2026';
+function tokenDeNodoValido(req) {
+    const t = String((req && req.headers && req.headers['x-agent-token']) || '');
+    if (!t) return false;
+    return t === AGENT_TOKEN || t === NODO_TOKEN;
+}
 function soloPuente(req, res, next) {
     if (!AGENT_TOKEN) return res.status(500).json({ success: false, message: 'AGENT_TOKEN no configurado' });
-    if (String(req.headers['x-agent-token'] || '') !== AGENT_TOKEN) {
+    if (!tokenDeNodoValido(req)) {
         return res.status(401).json({ success: false, message: 'token de agente invalido' });
     }
     return next();
@@ -532,7 +540,7 @@ app.get([BASE_PATH + '/api/me', '/api/me'], async (req, res) => {
 function autorizadoRed(req) {
     const t = req.headers['x-agent-token'] || '';
     const publico = process.env.RED_NODO_TOKEN || 'comfylatam-nodo-2026';
-    if (AGENT_TOKEN && t && t === AGENT_TOKEN) return { tipo: 'nodo' };
+    if (AGENT_TOKEN && t && (t === AGENT_TOKEN || t === NODO_TOKEN)) return { tipo: 'nodo' };
     // Token público: cualquier instalación nueva (clone del repo) entra así.
     if (t && t === publico) return { tipo: 'nodo' };
     if (AUTH_APAGADA) return { tipo: 'local' };
@@ -544,7 +552,7 @@ const rutasRed = (sufijo) => [BASE_PATH + sufijo, sufijo];
 
 // ¿el pedido viene del nodo (la app local) con el token de agente?
 function esAgente(req) {
-    return !!AGENT_TOKEN && String(req.headers['x-agent-token'] || '') === AGENT_TOKEN;
+    return !!AGENT_TOKEN && tokenDeNodoValido(req);
 }
 
 // Lista de nodos de la red (los que están corriendo la app con su Comfy).
@@ -738,7 +746,7 @@ app.get(rutasRed('/api/red/clientes'), (req, res) => {
 // media nunca pasa por el VPS.
 app.post(rutasRed('/api/red/media-mapa'), express.json({ limit: '16mb' }), (req, res) => {
     if (!AGENT_TOKEN) return res.status(500).json({ success: false, message: 'AGENT_TOKEN no configurado' });
-    if (String(req.headers['x-agent-token'] || '') !== AGENT_TOKEN) {
+    if (!tokenDeNodoValido(req)) {
         return res.status(403).json({ success: false, message: 'token inválido' });
     }
     const items = (req.body && req.body.items) || [];

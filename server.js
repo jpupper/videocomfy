@@ -3294,7 +3294,12 @@ server.on('error', (e) => {
 // ==========================================================================
 const RED_HUB = (process.env.RED_HUB || 'https://vps-4455523-x.dattaweb.com').replace(/\/+$/, '');
 const RED_BASE = process.env.RED_BASE || '/comfylatam';
-const RED_TOKEN = process.env.AGENT_TOKEN || '';
+// Token para hablar con el hub: el privado del .env o, si no hay (clon nuevo),
+// el PÚBLICO del repo. Antes un clon nuevo quedaba sin token y no podía ni
+// listar nodos ni compartir: la red le aparecía vacía.
+const RED_TOKEN = process.env.AGENT_TOKEN || (function () {
+    try { return require('./nodo.js').TOKEN_PUBLICO; } catch (e) { return ''; }
+})();
 
 const RED = {
     peerId: '',
@@ -3800,35 +3805,38 @@ function rutaDelAgente() {
 }
 
 app.post('/api/red/agente', async (req, res) => {
+    // OJO: el nodo va EMBEBIDO en la app (nodo.js). Acá no se lanza ningún
+    // agente aparte: si todavía no está publicado, se reconecta y se devuelve
+    // el motivo real (antes pedía AGENT_TOKEN y un clon nuevo quedaba trabado
+    // en "Conectando..." sin explicación).
     if (RED.nodos.some((p) => p && p.id === RED.peerId)) {
         return res.json({ success: true, ya: true, message: 'Ya estás publicado en la red.' });
     }
-    if (!RED_TOKEN) {
-        return res.status(400).json({ success: false, message: 'Falta AGENT_TOKEN en el .env de la app (el mismo token del hub).' });
-    }
-    const ruta = rutaDelAgente();
-    if (!ruta) {
-        return res.status(400).json({
+    const n = global.__comfylatamNodo;
+    if (!n) {
+        return res.status(503).json({
             success: false,
-            message: 'No encontré el agente. Poné AGENT_PATH en el .env apuntando a agent/comfylatam-agent.js del repo jpiassets.'
+            message: 'El nodo no arrancó (¿falta socket.io-client? corré "npm install" en la carpeta de la app).'
         });
     }
     try {
-        const { spawn } = require('child_process');
-        const hijo = spawn(process.execPath, [ruta], {
-            cwd: path.dirname(path.dirname(ruta)),
-            detached: true,
-            stdio: 'ignore',
-            env: Object.assign({}, process.env, {
-                VIDEOCOMFY_HTTP: 'http://127.0.0.1:' + port,
-                VIDEOCOMFY_WS: 'ws://127.0.0.1:' + port
-            })
+        if (typeof n.reconectar === 'function') n.reconectar();
+        for (let i = 0; i < 20; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            if (RED.nodos.some((p) => p && p.id === RED.peerId)) {
+                return res.json({ success: true, conectado: true, message: 'Publicado en la red.' });
+            }
+        }
+        const motivo = (typeof n.ultimoError === 'function' && n.ultimoError()) || '';
+        return res.json({
+            success: false,
+            conectado: false,
+            message: motivo
+                ? ('No pude conectarme al hub: ' + motivo)
+                : 'No pude conectarme al hub (revisá internet / que el puerto 443 no esté bloqueado).'
         });
-        hijo.unref();
-        console.log(`🔌 Agente lanzado desde la app (pid ${hijo.pid}) — ${ruta}`);
-        res.json({ success: true, lanzado: true, pid: hijo.pid, agente: ruta });
     } catch (e) {
-        res.status(500).json({ success: false, message: e.message });
+        return res.status(500).json({ success: false, message: e.message });
     }
 });
 
