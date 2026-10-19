@@ -340,11 +340,12 @@ function iniciar(io, basePath) {
 
     const nsp = io.of('/agent');
 
-    // Dos tokens válidos:
-    //   AGENT_TOKEN  -> el privado (la máquina del dueño)
-    //   NODO_TOKEN   -> el PÚBLICO, para que cualquiera que clone el repo se
-    //                   conecte sin configurar nada (el switch de compartir
-    //                   sigue siendo opt-in y para usar la red hay que loguearse).
+    // Dos tokens válidos, ninguno "especial":
+    //   NODO_TOKEN  -> el PÚBLICO: con éste entra cualquier PC que clone el repo,
+    //                  sin configurar nada (compartir sigue siendo opt-IN, y para
+    //                  pedir trabajo desde la web hay que loguearse).
+    //   AGENT_TOKEN -> token interno del servidor para mantenimiento. NO hace
+    //                  falta para conectarse a la red.
     const NODO_TOKEN = process.env.RED_NODO_TOKEN || 'comfylatam-nodo-2026';
     nsp.use((socket, next) => {
         const t = (socket.handshake.auth && socket.handshake.auth.token) || socket.handshake.query.token || '';
