@@ -27,6 +27,7 @@ const { Server } = require('socket.io');
 const { WebSocketServer } = require('ws');
 
 const relay = require('./lib/relay');
+const registro = require('./lib/registro');
 const db = require('./modelos');           // base IACOMFY (estadísticas, uptime y ranking)
 const jwt = require('jsonwebtoken');
 
@@ -239,14 +240,31 @@ process.on('uncaughtException', (e) => {
 const PORT = process.env.PORT || 8086;
 
 // ---- Base IACOMFY (MongoDB): estadísticas, uptime de fierros y ranking ----
-db.conectar().catch(() => { });
+db.conectar()
+    .then(() => registro.anotar('base-conectada', { base: 'iacomfy' }))
+    .catch((e) => registro.anotar('base-error', { error: e.message }));
+// Cuando un nodo se presenta, se anota la computadora EN EL MOMENTO (y queda
+// en nodos.log si Mongo falla): antes sólo se anotaba cada 30 s y los errores
+// se tragaban en silencio, así que una PC podía estar conectada y no figurar.
+let _dbAvisada = false;
+relay.alPresentarse((p) => {
+    db.latidoDeComputadora(p)
+        .then(() => { _dbAvisada = false; })
+        .catch((e) => {
+            registro.anotar('registro-error', { peerId: p.id, nombre: p.nombre, error: e.message });
+            if (!_dbAvisada) { _dbAvisada = true; console.log('⚠️  no pude registrar la computadora en IACOMFY:', e.message); }
+        });
+});
 // latido: cada 30 s se anota qué computadoras están prendidas (para el uptime).
 // Si un fierro deja de latir, la sesión se cierra sola 3 minutos después.
 setInterval(async () => {
     try {
         const peers = relay.listarPeers ? relay.listarPeers() : [];
         for (const pp of peers) { await db.latidoDeComputadora(pp); }
-    } catch (e) { }
+        _dbAvisada = false;
+    } catch (e) {
+        if (!_dbAvisada) { _dbAvisada = true; console.log('⚠️  latidos sin guardar:', ((e && e.message) || '')); }
+    }
 }, 30000);
 setInterval(() => { db.cerrarSesionesViejas().catch(() => { }); }, 60000);
 const BASE_PATH = process.env.BASE_PATH || '/comfylatam';
@@ -640,6 +658,16 @@ app.post(rutasRed('/api/pedidos/limpiar'), express.json({ limit: '1mb' }), async
     res.json({ success: true, cancelados });
 });
 
+
+// Historial de nodos (quién se conectó, cuándo, desde qué fierro). Sale del
+// archivo datos/nodos.log, así que sobrevive a caídas de Mongo y a reinstalos.
+app.get(rutasRed('/api/red/historial'), (req, res) => {
+    if (!tokenDeNodoValido(req) && !usuarioDe(tokenDe(req))) {
+        return res.status(401).json({ success: false, message: 'token inválido' });
+    }
+    const n = Math.min(parseInt(req.query.n, 10) || 200, 2000);
+    res.json({ success: true, resumen: registro.resumen(), eventos: registro.ultimos(n), archivo: registro.ARCHIVO });
+});
 
 app.get(rutasRed('/api/red/peers'), (req, res) => {
     const quien = autorizadoRed(req);

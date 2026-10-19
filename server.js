@@ -3804,6 +3804,38 @@ function rutaDelAgente() {
     return '';
 }
 
+// --- ¿APAREZCO EN LA RED? (lo pregunta el hub, no el estado local) ----------
+// El switch "Transmitir mi Comfy" necesita feedback real: esto consulta la
+// lista de nodos del hub y dice si esta PC está publicada y si comparte.
+app.get('/api/red/publicado', async (req, res) => {
+    if (!RED_TOKEN) return res.json({ success: false, publicado: false, motivo: 'sin token para hablar con el hub' });
+    try {
+        const r = await fetch(RED.hub + '/api/red/peers?pasados=1', {
+            headers: { 'x-agent-token': RED_TOKEN },
+            signal: AbortSignal.timeout(8000)
+        });
+        if (!r.ok) {
+            return res.json({ success: false, publicado: false, motivo: 'el hub contestó HTTP ' + r.status });
+        }
+        const d = await r.json().catch(() => ({}));
+        const lista = Array.isArray(d.peers) ? d.peers : [];
+        const yo = lista.filter((p) => p && p.id === RED.peerId)[0] || null;
+        RED.nodos = lista;   // de paso refrescamos la vista
+        res.json({
+            success: true,
+            publicado: !!yo,
+            nombre: yo ? yo.nombre : RED.nombre,
+            compartir: yo ? !!yo.compartir : false,
+            comfy: yo ? !!yo.comfy : false,
+            nodos: lista.length,
+            peers: lista.map((p) => ({ id: p.id, nombre: p.nombre, compartir: !!p.compartir })),
+            motivo: yo ? '' : 'el hub todavía no me tiene en la lista'
+        });
+    } catch (e) {
+        res.json({ success: false, publicado: false, motivo: 'no pude hablar con el hub: ' + e.message });
+    }
+});
+
 app.post('/api/red/agente', async (req, res) => {
     // OJO: el nodo va EMBEBIDO en la app (nodo.js). Acá no se lanza ningún
     // agente aparte: si todavía no está publicado, se reconecta y se devuelve

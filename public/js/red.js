@@ -517,8 +517,11 @@
                     (ESTADO.yo.publicarGpu !== false ? ' checked' : '') + '>',
                 '    <span class="pista"></span><span>🎮 Publicar el nombre de mi placa de video' +
                     (ESTADO.yo.gpu ? ' (' + esc(ESTADO.yo.gpu) + ')' : '') + '</span></label>',
-                '</div>'
+                '</div>',
+                '  <div class="red-pub-estado" id="redPubEstado"></div>',
             ].join('\n');
+            // feedback de publicación (cada 20 s como mucho)
+            if (!_ultimaVerif || (Date.now() - _ultimaVerif) > 20000) setTimeout(verificarPublicado, 400);
             var bc = document.getElementById('redConectar');
             if (bc) {
                 bc.addEventListener('click', function () {
@@ -577,12 +580,40 @@
                             log('⚠️ Al hub:' + (r.datos.hub.motivo || 'no pude avisarle') + ' → corré conectar-comfylatam.bat');
                         }
                         refrescar(true);
+                    verificarPublicado(10);
                     });
                 });
             }
         } else if (!esLocal || !ESTADO.yo) {
             cajaMio.innerHTML = '';
         }
+    }
+
+    // ---------- feedback del switch "Transmitir mi Comfy" ----------------
+    // Le pregunta AL HUB si esta PC aparece publicada (no usa el estado local).
+    var _ultimaVerif = 0;
+    function pintarPublicado(d) {
+        var caja = document.getElementById('redPubEstado');
+        if (!caja) return;
+        if (!d) { caja.textContent = ''; return; }
+        if (d.publicado) {
+            caja.className = 'red-pub-estado ok';
+            caja.innerHTML = '✅ Aparecés en la red como <b>' + esc(d.nombre) + '</b>' +
+                (d.compartir ? ' · compartiendo tu Comfy' : ' · sin compartir tu Comfy') +
+                (d.nodos ? ' <span class="red-pub-n">(' + d.nodos + ' PC en la red)</span>' : '');
+        } else {
+            caja.className = 'red-pub-estado no';
+            caja.innerHTML = '⚠️ Todavía no aparecés en la red' + (d.motivo ? ' · ' + esc(d.motivo) : '');
+        }
+    }
+    function verificarPublicado(intentos) {
+        var n = (intentos === undefined) ? 6 : intentos;
+        _ultimaVerif = Date.now();
+        api('/api/red/publicado').then(function (r) {
+            var d = (r && r.datos) || {};
+            pintarPublicado(d);
+            if (!d.publicado && n > 1) setTimeout(function () { verificarPublicado(n - 1); }, 1500);
+        }).catch(function () { });
     }
 
     function opcion(id, texto) {

@@ -13,6 +13,7 @@
 const AGENT_TOKEN = process.env.AGENT_TOKEN || '';
 const TIMEOUT_HTTP = Number(process.env.RELAY_TIMEOUT_MS || 240000);
 const mediaMap = require('./media-map');
+const registro = require('./registro');
 
 const state = { io: null, agent: null, basePath: '/comfylatam', info: {}, estado: null, peers: new Map(), historial: new Map() };
 const pendientes = new Map();
@@ -372,6 +373,10 @@ function iniciar(io, basePath) {
         console.log(`   desde ${ip || '?'} · app ${p.host || '?'}${p.principal ? ' · PRINCIPAL' : ''}${p.compartir ? ' · comparte su Comfy' : ' · no comparte'}`);
         console.log(`   ${state.peers.size} app(s) local(es) conectada(s)`);
         console.log('─'.repeat(70));
+        registro.anotar('conectado', {
+            peerId: p.id, nombre: p.nombre, host: p.host, gpu: p.gpu,
+            usuario: p.usuario || '', ip: ip || '', compartir: !!p.compartir, version: p.version || ''
+        });
         avisarPeers();
 
         socket.on('agent:hello', (info) => {
@@ -392,6 +397,15 @@ function iniciar(io, basePath) {
             p.ultimoLatido = ahora();
             if (p.principal || state.peers.size === 1) { state.agent = socket; state.info = i; }
             console.log(`ℹ️  Nodo ${p.id} se presentó: ${p.nombre} | usuario ${p.usuario || '(sin sesión)'} | host ${p.host} | gpu ${p.gpu || '?'} | compartir ${p.compartir} | modelos ${(p.modelos || []).length}`);
+            registro.anotar('presentado', {
+                peerId: p.id, nombre: p.nombre, host: p.host, gpu: p.gpu,
+                usuario: p.usuario || '', email: p.email || '', compartir: !!p.compartir,
+                principal: !!p.principal, modelos: (p.modelos || []).length
+            });
+            // que el hub anote la computadora YA (no esperar los 30 s del latido)
+            if (typeof state.alPresentarse === 'function') {
+                try { state.alPresentarse(p); } catch (e) { }
+            }
             avisarPeers();
         });
 
@@ -477,6 +491,7 @@ function iniciar(io, basePath) {
                 // queda como conexión pasada (la pestaña RED lo puede mostrar
                 // con el ojito; por defecto NO se lista)
                 console.log(`🔌 NODO DESCONECTADO DEL VPS: ${p.nombre} (${p.id}) — ${motivo || 'sin motivo'} · quedan ${state.peers.size - 1} app(s)`);
+                registro.anotar('desconectado', { peerId: p.id, nombre: p.nombre, motivo: motivo || '' });
             state.historial.set(p.id, Object.assign(publico(p), {
                     conectado: false, visto: ahora(), comfy: false, encolados: 0
                 }));
@@ -664,7 +679,13 @@ async function reenviarHttp({ peerId, method, ruta, query, contentType, range, s
     });
 }
 
+// El hub se engancha acá para anotar la computadora en IACOMFY en el momento
+// en que el nodo se presenta (antes sólo pasaba cada 30 s y si fallaba no se
+// sabía nada).
+function alPresentarse(fn) { state.alPresentarse = fn; }
+
 module.exports = {
+    alPresentarse,
     anotarUsoNodo, porNodoActual, anotarCliente, listarClientes, resumenClientes, avisarClientes, setResolutorUsuario, actualizarCliente,
     iniciar, estado, enviarAlAgente, enviarA, enviarATodos, alRecibirBroadcast, alCambiarPeers,
     reenviarHttp, reescribirJson, marcarClienteEnNodo, reescribirUrl, reescribirTexto, origenPublico,
