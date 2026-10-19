@@ -1116,7 +1116,17 @@ wss.on('connection', (ws, req) => {
     relay.enviarAlAgente('tunnel:ws:open', { clientId });
 
     ws.on('message', (data) => {
-        relay.enviarAlAgente('tunnel:ws:frame', { clientId, data: data.toString() });
+        const texto = data.toString();
+        // el pedido se anota en el HUB antes de mandarlo: aparece al instante
+        // en el BATCH y el REGISTRO de la web, aunque la PC tarde o falle.
+        try {
+            const m = JSON.parse(texto);
+            const tipo = String((m && m.type) || '');
+            if (tipo === 'generarImagen' || tipo === 'generarStoryboard' || tipo === 'generarWan22') {
+                anotarPedidoHub(m, clientId);
+            }
+        } catch (e) { }
+        relay.enviarAlAgente('tunnel:ws:frame', { clientId, data: texto });
     });
     ws.on('close', () => {
         clientesWs.delete(ws);
