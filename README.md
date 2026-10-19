@@ -45,6 +45,9 @@ buscar el trabajo, genera en su GPU y devuelve el resultado.
 token público de nodo. Sólo necesitás **internet** (la PC sale hacia afuera por `wss`, no hay
 que tocar el router ni el firewall).
 
+> Debajo del switch la app te dice si la web **ya te registró** ("✅ La web te tiene registrado
+> como …"). Si queda en ámbar te dice qué falta, no te deja adivinando.
+
 > Si apareces en la lista pero con el switch apagado, igual te ven: dice *transmisión apagada*
 > y nadie puede generar en tu PC hasta que lo prendas. El botón es tu permiso.
 
@@ -52,7 +55,7 @@ que tocar el router ni el firewall).
 
 | Qué ves en la consola de la app | Qué pasa |
 |---|---|
-| `no pude conectar al VPS: token de agente invalido` | Tenés un `.env` con un `AGENT_TOKEN` que no es el público. Borralo o poné `AGENT_TOKEN=comfylatam-nodo-2026` |
+| `no pude conectar al VPS: token de agente invalido` | Te quedó un `.env` de otra instalación. **Borralo**: un clon no necesita ningún `.env` |
 | `ENOTFOUND` / `ETIMEDOUT` | No hay internet o un firewall bloquea `wss:` |
 | `tenés Node X y se necesita 18 o superior` | Actualizá Node (nodejs.org, LTS) |
 | Dice *publicado* pero la web no la muestra | Recargá la web con Ctrl+Shift+R |
@@ -125,20 +128,14 @@ lista todo lo que hay ahí (nodos, KB, y si la app lo usa).
 
 ---
 
-## Para el dueño del VPS (deploy)
+## Mantenimiento del servidor
 
-El hub vive en este mismo repo (`hub/`) y sirve el `public/` de la app, así que hay una sola
-copia del front.
+El hub vive en este mismo repo (`hub/`) y sirve el `public/` de la app: hay una sola copia del
+front. Quien administra el VPS tiene los pasos en **`deploy_scripts/DEPLOY.md`**.
 
-```bash
-deploy_scripts/run_deploy.bat     # en Windows: sube el repo al VPS y el front al FTP
-```
-
-Hace tres cosas: el VPS hace `git pull` de este repo, reinicia PM2
-(`pm2 start hub/server.js --name comfylatam`) y sube `public/` al FTP.
-
-Variable útil: `RED_NODO_TOKEN` en el `.env` del VPS define el token público de nodo (por
-defecto `comfylatam-nodo-2026`). El `AGENT_TOKEN` privado queda sólo para la máquina del dueño.
+Para usar la red no hace falta nada de eso: cualquier PC entra con el token público, sin
+configurar servidores. **Ninguna PC es "la principal"**: la red funciona con todas las que estén
+conectadas y compartiendo.
 
 ---
 
@@ -146,5 +143,6 @@ defecto `comfylatam-nodo-2026`). El `AGENT_TOKEN` privado queda sólo para la m�
 
 - **Telegram está desactivado**: no se carga el módulo ni se envía nada. Para prenderlo algún
   día: `TELEGRAM_HABILITADO=true` + `TELEGRAM_BOT_TOKEN=...` en el `.env`.
-- La media **no** se sube a ninguna nube: se sirve desde la PC que la generó, a través del hub.
+- Lo que generás **en tu PC** queda en tu disco. Lo que se pide desde la **web o la red** se guarda en
+  Cloudflare R2 y se sirve desde ahí (nunca desde el VPS).
 - Los `.env` no van al repo. Si clonás, no necesitás ninguno.
