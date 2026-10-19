@@ -507,6 +507,7 @@
                 '    <span class="meta">' + (conectadoRed
                     ? 'publicado en la red · id ' + esc(ESTADO.yo.peerId)
                     : 'sin publicar todavía — corré <b>conectar-comfylatam.bat</b> para entrar a la red') + '</span>',
+                '    <span class="red-pub-estado" id="redPubEstado"></span>',
                 (!conectadoRed
                     ? '    <span class="red-nombre-fila"><button class="red-btn chico" id="redConectar">🔌 Conectar a la red</button></span>'
                     : '') +
@@ -522,8 +523,9 @@
                 '    <span class="pista"></span><span>🎮 Publicar el nombre de mi placa de video' +
                     (ESTADO.yo.gpu ? ' (' + esc(ESTADO.yo.gpu) + ')' : '') + '</span></label>',
                 '</div>',
-                '  <div class="red-pub-estado" id="redPubEstado"></div>',
             ].join('\n');
+            // el innerHTML borra el span: repinto lo último que sabía del hub
+            if (_ultimoPublicado) pintarPublicado(_ultimoPublicado);
             // feedback de publicación (cada 20 s como mucho)
             if (!_ultimaVerif || (Date.now() - _ultimaVerif) > 20000) setTimeout(verificarPublicado, 400);
             var bc = document.getElementById('redConectar');
@@ -597,7 +599,9 @@
     // ---------- feedback del switch "Transmitir mi Comfy" ----------------
     // Le pregunta AL HUB si esta PC aparece publicada (no usa el estado local).
     var _ultimaVerif = 0;
+    var _ultimoPublicado = null;
     function pintarPublicado(d) {
+        if (d) _ultimoPublicado = d;
         var caja = document.getElementById('redPubEstado');
         if (!caja) return;
         if (!d) { caja.textContent = ''; return; }

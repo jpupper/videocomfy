@@ -751,7 +751,7 @@ body.ck-sin-computadora #confirmRegenBtn {
 .red-subtab-content.active { display: block; }
 
 /* --- ¿aparece en la red? (feedback del switch "Transmitir mi Comfy") --- */
-.red-pub-estado { margin: 6px 0 2px; font-size: 12px; line-height: 1.35; color: var(--ck-muted, #9aa3ad); }
+.red-pub-estado { display: block; margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: var(--ck-muted, #9aa3ad); }
 .red-pub-estado.ok { color: #48d38b; }
 .red-pub-estado.no { color: #f0b429; }
 .red-pub-estado b { font-weight: 700; }
