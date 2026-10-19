@@ -659,6 +659,42 @@ app.post(rutasRed('/api/pedidos/limpiar'), express.json({ limit: '1mb' }), async
 });
 
 
+// Confirmación REAL de que la web ve a esa PC: el hub tiene que (1) tenerla en
+// la lista de nodos que sirve a la web y (2) tenerla REGISTRADA en IACOMFY con
+// latido fresco. Si falta cualquiera de las dos, no está "conectada" para la web.
+app.get(rutasRed('/api/red/confirmado'), async (req, res) => {
+    if (!tokenDeNodoValido(req)) return res.status(401).json({ success: false, message: 'token inválido' });
+    const peerId = String(req.query.peerId || '');
+    if (!peerId) return res.status(400).json({ success: false, message: 'falta peerId' });
+    try {
+        const peers = relay.listarPeers ? relay.listarPeers() : [];
+        const p = peers.filter((x) => x && x.id === peerId)[0] || null;
+        const comp = await db.estadoDeComputadora(peerId);
+        const ult = comp && comp.ultimoVisto ? new Date(comp.ultimoVisto).getTime() : 0;
+        const enBase = !!comp;
+        const enLinea = enBase && ult > 0 && (Date.now() - ult) < 120000;
+        const enRed = !!p;
+        let motivo = '';
+        if (!enRed) motivo = 'el hub no la tiene conectada';
+        else if (!enBase) motivo = 'el VPS la escucha pero la web todavía no la registró';
+        else if (!enLinea) motivo = 'está registrada pero el último latido es viejo';
+        res.json({
+            success: true,
+            ok: enRed && enBase && enLinea,
+            enRed, enBase, enLinea,
+            webVe: enRed && !!(p && p.compartir),
+            compartir: p ? !!p.compartir : false,
+            nombre: (p && p.nombre) || (comp && comp.nombre) || '',
+            motivo,
+            ultimoVisto: comp ? comp.ultimoVisto : null,
+            registrada: comp ? { username: comp.username || '', email: comp.email || '', sesiones: comp.sesiones || 0 } : null,
+            peers: peers.length
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // Historial de nodos (quién se conectó, cuándo, desde qué fierro). Sale del
 // archivo datos/nodos.log, así que sobrevive a caídas de Mongo y a reinstalos.
 app.get(rutasRed('/api/red/historial'), (req, res) => {

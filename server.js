@@ -3808,28 +3808,37 @@ function rutaDelAgente() {
 // El switch "Transmitir mi Comfy" necesita feedback real: esto consulta la
 // lista de nodos del hub y dice si esta PC está publicada y si comparte.
 app.get('/api/red/publicado', async (req, res) => {
+    // Verde SÓLO si la WEB la tiene registrada, no basta con que el socket del
+    // hub la escuche: el hub confirma lista de nodos + registro en IACOMFY.
     if (!RED_TOKEN) return res.json({ success: false, publicado: false, motivo: 'sin token para hablar con el hub' });
+    const cab = { headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(8000) };
     try {
-        const r = await fetch(RED.hub + '/api/red/peers?pasados=1', {
-            headers: { 'x-agent-token': RED_TOKEN },
-            signal: AbortSignal.timeout(8000)
-        });
-        if (!r.ok) {
-            return res.json({ success: false, publicado: false, motivo: 'el hub contestó HTTP ' + r.status });
-        }
-        const d = await r.json().catch(() => ({}));
-        const lista = Array.isArray(d.peers) ? d.peers : [];
+        const [rp, rc] = await Promise.all([
+            fetch(RED.hub + '/api/red/peers?pasados=1', cab).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+            fetch(RED.hub + '/api/red/confirmado?peerId=' + encodeURIComponent(RED.peerId || ''), cab)
+                .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+        ]);
+        const lista = (rp && Array.isArray(rp.peers)) ? rp.peers : [];
+        if (lista.length) RED.nodos = lista;
         const yo = lista.filter((p) => p && p.id === RED.peerId)[0] || null;
-        RED.nodos = lista;   // de paso refrescamos la vista
+        const c = rc || {};
+        const publicado = c.success === true ? !!c.ok : !!yo;
+        let motivo = c.motivo || '';
+        if (!motivo && !publicado) motivo = yo ? 'la web todavía no la registró' : 'el hub todavía no me tiene en la lista';
         res.json({
             success: true,
-            publicado: !!yo,
-            nombre: yo ? yo.nombre : RED.nombre,
-            compartir: yo ? !!yo.compartir : false,
+            publicado,
+            enRed: c.enRed !== undefined ? !!c.enRed : !!yo,
+            enBase: !!c.enBase,
+            enLinea: !!c.enLinea,
+            registrada: c.registrada || null,
+            ultimoVisto: c.ultimoVisto || null,
+            nombre: c.nombre || (yo ? yo.nombre : RED.nombre),
+            compartir: c.compartir !== undefined ? !!c.compartir : !!(yo && yo.compartir),
             comfy: yo ? !!yo.comfy : false,
-            nodos: lista.length,
+            nodos: c.peers !== undefined ? c.peers : lista.length,
             peers: lista.map((p) => ({ id: p.id, nombre: p.nombre, compartir: !!p.compartir })),
-            motivo: yo ? '' : 'el hub todavía no me tiene en la lista'
+            motivo
         });
     } catch (e) {
         res.json({ success: false, publicado: false, motivo: 'no pude hablar con el hub: ' + e.message });

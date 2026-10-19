@@ -439,6 +439,21 @@ async function segundosEnVivo() {
 
 // ¿Está conectada ahora? Sí si tiene una sesión abierta o si latió hace menos
 // de 2 minutos (el hub actualiza ultimoVisto cada 30 s).
+// ¿La PC quedó registrada en la base? (para confirmar que la WEB la ve, no sólo
+// que el socket del hub la escucha)
+async function estadoDeComputadora(peerId) {
+    if (!conectado || !peerId) return null;
+    try {
+        const c = await Computadora.findOne({ peerId }).lean();
+        if (!c) return null;
+        return {
+            peerId: c.peerId, nombre: c.nombre || '', username: c.username || '', email: c.email || '',
+            ultimoVisto: c.ultimoVisto || null, sesiones: Number(c.sesiones || 0),
+            segundosTotal: Number(c.segundosTotal || 0), recuperado: !!c.recuperado
+        };
+    } catch (e) { return null; }
+}
+
 function enLineaDe(email, ultimoVisto, vivo) {
     if (vivo && vivo.porEmail && vivo.porEmail[String(email || '').toLowerCase()]) return true;
     if (ultimoVisto) {
@@ -683,7 +698,7 @@ async function resumen() {
 
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
-    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe,
+    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora,
     leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
     rolEnElEcosistema, esAdminDelEcosistema,
     estadisticasDe, ranking, resumen,

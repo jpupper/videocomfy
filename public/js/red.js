@@ -606,13 +606,20 @@
         if (!caja) return;
         if (!d) { caja.textContent = ''; return; }
         if (d.publicado) {
+            // verde = la WEB la tiene registrada (lista de nodos + IACOMFY), no
+            // alcanza con que el socket del hub la escuche
+            var reg = d.registrada ? (' · @' + esc(d.registrada.username || '—') +
+                (d.registrada.sesiones ? ' · ' + d.registrada.sesiones + ' sesiones' : '')) : '';
             caja.className = 'red-pub-estado ok';
-            caja.innerHTML = '✅ Aparecés en la red como <b>' + esc(d.nombre) + '</b>' +
+            caja.innerHTML = '✅ La web te tiene registrado como <b>' + esc(d.nombre) + '</b>' + reg +
                 (d.compartir ? ' · compartiendo tu Comfy' : ' · sin compartir tu Comfy') +
                 (d.nodos ? ' <span class="red-pub-n">(' + d.nodos + ' PC en la red)</span>' : '');
         } else {
             caja.className = 'red-pub-estado no';
-            caja.innerHTML = '⚠️ Todavía no aparecés en la red' + (d.motivo ? ' · ' + esc(d.motivo) : '');
+            caja.innerHTML = (d.enRed
+                ? '⚠️ El VPS te escucha pero la web todavía no te registró'
+                : '⚠️ Todavía no aparecés en la red') +
+                (d.motivo ? ' · ' + esc(d.motivo) : '');
         }
     }
     function verificarPublicado(intentos) {
