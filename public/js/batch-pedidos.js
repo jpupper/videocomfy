@@ -129,10 +129,28 @@
                 (((est === 'listo' || est === 'sin_nube') && (p.url || p.archivo))
                     ? '<button class="reg-ojo batch-ojo" data-url="' + esc(p.url || '') + '" data-arch="' + esc(p.archivo || '') + '" title="Ver la imagen">👁️</button>'
                     : '') +
+                // REANUDAR en el batch: el mismo botón de la cola, por ítem
+                ((window.JPI_COLA_PAUSADA && (est === 'pedida' || est === 'en_espera'))
+                    ? '<button class="batch-reanudar" data-reanudar="' + esc(p.id || '') + '" title="Reanudar la cola desde este pedido">▶</button>'
+                    : '') +
             '</div>';
         };
 
-        var html = '';
+        // contadores del batch (pedidos + cola real)
+        var enEspera = PEDIDOS.filter(function (p) { return (p.estado || '') === 'pedida'; }).length;
+        var hechas = PEDIDOS.filter(function (p) { return p.estado === 'listo' || p.estado === 'sin_nube'; }).length;
+        var pausada = !!window.JPI_COLA_PAUSADA;
+        var auto = false;
+        try { auto = localStorage.getItem('ck_auto_reanudar') === '1'; } catch (e) { }
+        var barra = '<div class="batch-contadores">' +
+            '<span class="bc bc-curso">⚙️ ' + enCurso.length + ' en curso</span>' +
+            '<span class="bc bc-espera">⏳ ' + enEspera + ' en espera</span>' +
+            '<span class="bc bc-hechas">✅ ' + hechas + ' hechas</span>' +
+            (pausada ? '<button type="button" class="bc bc-reanudar" id="batchReanudarTodo">▶ REANUDAR COLA</button>' : '') +
+            '<label class="bc bc-auto" title="Si está prendido, al recargar la página arranca solo con lo que quedó en espera"><input type="checkbox" id="batchAuto"' + (auto ? ' checked' : '') + '> auto al recargar</label>' +
+            '</div>';
+
+        var html = barra;
         if (enCurso.length) html += enCurso.map(fila).join('');
         else html += '<div class="batch-vacio">no hay nada pendiente de generar</div>';
         if (terminadas.length) {
@@ -162,8 +180,56 @@
             .then(function () { if (b) { b.disabled = false; b.textContent = '🧹 LIMPIAR BATCH'; } });
     }
 
+    // ---------- reanudar (el mismo botón de la cola, acá y por ítem) ----------
+    function reanudarCola() {
+        try {
+            window.JPI_COLA_PAUSADA = false;
+            window.JPI_PAUSA_AVISADA = false;
+            window.dispatchEvent(new CustomEvent('jpi-cola-actualizada'));
+            if (typeof window.jpiColaReanudar === 'function') window.jpiColaReanudar();
+            else if (typeof checkGlobalQueue === 'function') checkGlobalQueue();
+            console.log('▶ cola reanudada desde el BATCH');
+        } catch (e) { }
+        setTimeout(pintar, 400);
+    }
+
+    function autoReanudarSiCorresponde() {
+        var auto = false;
+        try { auto = localStorage.getItem('ck_auto_reanudar') === '1'; } catch (e) { }
+        if (!auto) return;
+        // si quedó algo en espera y la cola está pausada, arranca solo
+        if (!window.JPI_COLA_PAUSADA) return;
+        var hay = (S().lista || []).some(function (p) { return (p.estado || '') === 'pedida'; });
+        if (hay) reanudarCola();
+    }
+
+    function enganchar() {
+        var cont = document.getElementById('batchPedidos');
+        if (!cont || cont.__reanudarListo) return;
+        cont.__reanudarListo = true;
+        cont.addEventListener('click', function (e) {
+            var t = e.target;
+            if (!t) return;
+            if (t.id === 'batchReanudarTodo' || (t.getAttribute && t.getAttribute('data-reanudar') !== null)) {
+                e.preventDefault();
+                reanudarCola();
+            }
+        });
+        cont.addEventListener('change', function (e) {
+            var t = e.target;
+            if (t && t.id === 'batchAuto') {
+                try { localStorage.setItem('ck_auto_reanudar', t.checked ? '1' : '0'); } catch (err) { }
+                console.log(t.checked ? '▶ auto-reanudar activado' : '⏸ auto-reanudar desactivado');
+                if (t.checked) autoReanudarSiCorresponde();
+            }
+        });
+    }
+
     function arrancar() {
         montar();
+        enganchar();
+        setTimeout(enganchar, 1500);
+        setTimeout(autoReanudarSiCorresponde, 4000);
         if (window.CKPedidos) window.CKPedidos.suscribir(function () { montar(); pintar(); });
         setInterval(function () { montar(); }, 3000);
     }

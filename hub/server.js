@@ -808,6 +808,27 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
         avatar: quienEs.avatar || '',
         tipo: quien.tipo === 'nodo' ? 'app-local' : 'web'
     };
+    // El pedido queda anotado en el hub ANTES de mandarlo: así aparece en el
+    // REGISTRO/BATCH de la web al instante (antes sólo se veía cuando el nodo
+    // contestaba, y si algo fallaba no aparecía nunca).
+    try {
+        anotarPedidoHub({
+            type: 'generarImagen',
+            params: { modelo: b.modelo || null },
+            jobId: jobId,
+            tipo: b.tipo || 'imagen',
+            prompt: b.prompt || '',
+            modelo: b.modelo || null,
+            peerId: destino.id,
+            peerNombre: destino.nombre,
+            pedidoPor: pedidoPor,
+            de: de,
+            origen: 'web',
+            estado: 'pedida',
+            ts: Date.now()
+        }, 'hub-generar', destino);
+    } catch (e) { }
+
     const ok = relay.enviarA(destino.id, 'red:job', {
         jobId,
         tipo: b.tipo || 'imagen',
@@ -1192,7 +1213,7 @@ let wsSeq = 0;
 const PEDIDOS_HUB = [];
 let pedidoHubSeq = 0;
 
-function anotarPedidoHub(msg, clientId) {
+function anotarPedidoHub(msg, clientId, destinoForzado) {
     try {
         const tipo = String(msg.type || '');
         if (tipo !== 'generarImagen' && tipo !== 'generarStoryboard' && tipo !== 'generarWan22') return null;
@@ -1202,10 +1223,10 @@ function anotarPedidoHub(msg, clientId) {
         // si el mismo navegador repite el mismo prompt en <90s, no se duplica
         const dup = PEDIDOS_HUB.find((p) => p.prompt === prompt && p.cliente === clientId && (ahora - p.cuando) < 90000);
         if (dup) return dup;
-        const destino = relay.principal();
+        const destino = destinoForzado || relay.principal();
         const p = {
             id: 'hub-' + (++pedidoHubSeq) + '-' + ahora.toString(36),
-            jobId: null, promptId: null,
+            jobId: msg.jobId || null, promptId: null,
             prompt,
             modelo: (msg.params && msg.params.modelo) || (tipo === 'generarStoryboard' ? 'flux' : 'ltx2'),
             usuario: pp.usuario || 'anónimo',

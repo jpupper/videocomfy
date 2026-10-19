@@ -376,3 +376,14 @@ body.es-web .pi-comfy-restart, .es-web #piComfyRestartBtn { display: none !impor
 .pi-server-status.cargando { color: #f59e0b !important; }
 .jpi-estado.cargando { color: #f59e0b !important; border-color: rgba(245, 158, 11, .45) !important; }
 @keyframes ckLatido { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* --- BATCH: contadores, reanudar y switch de auto --- */
+.batch-contadores { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 2px 8px; border-bottom: 1px solid var(--ck-borde, #1b2a36); margin-bottom: 6px; }
+.bc { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ck-borde, #1b2a36); color: var(--ck-texto-2, #94a3b8); background: var(--ck-panel-2, #0b1e2a); }
+.bc-curso { color: #8b5cf6; border-color: #8b5cf655; }
+.bc-espera { color: var(--ck-aviso, #f59e0b); border-color: #f59e0b55; }
+.bc-hechas { color: var(--ck-ok, #10b981); border-color: #10b98155; }
+.bc-reanudar { cursor: pointer; font: inherit; font-size: 11px; color: #04121a; background: var(--ck-ok, #10b981); border: 0; padding: 3px 10px; border-radius: 999px; font-weight: 700; }
+.bc-auto { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.batch-reanudar { background: transparent; border: 1px solid var(--ck-ok, #10b981); color: var(--ck-ok, #10b981); border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; padding: 2px 8px; margin-left: 4px; }
+.batch-reanudar:hover { background: color-mix(in srgb, var(--ck-ok, #10b981) 18%, transparent); }
