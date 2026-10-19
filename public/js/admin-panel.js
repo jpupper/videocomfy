@@ -39,7 +39,11 @@
         caja.className = 'admin-panel';
         caja.innerHTML = '<h3 class="rank-h4">🛡️ PANEL DE ADMINISTRACIÓN</h3><div class="rank-vacio">cargando…</div>';
         wrap.insertBefore(caja, wrap.firstChild);
-        // sólo si esta cuenta es administradora
+        // sólo si esta cuenta es administradora (si no, ni se pide: antes el
+        // navegador logueaba un 403 en consola en cada carga)
+        if (String(localStorage.getItem('role') || 'USER').toUpperCase() !== 'ADMIN') {
+            caja.remove(); window.__adminPanelOff = true; return;
+        }
         pedir('/api/admin/limite').then(function (d) {
             if (!d || d._status === 403 || d.success === false) {
                 // si no soy admin (o la sesión no llegó), no se muestra y NO se

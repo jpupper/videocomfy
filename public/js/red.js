@@ -352,6 +352,10 @@
     function pintar() {
         var cont = document.getElementById('redNodos');
         if (!cont) return;
+        // el panel se repinta cada pocos segundos: si no guardo el scroll vuelve
+        // arriba y nunca se llega a ver lo de abajo (MI EQUIPO y su línea de estado)
+        var _panelRed = document.getElementById('panelRed');
+        var _scrollRed = _panelRed ? _panelRed.scrollTop : 0;
 
         var peers = ESTADO.peers.slice();
         // mi propio nodo (en local): no lo repito en la grilla si ya viene en la lista
@@ -587,6 +591,7 @@
         } else if (!esLocal || !ESTADO.yo) {
             cajaMio.innerHTML = '';
         }
+        if (_panelRed && _scrollRed) _panelRed.scrollTop = _scrollRed;
     }
 
     // ---------- feedback del switch "Transmitir mi Comfy" ----------------
