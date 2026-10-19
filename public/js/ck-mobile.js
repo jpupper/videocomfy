@@ -34,8 +34,19 @@
         return (Date.now() - ultimoToque) > 700;   // el dedo todavía puede estar abajo
     }
 
+    // ¿la barra la movió el usuario? Si es así no se le toca el scroll hasta
+    // que él elija una pestaña (o gire el teléfono).
+    var movidaPorUsuario = false;
+    var programando = false;
+
+    cont.addEventListener('scroll', function () {
+        if (!programando) movidaPorUsuario = true;
+    }, { passive: true });
+
     function centrar(activo, forzar) {
         if (!activo || !puedeMover(forzar)) return;
+        if (movidaPorUsuario && !forzar) return;
+        programando = true;
         try {
             var c = cont.getBoundingClientRect();
             var b = activo.getBoundingClientRect();
@@ -43,6 +54,7 @@
                 cont.scrollLeft += (b.left - c.left) - (c.width / 2) + (b.width / 2);
             }
         } catch (e) { }
+        setTimeout(function () { programando = false; }, 120);
     }
 
     function activa() {
@@ -65,9 +77,23 @@
         var b = ev.target && ev.target.closest ? ev.target.closest('.tab-button, .ck-tab') : null;
         if (!b) return;
         ultima = b;
+        movidaPorUsuario = false;
         setTimeout(function () { centrar(b, true); }, 60);
     }, true);
 
     setTimeout(function () { centrar(activa(), true); }, 900);
-    window.addEventListener('resize', function () { centrar(activa()); });
+
+    // El celular dispara `resize` cada vez que se esconde/aparece la barra de
+    // direcciones (cambia el ALTO, no el ancho). Recentrar ahí devolvía la barra
+    // al botón activo en medio del arrastre: el "rebote" que reportó el usuario.
+    // Sólo se reacomoda si cambió el ANCHO (rotar el teléfono).
+    var ultimoAncho = cont.clientWidth;
+    window.addEventListener('resize', function () {
+        var ancho = cont.clientWidth;
+        var cambioDeAncho = Math.abs(ancho - ultimoAncho) > 24;
+        ultimoAncho = ancho;
+        if (!cambioDeAncho) return;
+        movidaPorUsuario = false;
+        centrar(activa(), true);
+    });
 })();
