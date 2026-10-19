@@ -370,3 +370,9 @@
 .pi-comfy-restart { margin-left: 6px; }
 body.es-web .pi-comfy-restart, .es-web #piComfyRestartBtn { display: none !important; }
 .pi-comfy-restart.reiniciando { opacity: .7; cursor: progress; }
+
+/* --- ComfyUI arrancando: motor responde pero el catálogo de nodos sigue --- */
+.pi-dot.cargando { background: #f59e0b !important; box-shadow: 0 0 0 3px rgba(245, 158, 11, .18); animation: ckLatido 1.4s ease-in-out infinite; }
+.pi-server-status.cargando { color: #f59e0b !important; }
+.jpi-estado.cargando { color: #f59e0b !important; border-color: rgba(245, 158, 11, .45) !important; }
+@keyframes ckLatido { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }

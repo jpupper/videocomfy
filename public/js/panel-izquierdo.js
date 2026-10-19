@@ -198,11 +198,22 @@
                 (esWeb ? '' : '<button type="button" class="pi-server-action-btn pi-comfy-restart" id="piComfyRestartBtn" title="Cerrar ComfyUI y volver a abrirlo">⟳ RESTART</button>');
         }
 
+        var cat = (d && d.comfyCatalogo) || {};
+        var cargandoCat = !!(comfyOk && cat.estado === 'cargando');
         if (comfyOk) {
-            if (dom.comfyDot) dom.comfyDot.className = 'pi-dot online';
-            if (dom.comfyStatus) {
-                dom.comfyStatus.className = 'pi-server-status online';
-                dom.comfyStatus.textContent = '🟢 ComfyUI Conectado';
+            if (cargandoCat) {
+                // el motor ya responde pero el catálogo de nodos sigue bajando
+                if (dom.comfyDot) dom.comfyDot.className = 'pi-dot cargando';
+                if (dom.comfyStatus) {
+                    dom.comfyStatus.className = 'pi-server-status cargando';
+                    dom.comfyStatus.textContent = 'Comfy is loading' + (cat.progreso ? ' · ' + cat.progreso : '');
+                }
+            } else {
+                if (dom.comfyDot) dom.comfyDot.className = 'pi-dot online';
+                if (dom.comfyStatus) {
+                    dom.comfyStatus.className = 'pi-server-status online';
+                    dom.comfyStatus.textContent = '🟢 Comfy ready';
+                }
             }
             if (dom.comfyAlert) dom.comfyAlert.style.display = 'none';
         } else {

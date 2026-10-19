@@ -25,9 +25,16 @@
 
         // --- app local: solo importa que ComfyUI responda ---
         if (d.entorno === 'local' || !esWeb) {
-            if (d.comfy) {
+            // ComfyUI responde desde el primer segundo, pero el Manager sigue
+            // bajando el catálogo de nodos. Mientras eso pasa: "Comfy is loading";
+            // cuando imprime "All startup tasks have been completed": "Comfy ready".
+            var cat = d.comfyCatalogo || {};
+            if (d.comfy && cat.estado === 'cargando') {
+                btn.className = 'jpi-estado cargando';
+                btn.textContent = 'Comfy is loading' + (cat.progreso ? ' · ' + cat.progreso : '');
+            } else if (d.comfy) {
                 btn.className = 'jpi-estado bien';
-                btn.textContent = '🟢 Comfy listo · local';
+                btn.textContent = '🟢 Comfy ready';
             } else {
                 btn.className = 'jpi-estado mal';
                 btn.textContent = '🔴 ComfyUI apagado';

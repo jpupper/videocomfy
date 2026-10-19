@@ -127,6 +127,8 @@ app.get('/api/status', (req, res) => {
         videocomfy: true,
         comfy: comfyOk,
         comfyTexto: comfyOk ? 'connected' : 'disconnected',
+        // 'cargando' = el motor responde pero el Manager sigue bajando el catálogo
+        comfyCatalogo: comfyCatalogo,
         comfyAddress: comfyAddress,
         red: { peerId: RED.peerId, nombre: RED.nombre, compartir: RED.compartir, nodos: RED.nodos.length, enVuelo: RED.enVuelo },
         encolados: RED.enVuelo,
@@ -1296,6 +1298,78 @@ app.get('/api/comfy/cola', async (req, res) => {
 
 // Vaciar la cola de ComfyUI (para las sobras de corridas viejas) o cortar lo
 // que está ejecutando ahora.
+// ============================================================================
+// CATÁLOGO DE NODOS (ComfyUI-Manager): "Comfy is loading" vs "Comfy ready"
+// ----------------------------------------------------------------------------
+// ComfyUI responde /system_stats apenas arranca, pero el Manager sigue bajando
+// el registro público (api.comfy.org, ~200 páginas): el motor está arriba pero
+// todavía no terminó de cargar. El estado real se lee del log interno de
+// ComfyUI (/internal/logs/raw): si hay páginas del registro sin su [DONE],
+// está cargando. Cuando aparece [DONE] (o "All startup tasks have been
+// completed") pasa a listo.
+// ============================================================================
+let comfyCatalogo = { estado: 'desconocido', progreso: '', actualizado: 0 };
+
+// Marca literal que imprime ComfyUI-Manager cuando TERMINÓ de arrancar:
+//   [INFO] [ComfyUI-Manager] All startup tasks have been completed.
+// Esa es la señal de "Comfy ready". Mientras haya páginas del registro
+// (FETCH ComfyRegistry Data: x/y) sin su [DONE], está "Comfy is loading".
+const RE_LISTO = /All startup tasks have been completed/i;
+const RE_PAGINA = /FETCH ComfyRegistry Data:\s*(\d+)\s*\/\s*(\d+)/;
+const RE_DONE = /FETCH ComfyRegistry Data \[DONE\]/i;
+
+async function leerCatalogoComfy() {
+    try {
+        const r = await fetch(comfyBase() + '/internal/logs/raw', { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        const entradas = d.entries || [];
+        let ultimaPagina = -1, ultimoDone = -1, ultimoListo = -1, progreso = '';
+        let ultimaMarcaT = 0;
+        entradas.forEach((e, i) => {
+            const t = String((e && e.m) || '');
+            const ts = Date.parse((e && e.t) || '') || 0;
+            if (ts) ultimaMarcaT = ts;
+            const mp = t.match(RE_PAGINA);
+            if (mp) { ultimaPagina = i; progreso = mp[1] + '/' + mp[2]; }
+            if (RE_DONE.test(t)) ultimoDone = i;
+            if (RE_LISTO.test(t)) ultimoListo = i;
+        });
+
+        let estado;
+        if (ultimoListo >= 0 && ultimoListo >= ultimaPagina && ultimoListo >= ultimoDone) {
+            // apareció "All startup tasks have been completed" después de todo
+            estado = 'listo';
+        } else if (ultimaPagina > ultimoDone) {
+            // está bajando el registro de nodos
+            estado = 'cargando';
+        } else if (ultimoDone >= 0 && ultimoDone > ultimaPagina) {
+            // el registro terminó, faltan tareas de arranque del Manager
+            estado = 'cargando';
+        } else if (ultimaPagina < 0 && ultimaMarcaT && (Date.now() - ultimaMarcaT) > 60000) {
+            // sin Manager / sin marcadores y el log quedó quieto: está listo
+            estado = 'listo';
+        } else {
+            estado = 'cargando';   // servidor arriba pero todavía sin señales
+        }
+
+        const antes = comfyCatalogo.estado;
+        comfyCatalogo = { estado, progreso, actualizado: Date.now() };
+        if (antes !== estado) {
+            console.log(estado === 'cargando'
+                ? `⏳ Comfy is loading — arrancó pero sigue con el catálogo de nodos (${progreso || 'iniciando'})`
+                : '🟢 Comfy ready — motor y catálogo de nodos cargados');
+        }
+    } catch (e) {
+        if (comfyCatalogo.estado !== 'desconocido') {
+            comfyCatalogo = { estado: 'desconocido', progreso: '', actualizado: Date.now() };
+        }
+    }
+    return comfyCatalogo;
+}
+setInterval(() => { leerCatalogoComfy().catch(() => { }); }, 3000);
+setTimeout(() => { leerCatalogoComfy().catch(() => { }); }, 2000);
+
 // ============================================================================
 // REINICIAR COMFYUI (sólo local): cierra la instancia que está corriendo y la
 // vuelve a abrir con la MISMA línea de comandos con la que estaba andando.
