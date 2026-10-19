@@ -608,7 +608,11 @@ async function ranking(orden) {
             if (filasPorDueno[k]) filasPorDueno[k].segundos += Number(seg || 0);
         }
 
-        const filas = Object.values(filasPorDueno).map((f) => {
+        // pedidos anónimos ("sin sesión") no van al ranking: ensucian la tabla
+        const SIN_DUENO = ['', 'sin sesión', 'sin sesion', 'anónimo', 'anonimo', 'desconocido', 'local', 'undefined', 'null'];
+        const filas = Object.values(filasPorDueno)
+            .filter((f) => SIN_DUENO.indexOf(String(f.clave || '').trim().toLowerCase()) < 0)
+            .map((f) => {
             const i = info[f.clave] || {};
             const emailReal = i.email || f.clave;
             return {
@@ -618,7 +622,8 @@ async function ranking(orden) {
                 avatar: i.avatar || '',
                 computadoras: f.computadoras.size,
                 segundosComputadora: f.segundos,
-                seguido: Number((vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(emailReal).toLowerCase()]) || 0),
+                seguido: Math.max(0, ...[...f.computadoras].map((pid) => Number((vivo.porPeerSeguido && vivo.porPeerSeguido[pid]) || 0)),
+                    Number((vivo.seguidoPorEmail && vivo.seguidoPorEmail[String(emailReal).toLowerCase()]) || 0)),
                 sesiones: f.sesiones,
                 generacionesProvistas: f.provistas,
                 generacionesPedidas: f.pedidas,
