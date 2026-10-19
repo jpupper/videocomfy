@@ -31,8 +31,18 @@
     function esApiDeLaApp(u) {
         try {
             var url = new URL(u, location.href);
-            if (url.origin !== location.origin) return false;
-            return /\/api\//.test(url.pathname);
+            var mismaApi = /\/api\//.test(url.pathname);
+            if (!mismaApi) return false;
+            if (url.origin === location.origin) return true;
+            // La web vive en fullscreencode.com y su API en el VPS: es OTRO origen
+            // y la cookie de sesión no viaja. Antes esta función exigía mismo
+            // origen, así que el token no se mandaba y TODO daba 401 (Studio
+            // Assets vacío, panel admin 403). Ahora se manda el Bearer también al
+            // backend de la app.
+            var api = '';
+            try { api = String((window.JPI || {}).API_BASE || ''); } catch (e) { }
+            if (api) { try { if (new URL(api, location.href).origin === url.origin) return true; } catch (e) { } }
+            return /vps-4455523-x\.dattaweb\.com$/.test(url.hostname);
         } catch (e) { return false; }
     }
 
