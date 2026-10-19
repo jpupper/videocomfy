@@ -449,8 +449,11 @@
         fetch('/api/comfy/reiniciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                if (d.success) {
-                    avisar('✅ ComfyUI volvió a arrancar en ' + d.segundos + 's');
+                if (d.success && d.catalogo === 'cargando') {
+                    avisar('ComfyUI arrancó en ' + d.segundos + 's, pero sigue cargando el catálogo de nodos');
+                    btn.textContent = 'Cargando catálogo…';
+                } else if (d.success) {
+                    avisar('✅ ComfyUI listo en ' + d.segundos + 's (motor + catálogo)');
                     btn.textContent = '✅ Listo';
                 } else {
                     avisar('⚠️ No arrancó: ' + (d.motivo || 'sin respuesta'));

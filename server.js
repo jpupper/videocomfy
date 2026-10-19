@@ -1497,9 +1497,21 @@ async function reiniciarComfy() {
         if (await comfyResponde(2500)) { arriba = true; break; }
         await esperar(2000);
     }
+    // El motor responde, pero el Manager sigue bajando el catálogo de nodos:
+    // recién está LISTO cuando imprime "All startup tasks have been completed".
+    // Se espera eso (hasta 2 min más) para informar el arranque real.
+    let catalogo = arriba ? 'cargando' : 'apagado';
+    if (arriba) {
+        const limiteCat = Date.now() + 120000;
+        while (Date.now() < limiteCat) {
+            try { await leerCatalogoComfy(); } catch (e) { }
+            if (comfyCatalogo.estado === 'listo') { catalogo = 'listo'; break; }
+            await esperar(2000);
+        }
+    }
     const segundos = Math.round((Date.now() - t0) / 1000);
-    console.log(`${arriba ? '✅' : '⚠️'} [RESTART COMFY] ${arriba ? 'arriba' : 'no respondió'} en ${segundos}s`);
-    return { ok: arriba, pid: hijo && hijo.pid, segundos, cerrados: procesos.length, exe, cwd };
+    console.log(`${arriba ? '✅' : '⚠️'} [RESTART COMFY] ${arriba ? 'arriba' : 'no respondió'} en ${segundos}s · catálogo: ${catalogo}`);
+    return { ok: arriba, pid: hijo && hijo.pid, segundos, catalogo, cerrados: procesos.length, exe, cwd };
 }
 
 app.post('/api/comfy/reiniciar', bodyParser.json(), async (req, res) => {
