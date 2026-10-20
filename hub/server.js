@@ -608,7 +608,9 @@ async function identidadesDe(quien) {
 function puedeVerNodo(p, nombres) {
     if (process.env.DBG_ACCESO) console.log('[ACCESO]', p && p.id, 'nombres=', nombres ? [...nombres].join(',') : '-', 'acceso=', JSON.stringify((p && p.estado && p.estado.accesoNodo) || null));
     if (!p) return false;
-    const a = (p.estado && p.estado.accesoNodo) || null;
+    // listarPeers() ya devuelve la forma pública (con accesoNodo arriba);
+    // relay.peer() devuelve el peer interno (con .estado). Sirven las dos.
+    const a = p.accesoNodo || (p.estado && p.estado.accesoNodo) || null;
     if (!a || a.modo !== 'lista') return true;
     const lista = (a.usuarios || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
     if (!lista.length) return true;
