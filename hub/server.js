@@ -571,21 +571,49 @@ const rutasRed = (sufijo) => [BASE_PATH + sufijo, sufijo];
 // ── ACCESO POR EQUIPO ───────────────────────────────────────────────────────
 // Cada PC publica en tunnel:estado su lista (accesoNodo). Si el dueño la
 // limitó, esa computadora no aparece para el resto y no acepta sus trabajos.
-function usuarioDeQuien(quien) {
-    if (!quien || quien.tipo !== 'usuario') return '';
-    const u = quien.usuario || {};
-    return String(u.username || u.email || '').trim().toLowerCase();
+// El token de sesión sólo trae id/email/role (NO username), así que hay que
+// resolver la cuenta por email: si no, la lista de accesos (que guarda
+// usernames) nunca coincidía y el filtro dejaba pasar a todos.
+let cacheCuentas = { t: 0, mapa: {} };
+async function mapaDeCuentas() {
+    if (Date.now() - cacheCuentas.t < 60000) return cacheCuentas.mapa;
+    let lista = [];
+    try { lista = await db.listarUsuarios(); } catch (e) { lista = []; }
+    const mapa = {};
+    (lista || []).forEach((u) => {
+        const clave = String(u.usuario || '').trim().toLowerCase();
+        if (!clave) return;
+        if (u.email && String(u.email).indexOf('@') > 0) mapa[String(u.email).trim().toLowerCase()] = clave;
+        mapa[clave] = clave;
+    });
+    cacheCuentas = { t: Date.now(), mapa };
+    return mapa;
 }
-function puedeVerNodo(p, quien) {
+
+// Todos los nombres con los que puede aparecer esta persona en una lista.
+async function identidadesDe(quien) {
+    const set = new Set();
+    if (!quien || quien.tipo !== 'usuario') return set;
+    const u = quien.usuario || {};
+    ['username', 'email', 'displayName'].forEach((k) => {
+        if (u[k]) set.add(String(u[k]).trim().toLowerCase());
+    });
+    const mail = String(u.email || '').trim().toLowerCase();
+    if (mail.indexOf('@') > 0) set.add(mail.split('@')[0]);
+    const mapa = await mapaDeCuentas();
+    if (mail && mapa[mail]) set.add(mapa[mail]);
+    return set;
+}
+
+function puedeVerNodo(p, nombres) {
     if (!p) return false;
     const a = (p.estado && p.estado.accesoNodo) || null;
     if (!a || a.modo !== 'lista') return true;
     const lista = (a.usuarios || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
     if (!lista.length) return true;
-    const u = usuarioDeQuien(quien);
-    if (!u) return true;            // nodo/clon (token de máquina): no se filtra
-    const mail = String((quien.usuario || {}).email || '').trim().toLowerCase();
-    return lista.indexOf(u) >= 0 || (mail && lista.indexOf(mail) >= 0);
+    if (!nombres || !nombres.size) return true;   // token de máquina: no se filtra
+    for (const n of nombres) if (lista.indexOf(n) >= 0) return true;
+    return false;
 }
 
 // ¿el pedido viene del nodo (la app local) con el token de agente?
@@ -739,7 +767,7 @@ app.get(rutasRed('/api/red/historial'), (req, res) => {
     res.json({ success: true, resumen: registro.resumen(), eventos: registro.ultimos(n), archivo: registro.ARCHIVO });
 });
 
-app.get(rutasRed('/api/red/peers'), (req, res) => {
+app.get(rutasRed('/api/red/peers'), async (req, res) => {
     const quien = autorizadoRed(req);
     if (!quien) {
         return res.status(401).json({
@@ -749,7 +777,8 @@ app.get(rutasRed('/api/red/peers'), (req, res) => {
     }
     res.set('Cache-Control', 'no-store');
     const todos = relay.listarPeers() || [];
-    const cuerpo = { success: true, peers: todos.filter((p) => puedeVerNodo(p, quien)) };
+    const nombres = await identidadesDe(quien);
+    const cuerpo = { success: true, peers: todos.filter((p) => puedeVerNodo(p, nombres)) };
     if (String(req.query.pasados || '') === '1') cuerpo.pasados = relay.listarPasados();
     res.json(cuerpo);
 });
@@ -766,7 +795,7 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     const b = req.body || {};
     const pedido = String(b.peerId || '');
     const destino = pedido ? relay.peer(pedido) : relay.principal();
-    if (destino && !puedeVerNodo(destino, quien)) {
+    if (destino && !puedeVerNodo(destino, await identidadesDe(quien))) {
         return res.status(403).json({
             success: false,
             motivo: 'sin-acceso',

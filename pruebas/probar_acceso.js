@@ -6,7 +6,9 @@ const fs = require('fs');
 const HUB = 'https://vps-4455523-x.dattaweb.com';
 
 function leerEnv() {
-    const f = ['.carloskernel.env', '../sistemasfullscreen/skillmaestrofsc/.carloskernel.env']
+    const f = ['.carloskernel.env',
+        '../../sistemasfullscreen/skillmaestrofsc/.carloskernel.env',
+        'D:/Programacion/sistemasfullscreen/skillmaestrofsc/.carloskernel.env']
         .map((p) => require('path').resolve(__dirname, p)).find((p) => fs.existsSync(p));
     if (!f) return {};
     const o = {};
