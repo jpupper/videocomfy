@@ -1042,6 +1042,33 @@ function guardarAccesoWf() {
 }
 leerAccesoWf();
 
+// ── ACCESO POR EQUIPO ────────────────────────────────────────────────────────
+// Quién puede VER y USAR esta computadora. Por defecto 👥 TODOS; si el dueño lo
+// limita, sólo los usuarios tildados la ven en COMUNIDAD y pueden mandarle
+// trabajos (se hace cumplir en el hub, no sólo en la pantalla).
+const ARCHIVO_ACCESO_NODOS = path.join(__dirname, 'datos', 'acceso-nodos.json');
+let ACCESO_NODOS = {};
+function leerAccesoNodos() {
+    try { ACCESO_NODOS = JSON.parse(fs.readFileSync(ARCHIVO_ACCESO_NODOS, 'utf8')) || {}; } catch (e) { ACCESO_NODOS = {}; }
+    return ACCESO_NODOS;
+}
+function guardarAccesoNodos() {
+    try {
+        fs.mkdirSync(path.dirname(ARCHIVO_ACCESO_NODOS), { recursive: true });
+        fs.writeFileSync(ARCHIVO_ACCESO_NODOS, JSON.stringify(ACCESO_NODOS, null, 2));
+        return true;
+    } catch (e) { console.log('⚠️ no pude guardar acceso-nodos.json:', e.message); return false; }
+}
+leerAccesoNodos();
+
+function accesoDeMiEquipo() {
+    const a = ACCESO_NODOS[RED.peerId] || {};
+    return {
+        modo: (a.modo === 'lista') ? 'lista' : 'todos',
+        usuarios: Array.isArray(a.usuarios) ? a.usuarios.map(String) : []
+    };
+}
+
 function accesoDeWf(archivo) {
     const a = ACCESO_WF[archivo] || {};
     return {
@@ -1107,6 +1134,30 @@ app.get('/api/wf/usuarios', async (req, res) => {
 
 app.get('/api/wf/acceso', (req, res) => {
     res.json({ success: true, acceso: ACCESO_WF });
+});
+
+// Quién puede usar MI equipo (por defecto todos).
+app.get('/api/red/acceso-nodo', (req, res) => {
+    res.json({ success: true, peerId: RED.peerId, acceso: accesoDeMiEquipo(), todos: ACCESO_NODOS });
+});
+
+app.post('/api/red/acceso-nodo', bodyParser.json(), async (req, res) => {
+    const b = req.body || {};
+    const peerId = String(b.peerId || RED.peerId).trim();
+    if (!peerId) return res.status(400).json({ success: false, message: 'falta el peerId' });
+    const modo = (b.modo === 'lista') ? 'lista' : 'todos';
+    let usuarios = Array.isArray(b.usuarios) ? b.usuarios : [];
+    usuarios = usuarios.map((u) => String(u || '').trim().replace(/^@/, '')).filter(Boolean);
+    usuarios = usuarios.filter((u, i, arr) => arr.findIndex((x) => x.toLowerCase() === u.toLowerCase()) === i);
+    if (modo === 'lista' && !usuarios.length) {
+        return res.status(400).json({ success: false, message: 'elegí al menos un usuario (o ponelo en TODOS)' });
+    }
+    ACCESO_NODOS[peerId] = { modo: modo, usuarios: modo === 'lista' ? usuarios : [] };
+    guardarAccesoNodos();
+    console.log(`🔐 Equipo ${peerId}: ${modo === 'lista' ? 'sólo ' + usuarios.join(', ') : 'TODOS'}`);
+    // que el hub se entere en el acto (filtra la lista y rechaza trabajos)
+    try { if (typeof enviarEstado === 'function') enviarEstado(); } catch (e) { }
+    res.json({ success: true, peerId: peerId, acceso: ACCESO_NODOS[peerId] });
 });
 
 app.post('/api/wf/acceso', bodyParser.json(), async (req, res) => {
@@ -3533,6 +3584,8 @@ function estadoRed() {
         // workflows que este fierro ofrece a la red (compartidos Y con modelos instalados)
         workflows: RED.workflowsRed || [],
         accesoWf: ACCESO_WF,
+        // quién puede ver/usar esta computadora (👥 todos por defecto)
+        accesoNodo: accesoDeMiEquipo(),
         usuario: RED.usuario,
         email: (RED.propietario && RED.propietario.email) || (RED.usuario && RED.usuario.email) || '',
         propietario: RED.propietario,

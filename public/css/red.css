@@ -777,3 +777,22 @@ body.ck-sin-computadora #confirmRegenBtn {
 .red-acc-user.on { background: color-mix(in srgb, var(--ck-acento, #00ffd5) 18%, transparent); border-color: var(--ck-acento, #00ffd5); color: var(--ck-acento, #00ffd5); }
 .red-acc-pista, .red-acc-vacio { font-size: 11px; color: var(--ck-texto-2, #94a3b8); }
 .red-acc-pista { flex: 1 1 100%; opacity: .8; }
+
+/* ---------- ACCESO → PERMISOS (por equipo) ---------- */
+.acc-bloque { border: 1px solid var(--border); padding: 12px 14px; margin-top: 10px; }
+.acc-bloque .red-titulo { margin-top: 0; }
+.acc-modo { display: flex; gap: 0; margin: 8px 0; }
+.acc-btn { flex: 0 0 auto; padding: 7px 14px; background: var(--card); color: var(--text-muted);
+  border: 1px solid var(--border); cursor: pointer; font: inherit; font-size: .88em; }
+.acc-btn + .acc-btn { border-left: 0; }
+.acc-btn.activo { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+.acc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.acc-chip { padding: 5px 10px; background: transparent; color: var(--text-muted);
+  border: 1px solid var(--border); cursor: pointer; font: inherit; font-size: .85em; }
+.acc-chip:hover { border-color: var(--accent); color: var(--foreground); }
+.acc-chip.on { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+.acc-fila { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.acc-fila:last-child { border-bottom: 0; }
+.acc-nombre { font-weight: 700; color: var(--foreground); }
+.acc-dueno { color: var(--text-muted); font-size: .85em; }
+.acc-badge { margin-left: auto; font-size: .85em; color: var(--text-muted); }

@@ -112,19 +112,10 @@
         panel.id = 'panelRed';
         panel.innerHTML = [
             '<div class="red-head">',
-            '  <h2>RED COMFYLATAM</h2>',
+            '  <h2>COMUNIDAD COMFYLATAM</h2>',
             '  <span class="red-badge" id="redModo"></span>',
             '  <span class="red-badge" id="redResumen"></span>',
             '  <button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
-            '</div>',
-
-            // Dos sub-pestañas (pedido explícito del usuario): una muestra LA RED
-            // (nodos conectados, cuál está elegido, generar) y la otra es la
-            // configuración PERSONAL (cómo expongo mi computadora: compartir,
-            // workflows, equipo).
-            '<div class="red-subtabs">',
-            '  <button type="button" class="red-subtab active" data-redsub="redTabLaRed">🌐 LA RED</button>',
-            '  <button type="button" class="red-subtab" data-redsub="redTabMiEquipo">⚙️ MI EQUIPO</button>',
             '</div>',
 
             '<div class="red-subtab-content active" id="redTabLaRed">',
@@ -162,27 +153,58 @@
             '</div>',
             '</div>',
 
-            '<div class="red-subtab-content" id="redTabMiEquipo">',
-            '<p class="red-sub">Así exponés TU computadora a la red. Nada de esto afecta tu uso local.</p>',
-            '<div id="redMio"></div>',
-            // acá se engancha el panel de workflows que compartís (js/workflows-red.js)
-            '<div id="redWfSlot"></div>',
-
-            // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
-            '<div class="red-clientes" id="redClientes"></div>',
             '</div>'
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
 
-        // Las dos sub-pestañas de RED (LA RED / MI EQUIPO)
-        panel.querySelectorAll('.red-subtab').forEach(function (b) {
+        // ── ACCESO: quién puede usar mi PC y cada workflow ───────────────────
+        // Pedido del usuario: pestaña propia con 3 sub-pestañas (EQUIPO,
+        // WORKFLOWS y PERMISOS), separada de COMUNIDAD.
+        var panelA = document.createElement('div');
+        panelA.className = 'tab-content red-panel';
+        panelA.id = 'panelAcceso';
+        panelA.innerHTML = [
+            '<div class="red-head">',
+            '  <h2>ACCESO</h2>',
+            '  <span class="red-badge">quién puede ver y usar lo tuyo</span>',
+            '  <button class="red-btn secundario" id="accesoRefrescar">Actualizar</button>',
+            '</div>',
+            '<div class="red-subtabs">',
+            '  <button type="button" class="red-subtab active" data-accsub="accTabEquipo">💻 EQUIPO</button>',
+            '  <button type="button" class="red-subtab" data-accsub="accTabWf">🧩 WORKFLOWS</button>',
+            '  <button type="button" class="red-subtab" data-accsub="accTabPerm">🔐 PERMISOS</button>',
+            '</div>',
+
+            '<div class="red-subtab-content active" id="accTabEquipo">',
+            '<p class="red-sub">Así exponés TU computadora a la red. Nada de esto afecta tu uso local.</p>',
+            '<div id="redMio"></div>',
+            // quién puede ver/usar esta PC (resumen; se edita en PERMISOS)
+            '<div id="redMioAcceso"></div>',
+            // Cuántos clientes/usuarios hay conectados y de qué tipo (web o local)
+            '<div class="red-clientes" id="redClientes"></div>',
+            '</div>',
+
+            '<div class="red-subtab-content" id="accTabWf">',
+            // acá se engancha el panel de workflows que compartís (js/workflows-red.js)
+            '<div id="redWfSlot"></div>',
+            '</div>',
+
+            '<div class="red-subtab-content" id="accTabPerm">',
+            '<p class="red-sub">Por defecto todo es 👥 TODOS. Si limitás un equipo o un workflow, sólo los usuarios tildados lo ven y pueden usarlo.</p>',
+            '<div id="redPermSlot"></div>',
+            '</div>'
+        ].join('\n');
+        if (contenedor) contenedor.appendChild(panelA);
+
+        // sub-pestañas de ACCESO
+        panelA.querySelectorAll('.red-subtab').forEach(function (b) {
             b.addEventListener('click', function (e) {
                 e.preventDefault();
-                var destino = b.getAttribute('data-redsub');
-                panel.querySelectorAll('.red-subtab').forEach(function (x) {
+                var destino = b.getAttribute('data-accsub');
+                panelA.querySelectorAll('.red-subtab').forEach(function (x) {
                     x.classList.toggle('active', x === b);
                 });
-                panel.querySelectorAll('.red-subtab-content').forEach(function (c) {
+                panelA.querySelectorAll('.red-subtab-content').forEach(function (c) {
                     c.classList.toggle('active', c.id === destino);
                 });
             });
@@ -194,10 +216,16 @@
         if (izq && !document.getElementById('ckPiRed')) {
             var bi = document.createElement('button');
             bi.id = 'ckPiRed';
-            bi.textContent = '🌎 Red ComfyLatam';
+            bi.textContent = '🌐 COMUNIDAD';
             bi.style.marginTop = '6px';
             bi.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
             izq.appendChild(bi);
+            var ba = document.createElement('button');
+            ba.id = 'ckPiAcceso';
+            ba.textContent = '🔐 ACCESO';
+            ba.style.marginTop = '6px';
+            ba.addEventListener('click', function (e) { e.preventDefault(); abrirAcceso(); });
+            izq.appendChild(ba);
         }
         var barra = document.querySelector('.mobile-bar, #mobileBar');
         if (barra && !document.getElementById('mobRed')) {
@@ -205,9 +233,16 @@
             mb.type = 'button';
             mb.id = 'mobRed';
             mb.className = 'mobile-tab';
-            mb.textContent = 'RED';
+            mb.textContent = 'COMUNIDAD';
             barra.appendChild(mb);
             mb.addEventListener('click', function () { abrir(); });
+            var mba = document.createElement('button');
+            mba.type = 'button';
+            mba.id = 'mobAcceso';
+            mba.className = 'mobile-tab';
+            mba.textContent = 'ACCESO';
+            barra.appendChild(mba);
+            mba.addEventListener('click', function () { abrirAcceso(); });
         }
 
         btn.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
@@ -215,12 +250,20 @@
         // Al tocar cualquier OTRA pestaña del editor, escondo la mía (el editor
         // capturó sus .tab-content al cargar y no conoce este panel).
         document.querySelectorAll('.workspace-header .tab-button').forEach(function (b) {
-            if (b.id === 'tabRedBtn') return;
+            if (b.id === 'tabRedBtn' || b.id === 'tabAccesoBtn') return;
             b.addEventListener('click', function () {
-                var p = document.getElementById('panelRed');
-                if (p) p.classList.remove('active');
+                ['panelRed', 'panelAcceso'].forEach(function (id) {
+                    var p = document.getElementById(id);
+                    if (p) p.classList.remove('active');
+                });
             });
         });
+
+        // el botón ACCESO de la barra de arriba
+        var btnA = document.getElementById('tabAccesoBtn');
+        if (btnA) {
+            btnA.addEventListener('click', function (e) { e.preventDefault(); abrirAcceso(); });
+        }
 
         document.getElementById('redRefrescar').addEventListener('click', function () { refrescar(true); });
         document.getElementById('redOjo').addEventListener('click', function () {
@@ -332,21 +375,31 @@
         try { window.CKConexion && window.CKConexion.pintar(); } catch (e) { }
     }
 
-    function abrir() {
-        var panel = document.getElementById('panelRed');
+    function abrirPanel(id, idBoton) {
+        var panel = document.getElementById(id);
         if (!panel) return;
         // misma mecánica que las pestañas del editor, pero en vivo
         document.querySelectorAll('.tab-button').forEach(function (b) {
-            b.classList.toggle('active', b.id === 'tabRedBtn');
+            b.classList.toggle('active', b.id === idBoton);
         });
         document.querySelectorAll('.tab-content').forEach(function (c) {
             c.classList.toggle('active', c === panel);
         });
         document.body.classList.remove('tab-editor-active');
         if (typeof window.cerrarCajonesMobile === 'function') { try { window.cerrarCajonesMobile(); } catch (e) { } }
+    }
+    function abrir() {
+        abrirPanel('panelRed', 'tabRedBtn');
         refrescar(false);
     }
-    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir };
+    function abrirAcceso() {
+        abrirPanel('panelAcceso', 'tabAccesoBtn');
+        refrescar(false);
+        if (typeof window.CK_acciones === 'object' && typeof window.CK_acciones.pintarPermisos === 'function') {
+            window.CK_acciones.pintarPermisos();
+        }
+    }
+    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir, abrirAcceso: abrirAcceso };
 
     // ---------- pintado ----------
     function pintar() {
@@ -704,6 +757,10 @@
             mio ? '<span class="red-badge comparto">tu nodo</span>'
                 : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
+            // si el dueño limitó quién puede usar su PC, se avisa en la tarjeta
+            (p.accesoNodo && p.accesoNodo.modo === 'lista')
+                ? '<span class="red-badge acceso-limitado" title="sólo algunos usuarios">🔒 ' + ((p.accesoNodo.usuarios || []).length) + '</span>'
+                : '',
             sello,
             '  </div>',
             // Si no hay GPU publicada NO se escribe nada (ni "sin GPU" ni la palabra

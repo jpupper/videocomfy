@@ -568,6 +568,26 @@ function autorizadoRed(req) {
 }
 const rutasRed = (sufijo) => [BASE_PATH + sufijo, sufijo];
 
+// ── ACCESO POR EQUIPO ───────────────────────────────────────────────────────
+// Cada PC publica en tunnel:estado su lista (accesoNodo). Si el dueño la
+// limitó, esa computadora no aparece para el resto y no acepta sus trabajos.
+function usuarioDeQuien(quien) {
+    if (!quien || quien.tipo !== 'usuario') return '';
+    const u = quien.usuario || {};
+    return String(u.username || u.email || '').trim().toLowerCase();
+}
+function puedeVerNodo(p, quien) {
+    if (!p) return false;
+    const a = (p.estado && p.estado.accesoNodo) || null;
+    if (!a || a.modo !== 'lista') return true;
+    const lista = (a.usuarios || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+    if (!lista.length) return true;
+    const u = usuarioDeQuien(quien);
+    if (!u) return true;            // nodo/clon (token de máquina): no se filtra
+    const mail = String((quien.usuario || {}).email || '').trim().toLowerCase();
+    return lista.indexOf(u) >= 0 || (mail && lista.indexOf(mail) >= 0);
+}
+
 // ¿el pedido viene del nodo (la app local) con el token de agente?
 function esAgente(req) {
     return !!AGENT_TOKEN && tokenDeNodoValido(req);
@@ -728,7 +748,8 @@ app.get(rutasRed('/api/red/peers'), (req, res) => {
         });
     }
     res.set('Cache-Control', 'no-store');
-    const cuerpo = { success: true, peers: relay.listarPeers() };
+    const todos = relay.listarPeers() || [];
+    const cuerpo = { success: true, peers: todos.filter((p) => puedeVerNodo(p, quien)) };
     if (String(req.query.pasados || '') === '1') cuerpo.pasados = relay.listarPasados();
     res.json(cuerpo);
 });
@@ -745,6 +766,13 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     const b = req.body || {};
     const pedido = String(b.peerId || '');
     const destino = pedido ? relay.peer(pedido) : relay.principal();
+    if (destino && !puedeVerNodo(destino, quien)) {
+        return res.status(403).json({
+            success: false,
+            motivo: 'sin-acceso',
+            message: 'Esa computadora no te dio acceso. Pedile al dueño que te agregue en ACCESO → PERMISOS.'
+        });
+    }
     if (!destino || !destino.socket || !destino.socket.connected) {
         // NUNCA elegir otra PC por atrás: se avisa y se listan las que hay.
         const vivas = (relay.listarPeers ? relay.listarPeers() : [])

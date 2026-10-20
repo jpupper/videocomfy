@@ -77,7 +77,7 @@ function arrancar(opciones) {
     let ultimoConectado = false;
     let ultimoMsgError = '';
 
-    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], accesoWf: {}, publicarGpu: true };
+    const identidad = { peerId: os.hostname(), nombre: os.hostname(), compartir: false, modelos: [], usuario: null, workflows: [], accesoWf: {}, accesoNodo: {}, publicarGpu: true };
 
     // ------------------------------ utilidades ------------------------------
     async function pedir(ruta, opciones) {
@@ -99,6 +99,8 @@ function arrancar(opciones) {
             identidad.workflows = Array.isArray(d.workflows) ? d.workflows : (identidad.workflows || []);
             // permisos por usuario de cada workflow (los decide el dueño)
             if (d.accesoWf && typeof d.accesoWf === 'object') identidad.accesoWf = d.accesoWf;
+            // quién puede ver/usar ESTA computadora (👥 todos por defecto)
+            if (d.accesoNodo && typeof d.accesoNodo === 'object') identidad.accesoNodo = d.accesoNodo;
             // switch de MI EQUIPO: si el dueño lo apagó, la placa NO se publica
             identidad.publicarGpu = d.publicarGpu !== false;
             if (!CFG.COMFY && d.comfyAddress) CFG.COMFY = String(d.comfyAddress).replace(/\/+$/, '');
@@ -133,6 +135,7 @@ function arrancar(opciones) {
             workflows: identidad.workflows || [],
             // quién puede usar cada workflow (lo decide el dueño en MI EQUIPO)
             accesoWf: identidad.accesoWf || {},
+            accesoNodo: identidad.accesoNodo || {},
             ts: Date.now()
         });
     }
@@ -206,6 +209,7 @@ function arrancar(opciones) {
                 gpu: (identidad.publicarGpu === false ? '' : gpuDetectada),
                 modelos: identidad.modelos,
                 accesoWf: identidad.accesoWf || {},
+                accesoNodo: identidad.accesoNodo || {},
                 principal: CFG.PRINCIPAL,
                 compartir: identidad.compartir,
                 avatar: (identidad.usuario && identidad.usuario.avatar) || '',
@@ -344,6 +348,7 @@ function arrancar(opciones) {
                 // del panel de STAGE, y desde la web quedaba bloqueado sin avisar.
                 /^\/api\/actualizar/i,                    // traer código nuevo (git pull)
                 /^\/api\/wf\/acceso/i,                    // permisos de workflows: sólo el dueño local
+                /^\/api\/red\/acceso-nodo/i,              // permisos de EQUIPO: sólo el dueño local
                 /^\/api\/generate-avatar/i,               // escribía archivos
                 /^\/api\/red\/(agente|nodos|perfil|job)/i, // identidad y trabajos internos
                 /^\/api\/(mo|entorno|salud-memoria)/i

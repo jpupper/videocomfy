@@ -82,6 +82,8 @@ function publico(p) {
         dueno: p.usuario || '',
         // workflows que ese fierro ofrece (compartidos y con modelos instalados)
         workflows: (p.estado && Array.isArray(p.estado.workflows)) ? p.estado.workflows : [],
+        // quién puede ver/usar esa PC (👥 todos por defecto)
+        accesoNodo: (p.estado && p.estado.accesoNodo) || { modo: 'todos', usuarios: [] },
         ultimoVisto: p.ultimoLatido
     };
 }
