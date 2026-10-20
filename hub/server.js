@@ -606,6 +606,7 @@ async function identidadesDe(quien) {
 }
 
 function puedeVerNodo(p, nombres) {
+    if (process.env.DBG_ACCESO) console.log('[ACCESO]', p && p.id, 'nombres=', nombres ? [...nombres].join(',') : '-', 'acceso=', JSON.stringify((p && p.estado && p.estado.accesoNodo) || null));
     if (!p) return false;
     const a = (p.estado && p.estado.accesoNodo) || null;
     if (!a || a.modo !== 'lista') return true;
