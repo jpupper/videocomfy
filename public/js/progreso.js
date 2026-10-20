@@ -256,6 +256,14 @@
             etapa(deLaWeb ? 'nube' : 'listo', { nodo: nombreNodo, pct: deLaWeb ? 94 : 100 });
             return;
         }
+        // La subida a Cloudflare terminó: la web ya tiene la URL del CDN.
+        if (m.type === 'media_en_nube') {
+            if (!S.archivo || m.filename === S.archivo) {
+                S.archivo = m.filename || S.archivo;
+                etapa('listo', { archivo: S.archivo, nodo: S.nodo });
+            }
+            return;
+        }
         if (m.type === 'storyboard_generated' || m.type === 'video_generated') {
             if (m.filename) S.archivo = m.filename;
             // urlNube presente = ya está en Cloudflare; si no y el trabajo es de
@@ -303,8 +311,50 @@
 
     function detenido() { etapa('detenido'); }
 
+    // ── NADA QUEDA COLGADO EN "SUBIENDO A CLOUDFLARE" ─────────────────────
+    // El estado real del pedido vive en /api/pedidos. Si el evento final se
+    // pierde (o el nodo se reconecta), el panel se quedaba en 'nube' para
+    // siempre aunque la imagen ya estuviera subida. Acá se reconcilia.
+    var ultimaReconcil = 0;
+    function reconciliar() {
+        if (S.etapa !== 'nube') return;
+        if (Date.now() - ultimaReconcil < 2500) return;
+        ultimaReconcil = Date.now();
+        var base = (window.JPI && (window.JPI.API_BASE || '')) || '';   // en la web el API vive en el VPS
+        fetch(base + '/api/pedidos?_=' + Date.now(), { credentials: 'include' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var lista = (d && (d.pedidos || d.lista)) || [];
+                if (!lista.length) return;
+                var p = null;
+                // 1) el mismo archivo que estamos esperando
+                if (S.archivo) {
+                    p = lista.filter(function (x) { return x.archivo === S.archivo; })[0] || null;
+                }
+                // 2) si no, el más nuevo que haya arrancado después de esta generación
+                if (!p) {
+                    var desde = S.desde || 0;
+                    p = lista.filter(function (x) {
+                        var t = x.ts || x.creado || 0;
+                        return t >= (desde - 120000) && x.estado !== 'pedida';
+                    })[0] || null;
+                }
+                if (!p) return;
+                if (p.archivo && !S.archivo) S.archivo = p.archivo;
+                if (p.estado === 'listo') {
+                    etapa('listo', { archivo: p.archivo || S.archivo, nodo: S.nodo });
+                } else if (p.estado === 'sin_nube') {
+                    etapa('listo', { archivo: p.archivo || S.archivo, nodo: S.nodo });
+                } else if (p.estado === 'error' || p.estado === 'cancelada' || p.estado === 'interrumpida') {
+                    etapa('error', { error: 'el trabajo ' + p.estado });
+                }
+            })
+            .catch(function () { });
+    }
+
     // cada segundo: el reloj y el estado de conexión
     setInterval(function () {
+        reconciliar();
         if (esWeb) {
             var n = nodoElegido();
             var activa = (S.etapa === 'comfy' || S.etapa === 'nube' || S.etapa === 'pidiendo' || S.etapa === 'enviado');

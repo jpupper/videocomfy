@@ -368,7 +368,7 @@ const MIME_POR_EXT = {
 let server_logClientes = '';   // última firma de clientes logueada
 let completedJobs = [];        // historial de trabajos terminados (se usaba sin declarar)
 
-const r2Estado = { activo: R2_ACTIVO, subidos: 0, bytes: 0, errores: 0, ultimo: null, enCurso: false, faltan: null };
+const r2Estado = { activo: R2_ACTIVO, subidos: 0, bytes: 0, errores: 0, ultimo: null, enCurso: false, faltan: null, subiendoAhora: null };
 
 function mimeDe(nombre) {
     return MIME_POR_EXT[String(path.extname(nombre)).toLowerCase()] || 'application/octet-stream';
@@ -449,6 +449,7 @@ async function subirArchivoAR2(carpeta, nombre) {
         if (!st.isFile() || st.size === 0) return false;
         marcarPedidoRedPorArchivo(nombre, { estado: 'subiendo' });   // línea de tiempo: "subiendo a Cloudflare"
         actualizarPedido({ archivo: nombre }, { estado: 'subiendo' });
+        r2Estado.subiendoAhora = nombre;   // el barrido de fondo espera: no le come el ancho de banda
         // Tope de tiempo: con una conexión lenta o un hipo de red el upload se
         // quedaba colgado para siempre ("Guardando en Cloudflare… 2 minutos").
         // Si no termina en 90 s, se marca sin_nube: la imagen YA existe y se ve,
@@ -465,6 +466,7 @@ async function subirArchivoAR2(carpeta, nombre) {
             }, 90000))
         ]);
         const segs = ((Date.now() - t0) / 1000).toFixed(1);
+        r2Estado.subiendoAhora = null;
         if (!r) { r2Estado.errores++; marcarPedidoRedPorArchivo(nombre, { estado: 'sin_nube' }); return false; }
         marcarPedidoRedPorArchivo(nombre, { estado: 'listo', urlNube: r.url });
         actualizarPedido({ archivo: nombre }, { estado: 'listo', url: r.url });
@@ -477,10 +479,19 @@ async function subirArchivoAR2(carpeta, nombre) {
         });
         r2Estado.subidos++; r2Estado.bytes += st.size; r2Estado.ultimo = nombre;
         console.log('☁️  [R2] subido ' + nombre + ' (' + (st.size / 1048576).toFixed(1) + ' MB en ' + segs + 's) -> ' + r.url);
+        // Aviso al instante a la web: antes el evento de "listo" salía ANTES de
+        // la subida (sin urlNube), así que el panel quedaba en "subiendo a
+        // Cloudflare…" para siempre. Con esto la web se entera al terminar.
+        enviarAlFront({ type: 'media_en_nube', filename: nombre, urlNube: r.url, bytes: st.size });
         registrarAsset(nombre, r.url, st.size).catch(() => { });
         return true;
     } catch (e) {
         r2Estado.errores++;
+        r2Estado.subiendoAhora = null;
+        // si falló la subida, el pedido NO puede quedar colgado en 'subiendo':
+        // la imagen existe y se ve igual, la nube se reintenta después.
+        marcarPedidoRedPorArchivo(nombre, { estado: 'sin_nube' });
+        actualizarPedido({ archivo: nombre }, { estado: 'sin_nube' });
         console.log('⚠️  [R2] error con ' + nombre + ': ' + e.message);
         return false;
     }
@@ -521,8 +532,20 @@ async function barrerMediaAR2() {
         // se queda en el disco de esta PC (por eso puede quedar en 0 subidos).
         console.log(`☁️  [R2] ${pendientes.length} archivo(s) fuera de la nube (${(bytesFaltan / 1048576).toFixed(0)} MB) — sólo se sube lo pedido desde la web o la red; lo local queda en esta PC`);
         }
+        // De a poco: si hay una subida pedida por un trabajo real, el barrido
+        // espera (antes le robaba el ancho de banda y una imagen de 2 MB tardaba
+        // minutos). Y como máximo 8 archivos por pasada para no saturar el link.
+        const MAX_POR_PASADA = 8;
         for (const x of pendientes) {
-            if (await subirArchivoAR2(x.carpeta, x.f)) hechos++;
+            let esperas = 0;
+            while (r2Estado.subiendoAhora && esperas < 30) { await new Promise((r) => setTimeout(r, 2000)); esperas++; }
+            if (await subirArchivoAR2(x.carpeta, x.f)) {
+                hechos++;
+                if (hechos >= MAX_POR_PASADA) {
+                    console.log('☁️  [R2] barrido: ' + MAX_POR_PASADA + ' en esta pasada, el resto queda para la próxima');
+                    break;
+                }
+            }
             r2Estado.faltan = pendientes.length - hechos;
         }
         if (hechos) console.log(`☁️  [R2] listo: ${hechos} archivo(s) nuevos en la nube (${(r2Estado.bytes / 1048576).toFixed(0)} MB acumulados)`);
