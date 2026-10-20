@@ -99,12 +99,17 @@
 
         if (dom.btnPausar) {
             dom.btnPausar.addEventListener('click', function () {
-                if (window.JPI_COLA_PAUSADA) {
+                // Un solo camino para pausar/reanudar: el mismo toggle que usa STAGE
+                // (si no, este boton cambiaba la cola pero no el boton de STAGE).
+                if (typeof window.JPIColaToggle === 'function') {
+                    window.JPIColaToggle();
+                } else if (window.JPI_COLA_PAUSADA) {
                     if (typeof window.jpiColaReanudar === 'function') window.jpiColaReanudar();
-                } else {
-                    if (typeof window.jpiColaPausar === 'function') window.jpiColaPausar();
+                } else if (typeof window.jpiColaPausar === 'function') {
+                    window.jpiColaPausar();
                 }
-                actualizarCola();
+                setTimeout(actualizarCola, 80);
+                setTimeout(actualizarCola, 600);
             });
         }
 

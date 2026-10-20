@@ -129,14 +129,20 @@ function handleWsOpen() {
         ws.send(JSON.stringify({ type: 'request_queue_state' }));
     }
     
-    // OJO (pedido explicito del usuario): la cola restaurada NO se arranca sola.
-    // Al abrir la web se reprocesaban los pendientes guardados en localStorage y
-    // aparecia una generacion "fantasma" (el famoso "an orange falling from a
-    // tree") sin que nadie la pidiera. Ahora queda EN PAUSA y sigue solo con el
-    // boton PLAY de la cola.
+    // PEDIDO EXPLICITO DEL USUARIO (20-Oct): la cola SIEMPRE arranca en PLAY.
+    // Antes quedaba en pausa al abrir la web y "las cosas nunca empiezan": habia
+    // que acordarse de apretar PLAY cada vez. Ahora sigue sola con lo que quedo
+    // guardado de la sesion anterior. PAUSA sigue disponible en el boton.
     if (globalGenerationQueue.filter(i => i.status === 'pending').length > 0) {
-        window.JPI_COLA_PAUSADA = true;
-        appendConsoleLine('⏸ Hay trabajos guardados de la sesion anterior: quedan en pausa. Apreta PLAY para seguir.', 'system');
+        window.JPI_COLA_PAUSADA = false;
+        appendConsoleLine('▶ Hay trabajos guardados de la sesion anterior: sigo con ellos.', 'system');
+        setTimeout(function () {
+            try {
+                if (window.JPI_COLA_PAUSADA) return;       // lo pausaron a mano mientras tanto
+                if (typeof window.jpiColaReanudar === 'function') window.jpiColaReanudar();
+                else if (typeof checkGlobalQueue === 'function') checkGlobalQueue();
+            } catch (e) { }
+        }, 1200);
     }
 }
 
@@ -1724,7 +1730,11 @@ function checkGlobalQueue() {
             // Quién pide ESTE trabajo: la sesión de este navegador (no un usuario
             // global de la app, que se confundía si en la misma PC se logueaba otro).
             pedidoPor: quienPide(),
-            type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',            // De dónde salió: si el navegador es la web, el trabajo es 'web'            // (se sube a R2 y lo ve quien lo pidió); si es la app local, queda acá.            origen: esLaWeb() ? 'web' : 'local',
+            type: nextItem.type === 'storyboard' ? 'generarStoryboard' : 'generarImagen',
+            // De dónde salió: si el navegador es la web, el trabajo es 'web'
+            // (se sube a R2 y lo ve quien lo pidió); si es la app local, queda acá.
+            origen: esLaWeb() ? 'web' : 'local',
+
             prompt: nextItem.prompt,
             params: nextItem.params,
             imageFilename: nextItem.imageFilename,

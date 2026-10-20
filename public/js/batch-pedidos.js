@@ -140,8 +140,9 @@
         var enEspera = PEDIDOS.filter(function (p) { return (p.estado || '') === 'pedida'; }).length;
         var hechas = PEDIDOS.filter(function (p) { return p.estado === 'listo' || p.estado === 'sin_nube'; }).length;
         var pausada = !!window.JPI_COLA_PAUSADA;
-        var auto = false;
-        try { auto = localStorage.getItem('ck_auto_reanudar') === '1'; } catch (e) { }
+        // Default ON (pedido del usuario): entrar a la web y que la cola siga sola.
+        var auto = true;
+        try { auto = localStorage.getItem('ck_auto_reanudar') !== '0'; } catch (e) { }
         var barra = '<div class="batch-contadores">' +
             '<span class="bc bc-curso">⚙️ ' + enCurso.length + ' en curso</span>' +
             '<span class="bc bc-espera">⏳ ' + enEspera + ' en espera</span>' +
@@ -194,8 +195,9 @@
     }
 
     function autoReanudarSiCorresponde() {
-        var auto = false;
-        try { auto = localStorage.getItem('ck_auto_reanudar') === '1'; } catch (e) { }
+        // Default ON (pedido del usuario): al entrar, la cola sigue sola.
+        var auto = true;
+        try { auto = localStorage.getItem('ck_auto_reanudar') !== '0'; } catch (e) { }
         if (!auto) return;
         // si quedó algo en espera y la cola está pausada, arranca solo
         if (!window.JPI_COLA_PAUSADA) return;

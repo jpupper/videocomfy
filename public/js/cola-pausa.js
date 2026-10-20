@@ -1,5 +1,5 @@
 // ============================================================
-// COMFYLATAM - boton PAUSA de la cola
+// COMFYLATAM - boton PAUSA / PLAY de la cola
 // ------------------------------------------------------------
 // Pedido: ademas de STOP (que corta), un boton PAUSA que:
 //   - deja TERMINAR el item que esta generando ahora,
@@ -8,13 +8,21 @@
 //   - y al reanudar sigue por donde estaba.
 // El motor de la cola vive en js/script.js (checkGlobalQueue): ahi se consulta
 // window.JPI_COLA_PAUSADA. Este archivo solo pinta el boton y maneja el estado.
+//
+// DOS BOTONES, UN SOLO ESTADO (pedido del usuario 20-Oct):
+//   1) el de la columna izquierda, junto a guardar proyecto (si existe);
+//   2) el de STAGE, en la cabecera de la cola, junto a STOP ALL. Antes el PLAY
+//      vivia SOLO a la izquierda y en el celular ese panel ni se ve: desde
+//      STAGE no habia forma de reanudar.
+// La cola ARRANCA EN PLAY: al entrar no queda en pausa (ver script.js).
 // ============================================================
 (function () {
     'use strict';
 
     window.JPI_COLA_PAUSADA = false;
 
-    var btn = null;
+    var btn = null;        // el de la izquierda (compatibilidad)
+    var btnStage = null;   // el de STAGE
 
     function estado() {
         // El estado real vive dentro de script.js (exponia en window por si el
@@ -37,23 +45,58 @@
 
     function enCurso() { return estado().enCurso; }
 
-    function pintar() {
-        if (!btn) return;
-        var n = pendientes();
+    // En STAGE el numero que importa son los pedidos "pedida" del registro
+    // (los que estan en espera de verdad), no la cola del navegador.
+    function enEsperaRegistro() {
+        try {
+            var st = window.CKPedidos;
+            if (st && typeof st.contar === 'function') {
+                var c = st.contar();
+                return Number(c.enEspera || 0);
+            }
+        } catch (e) { }
+        return 0;
+    }
+
+    function pintarBoton(b, esStage) {
+        if (!b) return;
+        var n = esStage ? enEsperaRegistro() : pendientes();
         var enPausa = !!window.JPI_COLA_PAUSADA;
 
-        document.body.classList.toggle('jpi-cola-pausada', enPausa);
+        b.classList.add('jpi-pausa');
+        b.classList.toggle('pausado', enPausa);
 
-        btn.classList.add('jpi-pausa');
-        btn.classList.toggle('pausado', enPausa);
         if (enPausa) {
-            btn.textContent = '▶ REANUDAR' + (n ? ' (' + n + ')' : '');
-            btn.title = 'Cola en pausa: ' + n + ' item(s) listos (ready) esperando.\n' +
+            b.textContent = '▶ PLAY COLA' + (n ? ' (' + n + ')' : '');
+            b.title = 'Cola en pausa: ' + n + ' pedido(s) esperando.\n' +
                 'Lo que estaba generando termina solo; el resto NO se borró.';
         } else {
-            btn.textContent = (n ? '⏸ PAUSAR (' + n + ')' : '⏸ PAUSAR');
-            btn.title = 'Termina lo que está generando y deja el resto del batch en ready (no borra nada).';
+            b.textContent = (n ? '⏸ PAUSA (' + n + ')' : '⏸ PAUSA');
+            b.title = 'Termina lo que está generando y deja el resto en espera (no borra nada).';
         }
+
+        var info = document.getElementById('jpiStagePlayInfo');
+        if (info && esStage) {
+            if (enPausa) {
+                info.textContent = n
+                    ? 'cola en pausa · ' + n + ' en espera'
+                    : 'cola en pausa';
+                info.classList.add('en-pausa');
+            } else {
+                info.textContent = n
+                    ? 'cola andando · ' + n + ' en espera'
+                    : 'cola andando';
+                info.classList.remove('en-pausa');
+            }
+        }
+    }
+
+    function pintar() {
+        var enPausa = !!window.JPI_COLA_PAUSADA;
+        document.body.classList.toggle('jpi-cola-pausada', enPausa);
+
+        pintarBoton(btn, false);
+        pintarBoton(btnStage, true);
 
         // Cartel arriba de la cola mientras esta pausada
         var chip = document.getElementById('jpiPausaChip');
@@ -68,7 +111,7 @@
             var cur = enCurso();
             chip.textContent = '⏸ COLA EN PAUSA — ' +
                 (cur ? 'terminando lo que está en curso, ' : '') +
-                n + ' en espera (ready, sin borrar). Reanudá con ▶ REANUDAR.';
+                enEsperaRegistro() + ' en espera (sin borrar). Reanudá con ▶ PLAY COLA.';
         } else if (chip) {
             chip.remove();
         }
@@ -91,25 +134,52 @@
                 }
             } catch (e) { }
         }
+        setTimeout(pintar, 500);
     }
 
-    function crear() {
-        var ref = document.getElementById('saveProjectBtn');
-        if (!ref || document.getElementById('jpiPausaBtn')) return;
+    // El boton del panel IZQUIERDO (#piBtnPausar, de panel-izquierdo.js) ya
+    // escribe el mismo estado (JPI_COLA_PAUSADA): no se crea otro al lado de
+    // guardar proyecto. Tener tres botones iguales en la misma pantalla confunde
+    // (habia uno en el header, otro en STAGE y otro en el panel).
+    function engancharIzquierdo() {
+        var b = document.getElementById('piBtnPausar');
+        if (!b || b.__ckPlay) return;
+        b.__ckPlay = true;
+        b.addEventListener('click', function () { setTimeout(pintar, 60); });
+    }
 
-        btn = document.createElement('button');
-        btn.id = 'jpiPausaBtn';
-        btn.type = 'button';
-        btn.addEventListener('click', alternar);
-        ref.parentNode.insertBefore(btn, ref.nextSibling);
-
+    // ---------- boton de STAGE ----------
+    // Va en el HTML (dentro de #progressContainer) para que este SIEMPRE a la
+    // vista en la pestaña Stage, haya o no pedidos en la cola: la tarjeta de la
+    // cola se oculta cuando esta vacia y el boton desaparecia con ella.
+    function crearStage() {
+        var b = document.getElementById('jpiStagePlayBtn');
+        if (!b) return;
+        if (b !== btnStage) {
+            btnStage = b;
+            btnStage.classList.add('jpi-pausa');
+            btnStage.addEventListener('click', alternar);
+        }
         pintar();
-        setInterval(pintar, 2000);   // mantiene el contador de ready al dia
     }
+
+    function arrancar() {
+        engancharIzquierdo();
+        crearStage();
+        // La cabecera de la cola la mueve batch-pedidos.js: si todavia no estaba,
+        // se reintenta un par de veces (no se crea duplicado: se chequea el id).
+        setTimeout(crearStage, 800);
+        setTimeout(crearStage, 3000);
+        setInterval(pintar, 5000);
+    }
+
+    // Para que cualquier otro boton (panel izquierdo, atajos) use el MISMO toggle.
+    window.JPIColaToggle = alternar;
+    window.JPIColaPintar = pintar;
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', crear);
+        document.addEventListener('DOMContentLoaded', arrancar);
     } else {
-        crear();
+        arrancar();
     }
 })();

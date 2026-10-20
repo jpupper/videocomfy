@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/sidebar-collapse.css?v=1">
     <link rel="stylesheet" href="css/estado.css?v=1">
-    <link rel="stylesheet" href="css/cola-pausa.css?v=3">
+    <link rel="stylesheet" href="css/cola-pausa.css?v=5">
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
@@ -300,6 +300,14 @@
                         </div>
                         <div class="progress-bar-bg">
                             <div class="progress-bar-fill" id="progressFill"></div>
+                        </div>
+                        <!-- PLAY / PAUSA de la cola, EN STAGE y siempre a la vista
+                             (antes el único botón estaba en el panel izquierdo y en
+                             el celular ese panel no se veía). El estado es el mismo
+                             que el de la izquierda: un solo window.JPI_COLA_PAUSADA. -->
+                        <div class="ck-cola-play-row">
+                            <button type="button" id="jpiStagePlayBtn" class="jpi-pausa" title="Reanudar la cola">▶ PLAY COLA</button>
+                            <span id="jpiStagePlayInfo" class="ck-cola-play-info"></span>
                         </div>
                     </div>
                     
@@ -1141,16 +1149,16 @@
   <script src="js/fsc-token-fetch.js?v=3"></script>
     <script src="js/auth-jpi.js?v=17"></script>
     <script src="js/temas.js?v=1"></script>
-    <script src="js/script.js?v=108"></script>
-    <script src="js/mobile.js?v=1"></script>
+    <script src="js/script.js?v=109"></script>
+    <script src="js/mobile.js?v=2"></script>
     <script src="js/estado.js?v=6"></script>
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
-    <script src="js/cola-pausa.js?v=2"></script>
+    <script src="js/cola-pausa.js?v=4"></script>
     <script src="js/pedidos-store.js?v=2"></script>
 <script src="js/cola-comfy.js?v=6"></script>
     <script src="js/registro.js?v=6"></script>
-<script src="js/batch-pedidos.js?v=5"></script>
+<script src="js/batch-pedidos.js?v=6"></script>
     <script src="js/version.js?v=3"></script>
     <script src="js/ranking.js?v=5"></script>
     <script src="js/workflows-red.js?v=43"></script>
@@ -1167,7 +1175,7 @@
     <script src="js/paneles.js?v=1"></script>
     <script src="js/sidebar-collapse.js?v=1"></script>
     <script src="js/comfystage.js?v=2"></script>
-<script src="js/panel-izquierdo.js?v=15"></script>
+<script src="js/panel-izquierdo.js?v=16"></script>
     <script src="js/conexion.js?v=6"></script>
     <script src="js/modelos-estado.js?v=4"></script>
     <script src="js/progreso.js?v=2"></script>
