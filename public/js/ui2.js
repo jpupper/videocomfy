@@ -17,45 +17,43 @@
         return palabras.some(function (p) { return t.indexOf(p) >= 0; });
     }
 
-    // ---------- 1) STAGE: COMMUNITY + BATCH ----------
+    // ---------- 1) STAGE: GLOBAL + DEVICE ----------
+    // GLOBAL: registro que vive en el VPS (lo llena js/registro-global.js).
+    // DEVICE: lo que ESTE dispositivo tiene que generar (cola, a dónde va, etc.).
     function armarStage() {
         var stage = document.getElementById('tabOutput');
         if (!stage || document.getElementById('stageSubTabs')) return;
 
-        // junto TODOS los bloques del stage y los clasifico por su contenido
-        var bloques = [];
-        (function juntar(nodo) {
-            Array.prototype.slice.call(nodo.children || []).forEach(function (hijo) {
-                if (hijo.id === 'stageSubTabs') return;
-                // 🎬 ÚLTIMA GENERACIÓN: pedido explícito — se elimina, todo va al GLOBAL
-                if (contiene(hijo, ['última generación'])) { hijo.style.display = 'none'; hijo.setAttribute('data-ck-oculto', '1'); return; }
-                if (contiene(hijo, ['a dónde va'])) bloques.push({ nodo: hijo, tipo: 'batch' });
-                // el REGISTRO local del STAGE lo reemplaza el GLOBAL (VPS)
-                else if (contiene(hijo, ['registro'])) { hijo.style.display = 'none'; hijo.setAttribute('data-ck-oculto', '1'); }
-                else if (contiene(hijo, ['tu batch local', 'completed history', 'nothing to generate', 'en cola', 'pendientes', 'pedidos de la red', 'pedidos que llegan'])) bloques.push({ nodo: hijo, tipo: 'batch' });
-                else juntar(hijo);
-            });
-        })(stage);
-
-        if (!bloques.length) return;
-
         var community = document.createElement('div');
         community.id = 'stageCommunity';
         community.className = 'sub-tab-content active';
-        // cabecera del registro GLOBAL (lo llena js/registro-global.js)
         var cab = document.createElement('div');
         cab.id = 'regGlobalCaja';
         community.appendChild(cab);
-        var batch = document.createElement('div');
-        batch.id = 'stageBatch';
-        batch.className = 'sub-tab-content';
 
-        bloques.forEach(function (b) {
-            (b.tipo === 'community' ? community : batch).appendChild(b.nodo);
+        var device = document.createElement('div');
+        device.id = 'stageBatch';
+        device.className = 'sub-tab-content';
+
+        // todo lo que hoy está suelto en el stage, menos lo que se elimina,
+        // pasa a DEVICE (es la información del dispositivo)
+        Array.prototype.slice.call(stage.children).forEach(function (hijo) {
+            if (hijo.id === 'stageSubTabs') return;
+            var t = (hijo.textContent || '').toLowerCase();
+            if (t.indexOf('última generación') >= 0 || t.indexOf('ultima generacion') >= 0) {
+                hijo.style.display = 'none';
+                hijo.setAttribute('data-ck-oculto', '1');
+                return;
+            }
+            if (t.indexOf('registro') >= 0) {   // el registro local lo reemplaza el GLOBAL
+                hijo.style.display = 'none';
+                hijo.setAttribute('data-ck-oculto', '1');
+                return;
+            }
+            if (hijo.id === 'ckFlujo') return;  // el mapa queda arriba de todo, fijo
+            device.appendChild(hijo);
         });
 
-        // COMFYSTAGE: consola + estado del motor. SOLO en la app local (la web
-        // no tiene ComfyUI propio: ahí no se muestra la pestaña).
         var esWebAqui = (function () {
             try {
                 var h = location.hostname;
@@ -71,9 +69,9 @@
             '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🖥️ DEVICE</button>' +
             (esWebAqui ? '' : '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>');
 
-        stage.appendChild(barra);
+        stage.insertBefore(barra, stage.firstChild);   // la barra arriba del mapa
         stage.appendChild(community);
-        stage.appendChild(batch);
+        stage.appendChild(device);
         if (!esWebAqui) {
             var comfy = document.createElement('div');
             comfy.id = 'stageComfy';
