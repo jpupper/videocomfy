@@ -82,6 +82,86 @@
 .ck-paso-haciendo { background: rgba(59, 130, 246, 0.18); border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
 .ck-paso-ok { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
 .ck-paso-flecha { color: #475569; }
+
+/* ── LÍNEA DE METRO DEL PROCESO ───────────────────────────────────────────
+   Las estaciones del trabajo (WEB → LOCAL → COMFY → LOCAL → WEB en la web,
+   LOCAL → COMFY → LOCAL en local). El punto lleno y palpitante es la estación
+   donde está el trabajo AHORA; los anteriores quedan verdes, los que faltan
+   apagados. Reemplaza los chips "Nodo → Comfy → Nube". */
+.ck-metro {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-top: 10px;
+    padding: 2px 0 0;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.ck-metro::-webkit-scrollbar { display: none; }
+.ck-metro-par {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 44px;
+    flex-shrink: 0;
+}
+.ck-metro-punto {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, .18);
+    border: 2px solid rgba(148, 163, 184, .45);
+    transition: background .25s ease, border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+}
+.ck-metro-nombre { color: #64748b; transition: color .25s ease; }
+.ck-metro-linea {
+    height: 2px;
+    flex: 1 1 26px;
+    min-width: 18px;
+    margin-bottom: 16px;
+    background: rgba(148, 163, 184, .22);
+    transition: background .25s ease;
+}
+.ck-metro-linea.on { background: rgba(34, 197, 94, .65); }
+
+/* estación ya pasada */
+.ck-metro-pasado .ck-metro-punto { background: #22c55e; border-color: #22c55e; }
+.ck-metro-pasado .ck-metro-nombre { color: #86efac; }
+
+/* estación ACTUAL: prendida, con halo y latido */
+.ck-metro-actual .ck-metro-punto {
+    background: #4ade80;
+    border-color: #bbf7d0;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .18), 0 0 10px rgba(34, 197, 94, .75);
+    animation: ck-metro-latido 1.15s ease-in-out infinite;
+}
+.ck-metro-actual .ck-metro-nombre { color: #eafff2; }
+
+/* terminado: todas verdes, la última con halo fijo */
+.ck-metro-final .ck-metro-punto {
+    background: #22c55e;
+    border-color: #86efac;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .16);
+}
+.ck-metro-final .ck-metro-nombre { color: #bbf7d0; }
+
+/* error: la estación donde se cortó, en rojo */
+.ck-metro-roto .ck-metro-punto {
+    background: #ef4444;
+    border-color: #fca5a5;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .16);
+}
+.ck-metro-roto .ck-metro-nombre { color: #fca5a5; }
+.ck-metro-error .ck-metro-linea.on { background: rgba(239, 68, 68, .45); }
+
+@keyframes ck-metro-latido {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.22); }
+}
 @media (max-width: 1024px) { .ck-conexion-banner { font-size: 0.76rem; } }
 
 /* ============================================================================

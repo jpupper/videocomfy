@@ -159,12 +159,40 @@
         if (seguir) alFondo();
     }
 
+    // En la WEB los logs no están acá: se los pide al HUB, que los relayea por el
+    // túnel a la PC conectada (/p/<nodo>/api/comfy/consola). La app local, a su vez,
+    // lee el motor que esté activo (ComfyUI local o el RunPod configurado), así que
+    // esto muestra los logs reales del motor que generó, sea cual sea.
+    function esModoWeb() {
+        var h = String(location.hostname || '');
+        return !/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h);
+    }
+    function nodoElegido() {
+        try {
+            var e = (window.comfyRed && window.comfyRed.estado) || {};
+            if (e.elegido) return e.elegido;
+        } catch (err) { }
+        try { return localStorage.getItem('comfylatam_nodo_elegido') || ''; } catch (err) { return ''; }
+    }
+    function urlConsola() {
+        var q = '/api/comfy/consola?limite=250';
+        if (!esModoWeb()) return q;
+        var base = ((window.JPI && window.JPI.API_BASE) || '').replace(/\/+$/, '');
+        var n = nodoElegido();
+        return base + (n ? '/p/' + encodeURIComponent(n) : '') + q;
+    }
+
     function traer() {
         var caja = document.getElementById('stageComfy');
         if (!caja) return;
         // sólo consulta cuando la pestaña está visible
         if (!caja.classList.contains('active') || caja.offsetParent === null) return;
-        fetch('/api/comfy/consola?limite=250', { cache: 'no-store' })
+        if (esModoWeb() && !nodoElegido()) {
+            var lg = document.getElementById('cfsLog');
+            if (lg) lg.textContent = 'elegí una computadora en la pestaña RED: los logs de ComfyUI son los de esa PC.';
+            return;
+        }
+        fetch(urlConsola(), { cache: 'no-store' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 errores = 0;

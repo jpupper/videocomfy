@@ -161,7 +161,47 @@
         pintarPasos();
     }
 
-    // mini-timeline: Nodo → Comfy → Nube (se ve TODO el proceso)
+    // ---------- línea de METRO: las estaciones reales del trabajo ----------
+    // Antes eran chips "Nodo → Comfy → Nube", que no decían nada del camino real.
+    // Ahora es una línea de puntos con las estaciones del proceso:
+    //   web:   WEB → LOCAL → COMFY → LOCAL → WEB
+    //   local: LOCAL → COMFY → LOCAL
+    // El punto lleno y palpitando es la estación donde está el trabajo ahora.
+    function paradas() {
+        if (esWeb) {
+            return [
+                { k: 'WEB', t: 'WEB', d: 'el pedido sale de la web' },
+                { k: 'LOCAL', t: 'LOCAL', d: 'la computadora conectada lo recibe' },
+                { k: 'COMFY', t: 'COMFY', d: 'está generando' },
+                { k: 'LOCAL2', t: 'LOCAL', d: 'vuelve a la computadora' },
+                { k: 'WEB2', t: 'WEB', d: 'sube a la nube y la ves en la web' }
+            ];
+        }
+        return [
+            { k: 'LOCAL', t: 'LOCAL', d: 'sale de esta PC' },
+            { k: 'COMFY', t: 'COMFY', d: 'está generando' },
+            { k: 'LOCAL2', t: 'LOCAL', d: 'vuelve a esta PC' }
+        ];
+    }
+
+    function estacionActual() {
+        var e = S.etapa;
+        if (e === 'reposo' || e === 'sinNodo' || e === 'detenido') return -1;
+        if (!esWeb) {
+            if (e === 'pidiendo' || e === 'enviado') return 0;
+            if (e === 'comfy') return 1;
+            if (e === 'nube' || e === 'listo' || e === 'error') return 2;
+            return 0;
+        }
+        if (e === 'pidiendo') return 0;
+        if (e === 'enviado') return 1;
+        if (e === 'comfy') return 2;
+        if (e === 'nube') return 3;
+        if (e === 'listo') return 4;
+        if (e === 'error') return -2;      // se queda donde estaba, pintado en rojo
+        return 0;
+    }
+
     function pintarPasos() {
         var cont = document.getElementById('ckProgPasos');
         if (!cont) {
@@ -169,16 +209,35 @@
             if (!caja) return;
             cont = document.createElement('div');
             cont.id = 'ckProgPasos';
-            cont.className = 'ck-prog-pasos';
+            cont.className = 'ck-metro';
             caja.appendChild(cont);
         }
-        // se muestra siempre: en local el paso "Nodo" es esta misma PC
+        cont.className = 'ck-metro' + (S.etapa === 'error' ? ' ck-metro-error' : '');
         cont.style.display = 'flex';
-        cont.innerHTML = PASOS.map(function (p) {
-            var est = S.pasos[p] || 'espera';
-            var icono = est === 'ok' ? '✅' : (est === 'haciendo' ? '⏳' : '•');
-            return '<span class="ck-paso ck-paso-' + est + '">' + icono + ' ' + p + '</span>';
-        }).join('<span class="ck-paso-flecha">→</span>');
+        var idx = estacionActual();
+        var roto = (S.etapa === 'error');
+        // en error no hay estación nueva: se marca la última que se sabe
+        var ultimoBueno = (S.pasos && S.pasos.__idx >= 0) ? S.pasos.__idx : idx;
+        if (idx >= 0) S.pasos.__idx = idx;
+        var activo = (idx >= 0) ? idx : (roto ? ultimoBueno : -1);
+        var estaciones = paradas();
+        var html = '';
+        estaciones.forEach(function (p, i) {
+            var estado = 'futuro';
+            if (activo >= 0) {
+                if (i < activo) estado = 'pasado';
+                else if (i === activo) estado = (S.etapa === 'listo' ? 'final' : 'actual');
+            }
+            if (roto && i === activo) estado = 'roto';
+            if (i > 0) {
+                html += '<span class="ck-metro-linea' + (i <= activo && !roto ? ' on' : '') + '"></span>';
+            }
+            html += '<span class="ck-metro-par ck-metro-' + estado + '" title="' + esc(p.d) + '">' +
+                '<span class="ck-metro-punto"></span>' +
+                '<span class="ck-metro-nombre">' + esc(p.t) + '</span>' +
+                '</span>';
+        });
+        cont.innerHTML = html;
     }
 
     function etapa(nombre, datos) {

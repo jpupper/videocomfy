@@ -84,17 +84,18 @@
         barra.innerHTML =
             '<button class="sub-tab-btn sub-tab-btn-std active" data-sub="stageCommunity">🌐 GLOBAL</button>' +
             '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🖥️ DEVICE</button>' +
-            (esWebAqui ? '' : '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>');
+            // COMFYSTAGE también en la web: muestra los logs del ComfyUI de la PC
+            // conectada (el hub los relayea por el túnel, y sirve igual si genera
+            // con RunPod porque la app local lee el motor que esté activo).
+            '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>';
 
         stage.insertBefore(barra, stage.firstChild);
         stage.appendChild(community);
         stage.appendChild(device);
-        if (!esWebAqui) {
-            var comfy = document.createElement('div');
-            comfy.id = 'stageComfy';
-            comfy.className = 'sub-tab-content';
-            stage.appendChild(comfy);
-        }
+        var comfy = document.createElement('div');
+        comfy.id = 'stageComfy';
+        comfy.className = 'sub-tab-content';
+        stage.appendChild(comfy);
         // "últimas completadas": fuera (todo va al GLOBAL), esté donde esté
         var hist = document.getElementById('completedHistoryContainer');
         if (hist) { hist.style.display = 'none'; hist.setAttribute('data-ck-oculto', '1'); }

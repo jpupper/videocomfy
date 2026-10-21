@@ -152,6 +152,10 @@ function handleWsMessage(event) {
         // El pipeline (nodo → comfy → nube) lo dibuja js/progreso.js: un solo dueño
         // de la barra, para que no diga una cosa arriba y otra abajo.
         if (window.CKProgreso) { try { window.CKProgreso.msg(message); } catch (e) { } }
+        // El aviso de partículas verdes y la sincronización de STUDIO ASSETS
+        // escuchan el mismo flujo de mensajes (ver js/aviso-generado.js y js/sync-assets.js).
+        if (window.CKAviso) { try { window.CKAviso.msg(message); } catch (e) { } }
+        if (window.CKSyncAssets) { try { window.CKSyncAssets.msg(message); } catch (e) { } }
         // No se registran los mensajes que llegan todo el tiempo (estado de la red,
 // clientes, progreso): antes llenaban la consola con bloques enormes.
       // NADA de volcados automáticos: el estado de la red, la cola y el latido
