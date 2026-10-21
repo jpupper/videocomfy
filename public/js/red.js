@@ -202,6 +202,22 @@
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
 
+        // ⚙️ AJUSTES vivía en la pestaña SETTINGS (se borró): ahora es una
+        // sección más de CONEXIÓN. El bloque está en el HTML y se mueve acá,
+        // así los ids (#ckComfyAddress, etc.) siguen funcionando igual.
+        (function () {
+            var ajustes = document.getElementById('ckAjustesBloque');
+            if (ajustes && !panel.contains(ajustes)) {
+                var titulo = document.createElement('h3');
+                titulo.className = 'red-titulo';
+                titulo.textContent = '⚙️ MI MOTOR — dónde genera esta PC';
+                var gen = panel.querySelector('.red-gen');
+                if (gen && gen.parentNode === panel) panel.insertBefore(titulo, gen);
+                else panel.appendChild(titulo);
+                panel.insertBefore(ajustes, titulo.nextSibling);
+            }
+        })();
+
         // ── ACCESO: quién puede usar mi PC y cada workflow ───────────────────
         // Pedido del usuario: pestaña propia con 3 sub-pestañas (EQUIPO,
         // WORKFLOWS y PERMISOS), separada de COMUNIDAD.
@@ -646,6 +662,8 @@
 
                 // ☁️ RUNPODS: se muestran como un nodo más (son ComfyUI en la nube).
         var runpods = (window.CK_runpods && window.CK_runpods.lista) ? window.CK_runpods.lista() : [];
+        // el ojo manda también acá: con "ocultar" sólo se ven los que están en línea
+        if (!ESTADO.verPasados) runpods = runpods.filter(function (rp) { return rp.enLinea; });
         runpods.forEach(function (rp) { tarjetas.push(tarjetaRunpod(rp)); });
 
 cont.innerHTML = tarjetas.length ? tarjetas.join('\n')

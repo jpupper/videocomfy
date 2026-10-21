@@ -19,16 +19,11 @@
     var BASE = J.API_BASE || '';
     var esLocal = !!J.esServidor;
 
-    var ICONO = {
-        pedida: '⏳', en_comfy: '⚙️', devuelta: '📥', subiendo: '☁️',
-        listo: '✅', cancelada: '✖', interrumpida: '⚠️', error: '⚠️', sin_nube: '💾'
-    };
-    var TEXTO = {
-        pedida: 'pedida', en_comfy: 'en ComfyUI', devuelta: 'volvió al local',
-        subiendo: 'subiendo a la nube', listo: 'lista', cancelada: 'cancelada',
-        interrumpida: 'interrumpida', error: 'error', sin_nube: 'lista (quedó local)'
-    };
-    var EN_CURSO = ['pedida', 'en_comfy', 'devuelta', 'subiendo'];
+    // ÚNICA fuente: js/estados.js
+    var E = window.CKEstados || {};
+    var ICONO = E.ICONO || {};
+    var TEXTO = E.TEXTO || {};
+    var EN_CURSO = E.ACTIVOS || ['pedida', 'en_comfy', 'devuelta', 'subiendo'];
 
     // los datos vienen del store único (js/pedidos-store.js): el panel izquierdo,
     // el BATCH y el REGISTRO leen SIEMPRE lo mismo

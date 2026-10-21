@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/style.css?v=2">
     <!-- TEMA: los colores de toda la app (ver css/GUIA-DE-ESTILOS.md) -->
     <link rel="stylesheet" href="css/tema.css?v=1">
+    <link rel="stylesheet" href="css/flujo.css?v=1">
     <!-- el tema guardado se aplica ANTES de pintar, para que no haya flash -->
     <script>
         (function () {
@@ -21,7 +22,6 @@
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/sidebar-collapse.css?v=1">
     <link rel="stylesheet" href="css/estado.css?v=1">
-    <link rel="stylesheet" href="css/cola-pausa.css?v=5">
     <link rel="stylesheet" href="css/auth-jpi.css?v=1">
     <link rel="stylesheet" href="css/energia.css?v=1">
     <link rel="stylesheet" href="css/settings-jpi.css?v=1">
@@ -176,7 +176,6 @@
                         <div class="pi-cola-empty">No hay generaciones pendientes</div>
                     </div>
                     <div class="pi-cola-actions">
-                        <button type="button" class="pi-cola-btn pause" id="piBtnPausar">⏸ Pausar</button>
                         <button type="button" class="pi-cola-btn stage" id="piBtnStage">🎯 Ver en Stage</button>
                     </div>
                 </div>
@@ -247,7 +246,6 @@
                     <button class="tab-button tab-button-std" id="tabEditorBtn" data-target="tabEditor">Editor</button>
                     <button class="tab-button tab-button-std" id="tabLogsBtn" data-target="tabLogs">CONSOLE</button>
                     <button class="tab-button tab-button-std" id="tabRankingBtn" data-target="tabRanking">Ranking</button>
-                    <button class="tab-button tab-button-std" id="tabSettingsBtn" data-target="tabSettings">Settings</button>
                     <button class="tab-button tab-button-std red-tab-btn" id="tabRedBtn" data-target="panelRed">CONEXIÓN</button>
                     <button class="tab-button tab-button-std" id="tabAccesoBtn" data-target="panelAcceso">ACCESO</button>
                     <button class="tab-button tab-button-std cuenta-tab-btn ck-perfil-btn" id="jpiCuentaBtn" data-target="tabCuenta">LOGIN</button>
@@ -294,6 +292,8 @@
                 </div>
 
                 <div class="tab-content active" id="tabOutput">
+                    <!-- MAPA: dónde está la pelota (js/flujo.js) -->
+                    <div id="ckFlujo"></div>
                     <div class="progress-container-std" id="progressContainer">
                         <div class="progress-header">
                             <span id="progressText" class="progress-label">Ready for generation...</span>
@@ -302,15 +302,7 @@
                         <div class="progress-bar-bg">
                             <div class="progress-bar-fill" id="progressFill"></div>
                         </div>
-                        <!-- PLAY / PAUSA de la cola, EN STAGE y siempre a la vista
-                             (antes el único botón estaba en el panel izquierdo y en
-                             el celular ese panel no se veía). El estado es el mismo
-                             que el de la izquierda: un solo window.JPI_COLA_PAUSADA. -->
-                        <div class="ck-cola-play-row">
-                            <button type="button" id="jpiStagePlayBtn" class="jpi-pausa" title="Reanudar la cola">▶ PLAY COLA</button>
-                            <span id="jpiStagePlayInfo" class="ck-cola-play-info"></span>
-                        </div>
-                    </div>
+                        
                     
                     <!-- COLA DE COMFYUI: lo que el motor tiene de verdad (puede
                          incluir trabajo de corridas anteriores que la app ya no
@@ -926,8 +918,8 @@
                 </div>
 
                 <!-- ============ SETTINGS ============ -->
-                <div class="tab-content" id="tabSettings">
-                    <div class="ck-set-wrap">
+                <!-- AJUSTES: no es una pestaña propia; red.js lo mueve adentro de CONEXIÓN -->
+                <div id="ckAjustesBloque" class="ck-set-wrap">
                         <div class="ck-set-card ck-set-comfy">
                             <div class="ck-set-titulo ck-set-comfy">⚙️ <span>COMFO</span> — dónde está tu ComfyUI</div>
                             <div class="ck-set-desc">
@@ -981,7 +973,6 @@
                             <div class="ck-set-estado" id="ckSetDetalle"></div>
                         </div>
                     </div>
-                </div>
 
             </div>
 
@@ -1155,8 +1146,8 @@
     <script src="js/estado.js?v=6"></script>
     <script src="js/scroll-guard.js?v=1"></script>
     <script src="js/assets-thumbs.js?v=1"></script>
-    <script src="js/cola-pausa.js?v=4"></script>
-    <script src="js/pedidos-store.js?v=2"></script>
+    <script src="js/estados.js?v=2"></script>
+    <script src="js/pedidos-store.js?v=3"></script>
 <script src="js/cola-comfy.js?v=6"></script>
     <script src="js/registro.js?v=6"></script>
 <script src="js/batch-pedidos.js?v=6"></script>
@@ -1164,7 +1155,8 @@
     <script src="js/ranking.js?v=5"></script>
     <script src="js/workflows-red.js?v=44"></script>
     <script src="js/acceso-permisos.js?v=2"></script>
-    <script src="js/runpods.js?v=2"></script>
+    <script src="js/runpods.js?v=3"></script>
+    <script src="js/flujo.js?v=1"></script>
     <script src="js/create-workflows.js?v=1"></script>
     <script src="js/ui-ajustes.js?v=1"></script>
     <script src="js/ui2.js?v=10"></script>

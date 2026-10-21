@@ -1,0 +1,76 @@
+/* STAGE → mapa de la cadena (WEB → EQUIPO → MOTOR) */
+#ckFlujo { margin: 10px 0 14px; }
+
+.fl-titulo-panel {
+    font-size: .78rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.fl-archivo { color: var(--accent, #22d3ee); font-family: monospace; text-transform: none; letter-spacing: 0; }
+
+.fl-cadena {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+
+.fl-caja {
+    flex: 1 1 0;
+    min-width: 150px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #243044);
+    background: var(--card, #0d1420);
+    opacity: .55;
+    transition: opacity .2s, border-color .2s, box-shadow .2s;
+}
+.fl-caja.ok { opacity: 1; border-color: var(--accent, #22d3ee); box-shadow: 0 0 0 1px rgba(34,211,238,.25) inset; }
+.fl-caja.espera { opacity: .9; border-color: #f59e0b; }
+.fl-caja.hecho { opacity: 1; border-color: #22c55e; }
+.fl-caja.mal { opacity: 1; border-color: #ef4444; }
+
+.fl-icono { font-size: 1.3rem; line-height: 1; }
+.fl-texto { min-width: 0; }
+.fl-titulo { font-weight: 700; color: var(--foreground, #e2e8f0); font-size: .92rem; }
+.fl-sub { font-size: .74rem; color: var(--text-muted, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-estado { font-size: .76rem; color: var(--text-muted, #94a3b8); margin-top: 2px; }
+.fl-caja.ok .fl-estado { color: var(--accent, #22d3ee); }
+.fl-caja.hecho .fl-estado { color: #22c55e; }
+.fl-caja.mal .fl-estado { color: #ef4444; }
+.fl-caja.espera .fl-estado { color: #f59e0b; }
+
+.fl-flecha {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    color: var(--border, #243044);
+    font-size: 1.2rem;
+    transition: color .2s;
+}
+.fl-flecha.on { color: var(--accent, #22d3ee); }
+
+.fl-nota {
+    margin-top: 8px;
+    font-size: .78rem;
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 720px) {
+    .fl-cadena { flex-wrap: wrap; }
+    .fl-caja { flex: 1 1 100%; }
+    .fl-flecha { display: none; }
+}

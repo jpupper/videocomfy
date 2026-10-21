@@ -20,10 +20,12 @@
     var J = window.JPI || {};
     var BASE = J.API_BASE || '';
 
-    var EN_CURSO = ['en_comfy', 'devuelta', 'subiendo'];
-    var EN_ESPERA = ['pedida'];
-    var HECHAS = ['listo', 'sin_nube'];
-    var CANCELADAS = ['cancelada', 'interrumpida', 'error'];
+    // ÚNICA fuente: js/estados.js (antes cada panel tenía su copia)
+    var E = window.CKEstados || {};
+    var EN_CURSO = E.EN_CURSO || ['en_comfy', 'devuelta', 'subiendo'];
+    var EN_ESPERA = E.EN_ESPERA || ['pedida'];
+    var HECHAS = E.HECHAS || ['listo', 'sin_nube'];
+    var CANCELADAS = E.CANCELADAS || ['cancelada', 'interrumpida', 'error'];
 
     var store = {
         lista: [],
@@ -34,15 +36,8 @@
         _t: null,
         EN_CURSO: EN_CURSO, EN_ESPERA: EN_ESPERA, HECHAS: HECHAS, CANCELADAS: CANCELADAS,
 
-        ICONO: {
-            pedida: '⏳', en_comfy: '⚙️', devuelta: '📥', subiendo: '☁️',
-            listo: '✅', cancelada: '✖', interrumpida: '⚠️', error: '⚠️', sin_nube: '💾'
-        },
-        TEXTO: {
-            pedida: 'pedida', en_comfy: 'en ComfyUI', devuelta: 'volvió al local',
-            subiendo: 'subiendo a la nube', listo: 'lista', cancelada: 'cancelada',
-            interrumpida: 'interrumpida', error: 'error', sin_nube: 'lista (quedó local)'
-        },
+        ICONO: E.ICONO || {},
+        TEXTO: E.TEXTO || {},
 
         // ---- suscripción: todos los paneles se enteran del mismo dato ----
         suscribir: function (fn) {
