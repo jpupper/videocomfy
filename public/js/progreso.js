@@ -172,7 +172,7 @@
             cont.className = 'ck-prog-pasos';
             caja.appendChild(cont);
         }
-        if (!esWeb) { cont.style.display = 'none'; return; }
+        // se muestra siempre: en local el paso "Nodo" es esta misma PC
         cont.style.display = 'flex';
         cont.innerHTML = PASOS.map(function (p) {
             var est = S.pasos[p] || 'espera';

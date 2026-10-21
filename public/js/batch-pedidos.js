@@ -149,9 +149,8 @@
         var html = barra;
         if (enCurso.length) html += enCurso.map(fila).join('');
         else html += '<div class="batch-vacio">no hay nada pendiente de generar</div>';
-        if (terminadas.length) {
-            html += '<div class="batch-subtitulo">últimas</div>' + terminadas.map(fila).join('');
-        }
+        // Las "últimas" ya no van acá: el historial completo vive en GLOBAL.
+        // DEVICE muestra SOLO lo que este dispositivo tiene que generar.
         cont.innerHTML = html;
     }
 

@@ -19,7 +19,13 @@
 
     // ---------- 1) STAGE: GLOBAL + DEVICE ----------
     // GLOBAL: registro que vive en el VPS (lo llena js/registro-global.js).
-    // DEVICE: lo que ESTE dispositivo tiene que generar (cola, a dónde va, etc.).
+    // DEVICE: lo que ESTE dispositivo tiene que generar (a dónde va, cola, batch).
+    // OJO: sólo se mueven los bloques que se reconocen por su texto. Otros
+    // paneles (CREATE, EDITOR, CONSOLE…) comparten el DOM: mover "todo lo que
+    // sobra" los rompía (esa fue la regresión que dejó CREATE y CONSOLE vacíos).
+    var DEVICE_TXT = ['a dónde va', 'tu batch local', 'completed history', 'nothing to generate',
+        'en cola', 'pendientes', 'pedidos de la red', 'pedidos que llegan'];
+
     function armarStage() {
         var stage = document.getElementById('tabOutput');
         if (!stage || document.getElementById('stageSubTabs')) return;
@@ -35,24 +41,35 @@
         device.id = 'stageBatch';
         device.className = 'sub-tab-content';
 
-        // todo lo que hoy está suelto en el stage, menos lo que se elimina,
-        // pasa a DEVICE (es la información del dispositivo)
-        Array.prototype.slice.call(stage.children).forEach(function (hijo) {
-            if (hijo.id === 'stageSubTabs') return;
-            var t = (hijo.textContent || '').toLowerCase();
-            if (t.indexOf('última generación') >= 0 || t.indexOf('ultima generacion') >= 0) {
-                hijo.style.display = 'none';
-                hijo.setAttribute('data-ck-oculto', '1');
-                return;
-            }
-            if (t.indexOf('registro') >= 0) {   // el registro local lo reemplaza el GLOBAL
-                hijo.style.display = 'none';
-                hijo.setAttribute('data-ck-oculto', '1');
-                return;
-            }
-            if (hijo.id === 'ckFlujo') return;  // el mapa queda arriba de todo, fijo
-            device.appendChild(hijo);
-        });
+        var bloques = [];
+        (function juntar(nodo) {
+            Array.prototype.slice.call(nodo.children || []).forEach(function (hijo) {
+                // el progreso y las colas NO se mueven: se quedan arriba de todo
+                if (!hijo) return;
+                if (['stageSubTabs', 'ckFlujo', 'progressContainer'].indexOf(hijo.id) >= 0) return;
+                if (/^queueCola/.test(hijo.id || '')) return;
+                var t = texto(hijo).toLowerCase();
+                if (t.indexOf('última generación') >= 0 || t.indexOf('ultima generacion') >= 0) {
+                    hijo.style.display = 'none';
+                    hijo.setAttribute('data-ck-oculto', '1');
+                    return;
+                }
+                if (hijo.id === 'completedHistoryContainer' || t.indexOf('completed history') >= 0) {
+                    hijo.style.display = 'none';   // "últimas completadas": lo reemplaza el GLOBAL
+                    hijo.setAttribute('data-ck-oculto', '1');
+                    return;
+                }
+                if (t.indexOf('registro') >= 0) {   // el registro local lo reemplaza el GLOBAL
+                    hijo.style.display = 'none';
+                    hijo.setAttribute('data-ck-oculto', '1');
+                    return;
+                }
+                if (DEVICE_TXT.some(function (p) { return t.indexOf(p) >= 0; })) { bloques.push(hijo); return; }
+                juntar(hijo);   // sigue buscando más adentro
+            });
+        })(stage);
+
+        bloques.forEach(function (b) { device.appendChild(b); });
 
         var esWebAqui = (function () {
             try {
@@ -69,7 +86,7 @@
             '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🖥️ DEVICE</button>' +
             (esWebAqui ? '' : '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>');
 
-        stage.insertBefore(barra, stage.firstChild);   // la barra arriba del mapa
+        stage.insertBefore(barra, stage.firstChild);
         stage.appendChild(community);
         stage.appendChild(device);
         if (!esWebAqui) {
@@ -78,6 +95,10 @@
             comfy.className = 'sub-tab-content';
             stage.appendChild(comfy);
         }
+        // "últimas completadas": fuera (todo va al GLOBAL), esté donde esté
+        var hist = document.getElementById('completedHistoryContainer');
+        if (hist) { hist.style.display = 'none'; hist.setAttribute('data-ck-oculto', '1'); }
+
         enganchar(barra);
     }
 
