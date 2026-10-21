@@ -126,7 +126,7 @@
             '<div class="red-aviso" id="redAviso"></div>',
 
             // ── RunPods del usuario (ComfyUI remoto, queda en su perfil) ──────
-            '<h3 class="red-titulo">☁️ AGREGAR UN RUNPOD <span class="red-sub-chico">(aparece en la lista de arriba como un nodo más)</span></h3>',
+            '<h3 class="red-titulo">☁️ AGREGAR UN RUNPOD <span class="red-sub-chico">(aparece abajo en la lista como un nodo más)</span></h3>',
 
             '<div class="red-disponibles" id="redDisponibles"></div>',
             '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
@@ -792,7 +792,7 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
         return [
             '<div class="red-nodo runpod">',
             '  <div class="nombre">☁️ ' + esc(rp.nombre || 'RunPod'),
-            '    <span class="red-badge">runpod</span>',
+            '    <span class="red-badge">☁️ web</span>',
             '    <span class="red-badge ' + (vivo ? 'comparto' : '') + '">' + (vivo ? '✅ EN LÍNEA' : 'sin respuesta') + '</span>',
             '  </div>',
             lineas.map(function (l) { return '  <div class="linea">' + l + '</div>'; }).join('\n'),
