@@ -817,7 +817,8 @@ app.get(rutasRed('/api/red/runpods'), async (req, res) => {
 app.post(rutasRed('/api/red/runpods'), express.json({ limit: '8kb' }), async (req, res) => {
     const quien = autorizadoRed(req);
     if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
-    const dueno = cuentaDe(quien);
+    // desde la app local viene el dueño en el body (el token de nodo no trae cuenta)
+    const dueno = cuentaDe(quien) || String((req.body || {}).dueno || '').trim().toLowerCase();
     const r = await db.guardarRunpod(dueno, req.body || {});
     if (r.success) console.log('☁️  RunPod de ' + dueno + ': ' + ((req.body || {}).url || ''));
     res.json(r);
@@ -826,7 +827,7 @@ app.post(rutasRed('/api/red/runpods'), express.json({ limit: '8kb' }), async (re
 app.post(rutasRed('/api/red/runpods/borrar'), express.json({ limit: '4kb' }), async (req, res) => {
     const quien = autorizadoRed(req);
     if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
-    const dueno = cuentaDe(quien);
+    const dueno = cuentaDe(quien) || String((req.body || {}).dueno || '').trim().toLowerCase();
     res.json(await db.borrarRunpod(dueno, String((req.body || {}).id || '')));
 });
 
