@@ -2772,7 +2772,9 @@ const anunciarGlobal = (function () {
                 headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
                 body: JSON.stringify({ pedidos: recorte }),
                 signal: AbortSignal.timeout(8000)
-            }).then(function (r) { console.log('🌐 [GLOBAL] ' + recorte.length + ' pedido(s) -> ' + r.status); })
+            }).then(function (r) { return r.json().then(function (d) {
+                    console.log('🌐 [GLOBAL] ' + recorte.length + ' -> ' + r.status + ' ok=' + (d && d.success) + ' n=' + ((d && d.n) || 0) + ' ' + ((d && d.message) || ''));
+                }).catch(function () { console.log('🌐 [GLOBAL] ' + recorte.length + ' -> ' + r.status + ' (sin cuerpo)'); }); })
                 .catch(function (e) { console.log('⚠️  [GLOBAL] ' + e.message + ' (hub ' + RED.hub + ')'); });
         }, 900);
     };

@@ -804,6 +804,8 @@ app.post(rutasRed('/api/red/pedidos-global'), express.json({ limit: '2mb' }), as
     }
     const lista = Array.isArray((req.body || {}).pedidos) ? req.body.pedidos : [];
     const r = await db.registrarPedidosGlobal(lista);
+    if (!r.ok) console.log('⚠️  [GLOBAL] no pude guardar ' + lista.length + ' pedido(s): ' + (r.error || 'sin detalle'));
+    else console.log('🌐 [GLOBAL] guardé ' + r.n + ' pedido(s)');
     if (r.ok) {
         try { io.emit('pedidos_global', { actualizado: Date.now(), n: r.n }); } catch (e) { }
     }
