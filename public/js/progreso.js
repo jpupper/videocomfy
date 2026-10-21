@@ -287,13 +287,18 @@
     }
 
     // ---------- estado de las colas (app + ComfyUI) ----------
+    // 'listo' / 'error' son FINALES: no se pisan con reposo ni con "no estás
+    // conectado" — el usuario tiene que poder leer cómo terminó.
+    function esFinal() {
+        return S.etapa === 'listo' || S.etapa === 'error' || S.etapa === 'detenido';
+    }
     function colas(d) {
         d = d || {};
         if (d.app !== undefined) S.colaApp = Number(d.app) || 0;
         if (d.comfy !== undefined) S.colaComfy = Number(d.comfy) || 0;
         // si no hay nada en ninguna cola y no hay una etapa activa, volvemos a reposo
         var activa = (S.etapa === 'comfy' || S.etapa === 'nube' || S.etapa === 'pidiendo' || S.etapa === 'enviado');
-        if (!activa && !hayTrabajo()) {
+        if (!activa && !hayTrabajo() && !esFinal()) {
             if (esWeb) etapa(nodoElegido() ? 'reposo' : 'sinNodo');
             else etapa('reposo');
             return;
@@ -307,7 +312,12 @@
             etapa('sinNodo');
             return false;
         }
+        // GENERACIÓN NUEVA: se borra el archivo de la anterior. Si no, la
+        // reconciliación sigue matcheando el pedido VIEJO por nombre y la barra
+        // da por terminada la generación nueva con la imagen anterior.
+        S.archivo = ''; S.error = ''; S.paso = 0; S.total = 0;
         etapa('pidiendo', {
+            archivo: '',
             nodo: (nodo && nodo.nombre) || '',
             pct: 8,
             desde: Date.now(),
@@ -346,12 +356,24 @@
                     return (b.ts || b.creado || 0) - (a.ts || a.creado || 0);
                 });
                 var p = null;
-                // 1) el mismo archivo que estamos esperando
-                if (S.archivo) {
+                // 1) el MISMO prompt que mandamos: es la identificación más firme
+                if (S.prompt) {
+                    p = cands.filter(function (x) { return x.prompt === S.prompt; })[0] || null;
+                }
+                // 2) el archivo que ya conocemos (avisos de Comfy)
+                if (!p && S.archivo) {
                     p = cands.filter(function (x) { return x.archivo === S.archivo; })[0] || null;
                 }
-                // 2) si no, el pedido más nuevo de esta generación
-                if (!p) p = cands[0] || null;
+                // 3) último recurso: uno que haya nacido con esta generación (o que
+                //    esté vivo ahora). NUNCA uno viejo ya terminado: la barra daba por
+                //    lista la generación nueva con la imagen anterior.
+                if (!p) {
+                    p = cands.filter(function (x) {
+                        var t = x.ts || x.creado || 0;
+                        if (t >= (desde - 3000)) return true;
+                        return ['pedida', 'en_comfy', 'devuelta', 'subiendo'].indexOf(x.estado) >= 0;
+                    })[0] || null;
+                }
                 if (!p) return;
                 if (p.archivo && !S.archivo) S.archivo = p.archivo;
 
@@ -388,7 +410,8 @@
         if (esWeb) {
             var n = nodoElegido();
             var activa = (S.etapa === 'comfy' || S.etapa === 'nube' || S.etapa === 'pidiendo' || S.etapa === 'enviado');
-            if (!n && !activa) { etapa('sinNodo'); return; }
+            // ni 'listo' ni 'error' se pisan: el resultado de la generación queda a la vista
+            if (!n && !activa && !esFinal()) { etapa('sinNodo'); return; }
             if (n && S.etapa === 'sinNodo') { etapa('reposo', { nodo: n.nombre, pct: 0 }); return; }
         }
         pintar();
