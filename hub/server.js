@@ -1458,7 +1458,30 @@ wss.on('connection', (ws, req) => {
             const m = JSON.parse(texto);
             const tipo = String((m && m.type) || '');
             if (tipo === 'generarImagen' || tipo === 'generarStoryboard' || tipo === 'generarWan22') {
-                anotarPedidoHub(m, clientId);
+                const p = anotarPedidoHub(m, clientId);
+                // El pedido se despacha al NODO (una PC de la red), no al agente
+                // legacy: antes iba por tunnel:ws:frame -> enviarAlAgente y si no
+                // había agente conectado el trabajo se perdía y quedaba "esperando".
+                const dest = (p && p.computadora && p.computadora.peerId)
+                    ? relay.peer(p.computadora.peerId)
+                    : relay.principal();
+                if (p && dest) {
+                    const okA = relay.enviarA(dest.id, 'red:job', {
+                        jobId: p.id,
+                        tipo: tipo === 'generarImagen' ? 'imagen' : (tipo === 'generarStoryboard' ? 'storyboard' : 'video'),
+                        prompt: m.prompt || '',
+                        params: m.params || {},
+                        modelo: (m.params && m.params.modelo) || null,
+                        pedidoPor: m.pedidoPor || null,
+                        origen: 'red',
+                        ts: Date.now()
+                    });
+                    console.log('🔀 Pedido web ' + p.id + ' -> ' + dest.nombre + (okA ? '' : ' (NO pude enviarlo)'));
+                    if (okA) return;   // ya lo mandamos al nodo: no va al agente legacy
+                } else if (p) {
+                    console.log('⚠️  Pedido web ' + p.id + ' sin PC que lo haga: queda en el registro como pedida');
+                    return;
+                }
             }
         } catch (e) { }
         relay.enviarAlAgente('tunnel:ws:frame', { clientId, data: texto });
