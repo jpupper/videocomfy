@@ -2712,6 +2712,9 @@ function nuevoPedido(d) {
     if (PEDIDOS.length > 400) PEDIDOS = PEDIDOS.slice(-400);
     guardarPedidos();
     avisarPedidos();
+    // ANTES de mandar nada al motor: el pedido tiene que estar YA en el registro
+    // global del VPS. Sin esperar el debounce de avisarPedidos.
+    try { anunciarGlobal(); } catch (e) { }
     return p;
 }
 

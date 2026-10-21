@@ -5661,8 +5661,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Chain add step button
     document.getElementById('chainAddStepBtn')?.addEventListener('click', () => addChainStep());
     
-    // Restore generation queue from localStorage
-    const hasRestoredQueue = loadQueueState();
+    // NO se restaura la cola desde localStorage: el servidor ya es la fuente de verdad
+    // (queue_state por WS). Restaurarla hacía que un trabajo guardado como 'generating'
+    // volviera a 'pending' y se reenviara solo al recargar (phantom 'Crazy man drinking fanta').
+    clearQueueState();
+    const hasRestoredQueue = false;
     if (hasRestoredQueue) {
         updateGlobalQueueUI();
         const pendingCount = globalGenerationQueue.filter(i => i.status === 'pending').length;
