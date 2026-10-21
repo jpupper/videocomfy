@@ -126,15 +126,7 @@
             '<div class="red-aviso" id="redAviso"></div>',
 
             // ── RunPods del usuario (ComfyUI remoto, queda en su perfil) ──────
-            '<h3 class="red-titulo">☁️ MIS RUNPODS <span class="red-sub-chico">(ComfyUI remoto, guardado en tu perfil)</span></h3>',
-            '<div class="red-runpod-alta">',
-            '  <input type="text" id="rpNombre" maxlength="40" placeholder="nombre (ej: RunPod 4090)">',
-            '  <input type="text" id="rpUrl" placeholder="https://xxxx-8188.proxy.runpod.net">',
-            '  <button class="red-btn" id="rpAgregar">AGREGAR RUNPOD</button>',
-            '  <button class="red-btn secundario" id="rpRefrescar" title="volver a probar si están vivos">⟳</button>',
-            '</div>',
-            '<div class="red-sub-chico" id="rpAviso"></div>',
-            '<div class="red-runpods" id="redRunpods"></div>',
+            '<h3 class="red-titulo">☁️ AGREGAR UN RUNPOD <span class="red-sub-chico">(aparece en la lista de arriba como un nodo más)</span></h3>',
 
             '<div class="red-disponibles" id="redDisponibles"></div>',
             '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
@@ -410,7 +402,7 @@
             window.CK_acciones.pintarPermisos();
         }
     }
-    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir, abrirAcceso: abrirAcceso };
+    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir, abrirAcceso: abrirAcceso, repintar: pintar };
 
     // ---------- pintado ----------
     function pintar() {
@@ -531,7 +523,11 @@
         }
         otros.forEach(function (p) { tarjetas.push(tarjeta(p)); });
 
-        cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
+                // ☁️ RUNPODS: se muestran como un nodo más (son ComfyUI en la nube).
+        var runpods = (window.CK_runpods && window.CK_runpods.lista) ? window.CK_runpods.lista() : [];
+        runpods.forEach(function (rp) { tarjetas.push(tarjetaRunpod(rp)); });
+
+cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
             : '<div class="red-nodo vacio"><div class="nombre">😴 No hay otros nodos conectados</div>' +
               '<div class="linea">Cuando otra persona abra la app y habilite "compartir", aparece acá para que la uses.</div></div>';
 
@@ -780,6 +776,30 @@
             '  <div class="linea">' + esc(modelos) + '</div>',
             '  <div class="estado"><span class="red-punto ' + punto + '"></span>' + estado + '</div>',
             '  <div class="red-accion">' + boton + '</div>',
+            '</div>'
+        ].join('\n');
+    }
+
+    // --- ☁️ tarjeta de un RunPod (mismo formato que un nodo de la red) -------
+    function tarjetaRunpod(rp) {
+        var vivo = !!rp.enLinea;
+        var lineas = [];
+        if (rp.gpu) lineas.push(esc(rp.gpu) + (rp.vram ? ' · ' + rp.vram + ' GB' : ''));
+        lineas.push(esc(rp.url));
+        var accion = esLocal
+            ? '<button class="red-btn chico" data-runpod-usar="' + esc(rp.url) + '">☁️ USAR EN MI APP</button>'
+            : '<button class="red-btn chico" data-runpod-info="1" title="este RunPod se usa desde la app local de su dueño">☁️ DE ' + esc((rp.dueno || '').toUpperCase() || 'TU CUENTA') + '</button>';
+        return [
+            '<div class="red-nodo runpod">',
+            '  <div class="nombre">☁️ ' + esc(rp.nombre || 'RunPod'),
+            '    <span class="red-badge">runpod</span>',
+            '    <span class="red-badge ' + (vivo ? 'comparto' : '') + '">' + (vivo ? '✅ EN LÍNEA' : 'sin respuesta') + '</span>',
+            '  </div>',
+            lineas.map(function (l) { return '  <div class="linea">' + l + '</div>'; }).join('\n'),
+            '  <div class="estado"><span class="red-punto ' + (vivo ? 'ok' : 'gris') + '"></span>' +
+                (vivo ? 'ComfyUI en la nube (no ocupa tu PC)' : 'no contesta /system_stats') + '</div>',
+            '  <div class="red-accion">' + accion +
+                ' <button class="red-btn secundario chico" data-runpod-borrar="' + esc(rp.id) + '" title="quitar de mi perfil">✕</button></div>',
             '</div>'
         ].join('\n');
     }
