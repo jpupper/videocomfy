@@ -23,6 +23,8 @@
         pasados: [],         // conexiones pasadas (desconectados / sin transmisión)
         yo: null,            // solo en local: mi nodo
         elegido: null,       // peerId al que le voy a mandar los trabajos
+        runpod: { url: '', activo: false }, // motor externo (RunPod) activo
+        motorBase: '',       // a dónde apunta el motor de ESTA app
         verPasados: false,   // ojito: por defecto NO se indexan
         log: []
     };
@@ -75,6 +77,39 @@
         try { return localStorage.getItem(CLAVE_ELEGIDO) || ''; } catch (e) { return ''; }
     }
 
+    // ---------- CONEXIÓN: una sola a la vez (una PC o un RunPod) ----------
+    // El RunPod es el motor externo de ESTA app (`comfyExterno` en el server).
+    // Si está activo, no hay PC elegida: nunca las dos cosas juntas.
+    function runpodActivo() {
+        var r = ESTADO.runpod || {};
+        return !!(r.activo && r.url);
+    }
+    function runpodDe(url) {
+        var ls = (window.CK_runpods && window.CK_runpods.lista) ? window.CK_runpods.lista() : [];
+        for (var i = 0; i < ls.length; i++) if (ls[i].url === url) return ls[i];
+        return null;
+    }
+    function nombreRunpod() {
+        var rp = runpodDe((ESTADO.runpod || {}).url);
+        return (rp && rp.nombre) || 'RunPod';
+    }
+    // la conexión vigente, con su TIPO (lo que el banner tiene que decir)
+    function conexionActual() {
+        if (runpodActivo()) return { tipo: 'runpod', id: ESTADO.runpod.url, nombre: nombreRunpod() };
+        if (ESTADO.elegido) return { tipo: 'pc', id: ESTADO.elegido, nombre: nombreDe(ESTADO.elegido) };
+        return { tipo: '', id: '', nombre: '' };
+    }
+    // prende/apaga el motor externo y deja el estado igual a lo que contestó el server
+    function setRunpod(url, activo) {
+        return api('/api/config/comfy-externo', { json: { url: url || '', activo: !!activo } })
+            .then(function (r) {
+                var d = (r && r.datos) || {};
+                ESTADO.runpod = { url: d.url || '', activo: !!d.activo };
+                ESTADO.motorBase = d.base || ESTADO.motorBase;
+                return d;
+            });
+    }
+
     // ---------- UI ----------
     function montarUI() {
         if (document.getElementById('panelRed')) return;
@@ -119,21 +154,28 @@
             '</div>',
 
             '<div class="red-subtab-content active" id="redTabLaRed">',
-            '<p class="red-sub">Cada persona que corre la app en su PC aporta su Comfy a la red. ',
-            'Elegí el nodo, escribí el prompt y el trabajo se hace en la máquina de esa persona: acá llega el resultado.</p>',
+            '<p class="red-sub">Hay UNA sola conexión a la vez: o una <b>PC</b> (cada persona que corre la app aporta su Comfy) ' +
+            'o un <b>RunPod</b> (ComfyUI en la nube). Elegí una tarjeta abajo, tocá <b>CONECTAR</b> y el trabajo va ahí: ' +
+            'el banner de arriba dice siempre a cuál estás conectado.</p>',
 
             '<div class="red-elegido" id="redElegidoCaja"></div>',
             '<div class="red-aviso" id="redAviso"></div>',
 
             // ── RunPods del usuario (ComfyUI remoto, queda en su perfil) ──────
-            '<h3 class="red-titulo">☁️ AGREGAR UN RUNPOD <span class="red-sub-chico">(aparece abajo en la lista como un nodo más)</span></h3>',
+            '<h3 class="red-titulo">☁️ AGREGAR UN RUNPOD <span class="red-sub-chico">(se guarda en tu perfil y aparece abajo como una tarjeta más)</span></h3>',
+            '<div class="red-runpod-alta">',
+            '  <input type="text" id="rpNombre" maxlength="40" placeholder="nombre (ej: RunPod 4090)">',
+            '  <input type="text" id="rpUrl" placeholder="https://xxxx-8188.proxy.runpod.net">',
+            '  <button class="red-btn" id="rpAgregar">AGREGAR RUNPOD</button>',
+            '</div>',
+            '<div class="red-sub-chico" id="rpAviso"></div>',
 
             '<div class="red-disponibles" id="redDisponibles"></div>',
-            '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
+            '<h3 class="red-titulo">🖥️ COMPUTADORAS Y RUNPODS <span id="redCantidad"></span>',
             '  <button class="red-ojo" id="redOjo" title="Ver también los que no están transmitiendo y las conexiones pasadas"></button>',
             '</h3>',
-            '<div class="red-leyenda">🟢 listo para generar · 🟡 ocupado (en cola) · ⚪ apagado / sin transmitir · ',
-            'el nodo sale de la lista cuando se desconecta (queda en las conexiones pasadas, con el ojito).</div>',
+            '<div class="red-leyenda">💻 PC · ☁️ RUNPOD · 🟢 listo para generar · 🟡 ocupado (en cola) · ⚪ apagado / sin transmitir · ',
+            'una sola conexión a la vez (al conectar otra, la anterior se suelta).</div>',
             '<div class="red-grid" id="redNodos"></div>',
 
             '<div class="red-gen">',
@@ -281,14 +323,29 @@
             guardarElegido(e.target.value);
             pintar();
         });
+        // TODAS las tarjetas (PC y RunPod) se manejan acá: un solo camino de conexión
         document.getElementById('redNodos').addEventListener('click', function (e) {
             var bd = e.target.closest('[data-desconectar]');
             if (bd) { e.preventDefault(); desconectar(); return; }
+            var ru = e.target.closest('[data-runpod-usar]');
+            if (ru) {
+                e.preventDefault();
+                if (ru.disabled) return;
+                conectarRunpod(ru.getAttribute('data-runpod-usar'));
+                return;
+            }
+            var rb = e.target.closest('[data-runpod-borrar]');
+            if (rb) {
+                e.preventDefault();
+                if (window.CK_runpods && typeof window.CK_runpods.borrar === 'function') {
+                    window.CK_runpods.borrar(rb.getAttribute('data-runpod-borrar'));
+                }
+                return;
+            }
             var b = e.target.closest('[data-usar]');
             if (!b) return;
-            var id = b.getAttribute('data-usar');
             if (b.disabled) return;
-            conectar(id);
+            conectar(b.getAttribute('data-usar'));
         });
     }
 
@@ -303,6 +360,39 @@
     // En la web va por /p/<nodo>/…, así la respuesta viene de esa computadora y
     // no del hub: si el pedido llegó y el ComfyUI contesta, se dice "conectado".
     function conectar(id) {
+        // UNA sola conexión: si estaba el RunPod, se apaga antes de agarrar la PC
+        if (runpodActivo()) {
+            log('🔌 Soltando el RunPod ' + nombreRunpod() + ' para conectar la PC…');
+            setRunpod(ESTADO.runpod.url, false)
+                .then(function () { conectarPC(id); })
+                .catch(function (e) { log('⚠️ No pude apagar el RunPod: ' + e.message); });
+            return;
+        }
+        conectarPC(id);
+    }
+
+    function conectarRunpod(url) {
+        var rp = runpodDe(url) || {};
+        var nom = rp.nombre || 'RunPod';
+        // UNA sola conexión: al RunPod se le suelta la PC
+        if (ESTADO.elegido) guardarElegido('');
+        log('☁️ Conectando al RunPod ' + nom + '…');
+        setRunpod(url, true).then(function (d) {
+            if (!d || d.success === false) {
+                log('⚠️ ' + ((d && d.message) || 'no pude activar ese RunPod'));
+            } else {
+                log('✅ Conectado a ' + nom + ' · motor en la nube (' + (d.base || url) + ') · no usa tu PC');
+            }
+            pintar();
+            try { window.CKConexion && window.CKConexion.pintar(); } catch (e) { }
+            refrescar(false);
+        }).catch(function (e) {
+            log('⚠️ No pude activar el RunPod: ' + e.message);
+            pintar();
+        });
+    }
+
+    function conectarPC(id) {
         guardarElegido(id);
         pintar();
         log('🔗 Conectando a ' + nombreDe(id) + '…');
@@ -367,6 +457,18 @@
     }
 
     function desconectar() {
+        // La conexión puede ser una PC o un RunPod: se suelta la que esté activa.
+        if (runpodActivo()) {
+            var nom = nombreRunpod();
+            log('🔌 Soltando el RunPod ' + nom + '…');
+            setRunpod(ESTADO.runpod.url, false).then(function () {
+                log('🔌 Desconectado de ' + nom + '. En local volvés a generar en esta PC.');
+                pintar();
+                try { window.CKConexion && window.CKConexion.pintar(); } catch (e) { }
+                refrescar(false);
+            }).catch(function (e) { log('⚠️ No pude apagar el RunPod: ' + e.message); });
+            return;
+        }
         var eraRemoto = !!ESTADO.elegido && !(ESTADO.yo && ESTADO.yo.peerId === ESTADO.elegido);
         guardarElegido('');
         ESTADO.elegido = '';
@@ -402,7 +504,12 @@
             window.CK_acciones.pintarPermisos();
         }
     }
-    window.comfyRed = { estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir, abrirAcceso: abrirAcceso, repintar: pintar };
+    window.comfyRed = {
+        estado: ESTADO, refrescar: refrescar, generar: generar, abrir: abrir,
+        abrirAcceso: abrirAcceso, repintar: pintar,
+        conectarRunpod: conectarRunpod, desconectar: desconectar, runpodActivo: runpodActivo,
+        conexionActual: conexionActual
+    };
 
     // ---------- pintado ----------
     function pintar() {
@@ -470,35 +577,49 @@
         var elegido = ESTADO.elegido;
         var existeElegido = elegido && (elegido === yoId || peers.some(function (p) { return p.id === elegido; }));
         if (!existeElegido) { guardarElegido(''); elegido = ''; }
+        // UNA sola conexión: si hay un RunPod activo, la PC elegida se suelta.
+        if (runpodActivo() && elegido) { guardarElegido(''); elegido = ''; }
         var esWebAqui = (function () {
             try { var h = location.hostname; return h !== 'localhost' && h !== '127.0.0.1' && h.indexOf('localhost') === -1; }
             catch (e) { return false; }
         })();
-        if (!elegido && !esWebAqui) {
-            // En LOCAL, por defecto se genera en esta PC. En la WEB no se elige
-            // NADA por defecto: el usuario decide a quién pedirle en RED y hasta
-            // entonces los workflows de CREATE quedan en gris.
+        if (!elegido && !esWebAqui && !runpodActivo()) {
+            // En LOCAL, por defecto se genera en esta PC (salvo que esté conectado
+            // un RunPod). En la WEB no se elige NADA por defecto: el usuario decide
+            // a quién pedirle en RED y hasta entonces los workflows de CREATE van grises.
             if (yoId) { guardarElegido(yoId); elegido = yoId; }
             else {
                 var libre = peers.filter(function (p) { return p.compartir; })[0];
                 if (libre) { guardarElegido(libre.id); elegido = libre.id; }
             }
         }
-        // Sin computadora elegida (por defecto al entrar en la web) los botones de
-        // generar se muestran grises y bloqueados.
-        try { document.body.classList.toggle('ck-sin-computadora', esWebAqui && !elegido); } catch (e) { }
+        // Sin conexión (ni PC ni RunPod) los botones de generar van grises.
+        try {
+            document.body.classList.toggle('ck-sin-computadora', !(elegido || runpodActivo()));
+        } catch (e) { }
 
-        if (elegido) {
-            var esMio = (elegido === yoId);
-            var p2 = esMio ? null : peers.filter(function (p) { return p.id === elegido; })[0];
-            caja.innerHTML = '🔗 <b>CONECTADO</b> a <b>' + esc(nombreDe(elegido)) + '</b>' +
-                (esMio ? ' <span class="red-badge comparto">tu Comfy</span>'
-                    : (p2 ? ' <span class="red-badge">' + (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') + '</span>' : '')) +
+        var con = conexionActual();
+        if (con.tipo === 'runpod') {
+            var rpC = runpodDe(con.id) || {};
+            caja.innerHTML = '🔗 <b>CONECTADO</b> a <b>' + esc(con.nombre) + '</b>' +
+                ' <span class="red-badge">☁️ RunPod</span>' +
+                ' <span class="red-sub-chico">' + (rpC.enLinea
+                    ? 'motor en la nube · no ocupa tu PC'
+                    : 'sin respuesta · revisá que el pod esté prendido') + '</span>' +
+                ' <button class="red-btn secundario chico" id="redDesconectar">🔌 DESCONECTAR</button>';
+        } else if (con.tipo === 'pc') {
+            var esMio = (con.id === yoId);
+            var p2 = esMio ? null : peers.filter(function (p) { return p.id === con.id; })[0];
+            caja.innerHTML = '🔗 <b>CONECTADO</b> a <b>' + esc(con.nombre) + '</b>' +
+                ' <span class="red-badge">' + (esMio ? '💻 Esta PC' : '🖥️ PC') + '</span>' +
+                (esMio ? '' : (p2 ? ' <span class="red-sub-chico">' +
+                    (p2.ocupado || p2.encolados ? 'ocupada · ' + (p2.encolados || 0) + ' en cola' : 'libre') +
+                    '</span>' : '')) +
                 ' <button class="red-btn secundario chico" id="redDesconectar">🔌 DESCONECTAR</button>';
         } else {
-            caja.innerHTML = '🔌 <b>No estás conectado</b> a ninguna computadora — elegí una abajo para generar.';
+            caja.innerHTML = '🔌 <b>No estás conectado</b> — elegí una PC o un RunPod abajo y tocá CONECTAR.';
         }
-        caja.className = 'red-elegido' + (elegido ? '' : ' vacio');
+        caja.className = 'red-elegido' + (con.tipo ? '' : ' vacio');
         var bd = document.getElementById('redDesconectar');
         if (bd) bd.addEventListener('click', function (e) {
             e.preventDefault();
@@ -719,16 +840,25 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
         }
     }
 
+    // --- el botón es EL MISMO para una PC y para un RunPod -------------------
+    function botonConexion(activo, attr, valor, habilitado, textoNo, title) {
+        if (activo) {
+            return '<button class="red-btn chico" data-desconectar="' + esc(valor) + '" title="soltar esta conexión">🔌 DESCONECTAR</button>';
+        }
+        return '<button class="red-btn secundario chico" ' + attr + '="' + esc(valor) + '"' +
+            (habilitado ? '' : ' disabled') +
+            (title ? ' title="' + esc(title) + '"' : '') + '>' +
+            (habilitado ? 'CONECTAR' : textoNo) + '</button>';
+    }
+
     function tarjeta(p) {
         var mio = !!p.propio;
         var elegido = ESTADO.elegido === p.id;
         var punto = !p.conectado ? 'off' : (p.encolados > 0 ? 'ocupado' : (p.comfy ? 'ok' : 'off'));
         var modelos = (p.modelos || []).map(function (m) { return m.nombre || m.id; }).join(' · ') || '—';
         var puede = mio || (p.compartir && p.conectado);
-        var boton = elegido
-            ? '<button class="red-btn chico" data-desconectar="' + esc(p.id) + '">🔌 DESCONECTAR</button>'
-            : '<button class="red-btn secundario chico" data-usar="' + esc(p.id) + '"' + (puede ? '' : ' disabled') + '>' +
-              (puede ? 'CONECTAR' : (p.compartir ? 'No disponible' : 'No comparte')) + '</button>';
+        var boton = botonConexion(elegido, 'data-usar', p.id, puede,
+            p.compartir ? 'No disponible' : 'No comparte');
         var sello = elegido ? ' <span class="red-badge comparto">✅ CONECTADO</span>' : '';
         var estado;
         // OJO: el puntito de estado ya lo pone <span class="red-punto">; acá NO va
@@ -761,6 +891,7 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
             '  <div class="nombre">' + (p.avatar
                 ? '<img class="red-avatar" src="' + esc(p.avatar) + '" alt="">'
                 : (p.principal ? '⭐ ' : (mio ? '💻 ' : '🖥️ '))) + esc(p.nombre),
+            '<span class="red-badge">PC</span>',
             mio ? '<span class="red-badge comparto">tu nodo</span>'
                 : '<span class="red-badge ' + (p.compartir ? 'comparto' : '') + '">' + (p.compartir ? 'comparte' : 'transmisión apagada') + '</span>',
             (p.principal && !mio) ? '<span class="red-badge principal">principal</span>' : '',
@@ -780,25 +911,30 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
         ].join('\n');
     }
 
-    // --- ☁️ tarjeta de un RunPod (mismo formato que un nodo de la red) -------
+    // --- ☁️ tarjeta de un RunPod: MISMO formato, mismo botón, mismo estado ----
     function tarjetaRunpod(rp) {
         var vivo = !!rp.enLinea;
+        var activo = runpodActivo() && ESTADO.runpod.url === rp.url;
         var lineas = [];
         if (rp.gpu) lineas.push(esc(rp.gpu) + (rp.vram ? ' · ' + rp.vram + ' GB' : ''));
         lineas.push(esc(rp.url));
-        var accion = esLocal
-            ? '<button class="red-btn chico" data-runpod-usar="' + esc(rp.url) + '">☁️ USAR EN MI APP</button>'
-            : '<button class="red-btn chico" data-runpod-info="1" title="este RunPod se usa desde la app local de su dueño">☁️ DE ' + esc((rp.dueno || '').toUpperCase() || 'TU CUENTA') + '</button>';
+        // Igual que una PC: en la web no se puede conectar el RunPod de otro
+        var boton = botonConexion(activo, 'data-runpod-usar', rp.url, esLocal ? vivo : false,
+            'No disponible',
+            esLocal ? 'usar este ComfyUI de la nube como motor' : 'se usa desde la app local de su dueño');
+        var sello = activo ? ' <span class="red-badge comparto">✅ CONECTADO</span>' : '';
+        var estado = vivo
+            ? (activo ? 'CONECTADO · el motor de tu app es este RunPod' : 'LIBRE para generar')
+            : 'sin respuesta · /system_stats no contesta';
         return [
-            '<div class="red-nodo runpod">',
+            '<div class="red-nodo runpod' + (activo ? ' elegido' : '') + (vivo ? '' : ' apagado') + '">',
             '  <div class="nombre">☁️ ' + esc(rp.nombre || 'RunPod'),
-            '    <span class="red-badge">☁️ web</span>',
-            '    <span class="red-badge ' + (vivo ? 'comparto' : '') + '">' + (vivo ? '✅ EN LÍNEA' : 'sin respuesta') + '</span>',
+            '    <span class="red-badge">☁️ NUBE</span>',
+            sello,
             '  </div>',
             lineas.map(function (l) { return '  <div class="linea">' + l + '</div>'; }).join('\n'),
-            '  <div class="estado"><span class="red-punto ' + (vivo ? 'ok' : 'gris') + '"></span>' +
-                (vivo ? 'ComfyUI en la nube (no ocupa tu PC)' : 'no contesta /system_stats') + '</div>',
-            '  <div class="red-accion">' + accion +
+            '  <div class="estado"><span class="red-punto ' + (vivo ? 'ok' : 'off') + '"></span>' + estado + '</div>',
+            '  <div class="red-accion">' + boton +
                 ' <button class="red-btn secundario chico" data-runpod-borrar="' + esc(rp.id) + '" title="quitar de mi perfil">✕</button></div>',
             '</div>'
         ].join('\n');
@@ -882,6 +1018,10 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
         window.JPI_RED_VUELO = ESTADO.enVueloDetalle || [];
         if (typeof window.jpiPintarVuelo === 'function') { try { window.jpiPintarVuelo(); } catch (e) { } }
                 ESTADO.computadora = r.datos.computadora || ESTADO.computadora;
+                // motor externo (RunPod): es la otra forma de estar conectado
+                var ce = r.datos.comfyExterno || {};
+                ESTADO.runpod = { url: ce.url || '', activo: !!ce.activo };
+                ESTADO.motorBase = r.datos.motorBase || '';
             } else {
                 ESTADO.yo = null;
                 ESTADO.peers = r.datos.peers || [];
@@ -904,7 +1044,13 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
         // usaba la última guardada y el trabajo podía irse a otra computadora.
         var selDestino = document.getElementById('redDestino');
         var destino = (selDestino && selDestino.value) || '';
-        if (!destino) { log('⚠️ Elegí una computadora en la lista (no hay ninguna seleccionada)'); return; }
+        if (!destino) {
+            log(runpodActivo()
+                ? '⚠️ Estás conectado al RunPod ' + nombreRunpod() +
+                  ': generá desde CREATE (usa ese motor) o conectá una PC para mandarle el trabajo.'
+                : '⚠️ Elegí una computadora en la lista (no hay ninguna seleccionada)');
+            return;
+        }
         var peerDestino = (ESTADO.peers || []).filter(function (x) { return x.id === destino; })[0] || null;
         if (peerDestino && peerDestino.comfy === false) {
             log('⚠️ ' + (peerDestino.nombre || 'Esa PC') + ' tiene el ComfyUI apagado: elegí otra computadora.');
@@ -956,6 +1102,12 @@ cont.innerHTML = tarjetas.length ? tarjetas.join('\n')
                         };
                         ESTADO.peers = m.red.nodos || [];
                         ESTADO.pasados = m.red.pasados || [];
+                        if (m.red.comfyExterno !== undefined) {
+                            ESTADO.runpod = {
+                                url: (m.red.comfyExterno && m.red.comfyExterno.url) || '',
+                                activo: !!(m.red.comfyExterno && m.red.comfyExterno.activo)
+                            };
+                        }
                         pintar();
                     }
                     if (m.type === 'red_job' && m.job) log('🎯 Trabajo de ' + (m.job.de || '?') + ' encolado acá');

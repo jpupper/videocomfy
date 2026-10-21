@@ -65,18 +65,8 @@
         }).then(function () { cargar(); }).catch(function () { });
     }
 
-    function usar(url) {
-        aviso('apuntando el motor al RunPod…');
-        fetch(base() + '/api/config/comfy-externo', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url, activo: true })
-        }).then(function (r) { return r.json(); }).then(function (d) {
-            if (d && d.success === false) { aviso(d.message || 'no se pudo cambiar', true); return; }
-            aviso('✅ tu app ahora usa ese RunPod como motor (Comfy externo activo).');
-        }).catch(function (e) { aviso(e.message, true); });
-    }
-
-    // los botones viven dentro de la grilla de nodos → delegación
+    // los botones de las tarjetas los maneja red.js (un solo camino de conexión:
+    // la misma tarjeta, el mismo CONECTAR/DESCONECTAR que una PC). Acá sólo el alta.
     function enganchar() {
         var b = document.getElementById('rpAgregar');
         if (b && !b.__ck) { b.__ck = 1; b.addEventListener('click', agregar); }
@@ -85,20 +75,11 @@
             u.__ck = 1;
             u.addEventListener('keydown', function (e) { if (e.key === 'Enter') agregar(); });
         }
-        var grilla = document.getElementById('redNodos');
-        if (grilla && !grilla.__ckRp) {
-            grilla.__ckRp = 1;
-            grilla.addEventListener('click', function (e) {
-                var usarB = e.target.closest('[data-runpod-usar]');
-                if (usarB) { e.preventDefault(); usar(usarB.getAttribute('data-runpod-usar')); return; }
-                var borrarB = e.target.closest('[data-runpod-borrar]');
-                if (borrarB) { e.preventDefault(); borrar(borrarB.getAttribute('data-runpod-borrar')); return; }
-            });
-        }
     }
 
     window.CK_runpods = {
         cargar: cargar,
+        borrar: borrar,
         lista: function () { return LS; },
         esLocal: esLocal
     };

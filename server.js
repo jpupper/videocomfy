@@ -3662,7 +3662,11 @@ function estadoRed() {
         conectado: RED.nodos.some((p) => p && p.id === RED.peerId),
         enVuelo: RED.enVuelo,
         nodos: RED.nodos,
-        pasados: RED.pasados
+        pasados: RED.pasados,
+        // UNA sola conexión: o una PC de la red o este motor externo (RunPod).
+        // El front lo necesita para pintar el MISMO estado en las dos tarjetas.
+        comfyExterno: { url: comfyExterno.url || '', activo: !!comfyExterno.activo },
+        motorBase: comfyBase()
     };
 }
 
