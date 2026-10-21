@@ -4391,7 +4391,7 @@ function addToStoryboardQueue(prompt, options = {}) {
         storyboardSteps: customParams.storyboardSteps || parseInt(document.getElementById('storyboardSteps')?.value) || 25,
         // Motor de imagen de esta etapa: Flux (workflow de siempre) o los nuevos
         // (Z-Image Turbo / Qwen 2.1), segun el selector visible del panel.
-        modelo: customParams.modelo || (document.getElementById('imgEngineSelect')?.value || 'zimage'),
+        modelo: customParams.modelo || options.model || (document.getElementById('imgEngineSelect')?.value || 'zimage'),
         ...(customParams.seed !== undefined ? { seed: customParams.seed } : {})
     };
 
