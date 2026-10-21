@@ -983,8 +983,9 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
     // El pedido queda anotado en el hub ANTES de mandarlo: así aparece en el
     // REGISTRO/BATCH de la web al instante (antes sólo se veía cuando el nodo
     // contestaba, y si algo fallaba no aparecía nunca).
+    let pedidoAnotado = null;
     try {
-        anotarPedidoHub({
+        pedidoAnotado = anotarPedidoHub({
             type: 'generarImagen',
             params: { modelo: b.modelo || null },
             jobId: jobId,
@@ -1000,6 +1001,11 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
             ts: Date.now()
         }, 'hub-generar', destino);
     } catch (e) { }
+
+    if (pedidoAnotado && pedidoAnotado._dup) {
+        console.log('♻️ /api/red/generar repetido (' + jobId + '): no se despacha de nuevo');
+        return res.json({ success: true, jobId: pedidoAnotado.id || jobId, repetido: true, peer: relay.publico(destino) });
+    }
 
     const ok = relay.enviarA(destino.id, 'red:job', {
         jobId,
@@ -1405,7 +1411,13 @@ function anotarPedidoHub(msg, clientId, destinoForzado) {
         const prompt = String(msg.prompt || '').slice(0, 400);
         // si el mismo navegador repite el mismo prompt en <90s, no se duplica
         const dup = PEDIDOS_HUB.find((p) => p.prompt === prompt && p.cliente === clientId && (ahora - p.cuando) < 90000);
-        if (dup) return dup;
+        if (dup) {
+            // MARCAR, no reenviar: antes el handler tomaba este pedido repetido y lo
+            // volvía a despachar al nodo -> la misma PC generaba DOS imágenes para
+            // un solo pedido (visto en /api/pedidos: mismo id, dos archivos).
+            dup._dup = true;
+            return dup;
+        }
         const destino = destinoForzado || relay.principal();
         const p = {
             id: 'hub-' + (++pedidoHubSeq) + '-' + ahora.toString(36),
@@ -1470,6 +1482,12 @@ wss.on('connection', (ws, req) => {
             const tipo = String((m && m.type) || '');
             if (tipo === 'generarImagen' || tipo === 'generarStoryboard' || tipo === 'generarWan22') {
                 const p = anotarPedidoHub(m, clientId);
+                // Pedido repetido del mismo navegador (<90 s, mismo prompt): ya está
+                // encolado o terminando. NO se despacha otra vez.
+                if (p && p._dup) {
+                    console.log('♻️ Pedido repetido ignorado (mismo prompt, mismo cliente): ' + p.id);
+                    return;
+                }
                 // El pedido se despacha al NODO (una PC de la red), no al agente
                 // legacy: antes iba por tunnel:ws:frame -> enviarAlAgente y si no
                 // había agente conectado el trabajo se perdía y quedaba "esperando".

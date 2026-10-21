@@ -1789,6 +1789,144 @@ app.get('/api/comfy/consola', async (req, res) => {
 });
 
 // ============================================================================
+// PARÁMETROS REALES DE LA GENERACIÓN (el registro que hace ComfyUI)
+// ----------------------------------------------------------------------------
+// /api/images guarda lo que mandó el front (params del formulario), pero los
+// valores EFECTIVOS son los del grafo que ComfyUI ejecutó: cfg, steps, sampler,
+// scheduler, seed, denoise, tamaño del latent, modelo y loras.
+// ComfyUI los guarda en /history/<prompt_id>, así que acá se leen de ahí y se
+// devuelven listos para la pestaña DATA del PREVIZ.
+// ============================================================================
+const CLASES_SAMPLER = ['KSampler', 'KSamplerAdvanced', 'SamplerCustom', 'SamplerCustomAdvanced', 'CFGGuider'];
+const CLASES_LATENT = ['EmptyLatentImage', 'EmptySD3LatentImage', 'EmptyLatentImageSDXL', 'LatentUpscale'];
+const CLASES_MODELO = ['CheckpointLoaderSimple', 'UNETLoader', 'CheckpointLoader', 'UnetLoaderGGUF', 'UnetLoaderGGUFAdvanced'];
+
+function paramsDePromptComfy(grafo, salida) {
+    grafo = grafo || {};
+    const out = {
+        cfg: null, steps: null, sampler: null, scheduler: null, seed: null, denoise: null,
+        ancho: null, alto: null, modelo: null, loras: [], positivo: '', negativo: '',
+        nodos: 0, claseSampler: ''
+    };
+    const ids = Object.keys(grafo);
+    out.nodos = ids.length;
+
+    // salida (outputs) para el tamaño final del archivo
+    try {
+        const imgs = (salida && salida.images) || [];
+        if (imgs[0] && imgs[0].type) out.tipoSalida = imgs[0].type;
+    } catch (e) { }
+
+    ids.forEach((id) => {
+        const n = grafo[id] || {};
+        const ct = String(n.class_type || '');
+        const inp = n.inputs || {};
+
+        if (CLASES_SAMPLER.indexOf(ct) >= 0) {
+            if (out.steps == null && inp.steps != null) out.steps = inp.steps;
+            if (out.cfg == null && inp.cfg != null) out.cfg = inp.cfg;
+            if (out.seed == null && (inp.seed != null || inp.noise_seed != null)) out.seed = (inp.seed != null ? inp.seed : inp.noise_seed);
+            if (out.sampler == null && inp.sampler_name) out.sampler = inp.sampler_name;
+            if (out.scheduler == null && inp.scheduler) out.scheduler = inp.scheduler;
+            if (out.denoise == null && inp.denoise != null) out.denoise = inp.denoise;
+            if (!out.claseSampler) out.claseSampler = ct;
+        }
+        // workflows nuevos: cada cosa en su nodo
+        if (ct === 'BasicScheduler' && out.steps == null && inp.steps != null) out.steps = inp.steps;
+        if (ct === 'BasicScheduler' && out.scheduler == null && inp.scheduler) out.scheduler = inp.scheduler;
+        if (ct === 'BasicScheduler' && out.denoise == null && inp.denoise != null) out.denoise = inp.denoise;
+        if (ct === 'KSamplerSelect' && out.sampler == null && inp.sampler_name) out.sampler = inp.sampler_name;
+        if (ct === 'CFGGuider' && out.cfg == null && inp.cfg != null) out.cfg = inp.cfg;
+        if ((ct === 'RandomNoise') && out.seed == null && inp.noise_seed != null) out.seed = inp.noise_seed;
+
+        if (CLASES_LATENT.indexOf(ct) >= 0) {
+            if (out.ancho == null && inp.width != null) out.ancho = inp.width;
+            if (out.alto == null && inp.height != null) out.alto = inp.height;
+        }
+        if (CLASES_MODELO.indexOf(ct) >= 0 && !out.modelo) {
+            out.modelo = inp.ckpt_name || inp.unet_name || inp.model_name || inp.gguf_name || null;
+        }
+        if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly') {
+            const l = inp.lora_name || inp.name;
+            if (l) out.loras.push({ nombre: l, fuerza: (inp.strength_model != null ? inp.strength_model : inp.strength) });
+        }
+        // positivo/negativo NO por longitud: se resuelven abajo por las conexiones
+        // 'positive' / 'negative' del sampler (una heurística por largo cruzaba los
+        // textos cuando el prompt era corto, p. ej. "RED DOG").
+    });
+
+    out.loras = out.loras.filter((l, i, a) => a.findIndex((x) => x.nombre === l.nombre) === i);
+
+    // ── positivo / negativo: seguir la conexión del sampler ────────────────
+    // Los conditioning llegan como [idNodo, indice]. El texto vive en el nodo
+    // CLIPTextEncode (o en un primitivo tipo String/PrimitiveNode).
+    const textoDe = (ref) => {
+        try {
+            const id = Array.isArray(ref) ? ref[0] : ref;
+            const n = grafo[id];
+            if (!n) return '';
+            const inp = n.inputs || {};
+            if (typeof inp.text === 'string') return inp.text;
+            if (typeof inp.prompt === 'string') return inp.prompt;
+            if (typeof inp.value === 'string') return inp.value;
+            // un combinador (ConditioningCombine) o un encoder: buscar para abajo
+            const refs = Object.values(inp).filter((v) => Array.isArray(v) && typeof v[0] === 'string');
+            for (const r of refs) {
+                const s = textoDe(r);
+                if (s) return s;
+            }
+        } catch (e) { }
+        return '';
+    };
+    let samplerId = null;
+    for (const id of Object.keys(grafo)) {
+        const ct = String((grafo[id] || {}).class_type || '');
+        if (CLASES_SAMPLER.indexOf(ct) >= 0 && (grafo[id].inputs || {}).positive) { samplerId = id; break; }
+    }
+    if (samplerId) {
+        const sp = grafo[samplerId].inputs || {};
+        out.positivo = textoDe(sp.positive) || out.positivo;
+        out.negativo = textoDe(sp.negative) || out.negativo;
+    }
+    return out;
+}
+
+app.get('/api/generacion-detalle', async (req, res) => {
+    const archivo = String(req.query.archivo || '').replace(/^.*[\\/]/, '').split('?')[0];
+    if (!archivo) return res.status(400).json({ success: false, message: 'falta archivo' });
+    let meta = {};
+    try { meta = (getImageMetadata(archivo) || getVideoMetadata(archivo) || {}) || {}; } catch (e) { meta = {}; }
+
+    const detalle = {
+        success: true, archivo,
+        promptId: meta.prompt_id || meta.promptId || null,
+        modelo: meta.modelo || meta.model || '',
+        paramsFront: meta.params || {},
+        desdeComfy: false,
+        comfy: null,
+        errorComfy: ''
+    };
+    if (!detalle.promptId) return res.json(detalle);
+
+    try {
+        const r = await fetch(comfyBase() + '/history/' + encodeURIComponent(detalle.promptId), { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const hist = await r.json();
+        const h = hist[detalle.promptId] || (Object.values(hist)[0] || null);
+        if (!h) throw new Error('no está en el historial de ComfyUI');
+        // h.prompt = [num, promptId, grafo, extra, outputs]
+        const grafo = Array.isArray(h.prompt) ? h.prompt[2] : (h.prompt || {});
+        const salida = (h.outputs && Object.values(h.outputs)[0]) || null;
+        detalle.comfy = paramsDePromptComfy(grafo, salida);
+        detalle.desdeComfy = true;
+    } catch (e) {
+        detalle.errorComfy = e.message;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(detalle);
+});
+
+// ============================================================================
 // REINICIAR COMFYUI (sólo local): cierra la instancia que está corriendo y la
 // vuelve a abrir con la MISMA línea de comandos con la que estaba andando.
 // Lo usa el botón ⟳ RESTART del panel de servidores. Nunca desde la web.
@@ -4003,6 +4141,18 @@ function _aplicarPasoRed(j, cambios) {
 async function encolarTrabajoRed(b) {
     const prompt = String((b && b.prompt) || '').trim();
     if (!prompt) throw new Error('El trabajo no trae prompt.');
+
+    // ── UN jobId = UN trabajo ────────────────────────────────────────────
+    // El hub puede reenviar el mismo red:job (reintento, reconexión, o el bug
+    // del pedido repetido). Si ese jobId ya existe acá y no terminó en error,
+    // NO se genera otra vez: antes la misma PC hacía dos imágenes iguales.
+    if (b && b.jobId) {
+        const ya = buscarPedido({ jobId: b.jobId });
+        if (ya && ya.estado !== 'error' && ya.estado !== 'cancelada' && ya.estado !== 'interrumpida') {
+            console.log('♻️ red:job repetido (' + b.jobId + ') ya está en ' + ya.estado + ': no se genera de nuevo');
+            return { jobId: b.jobId, promptId: ya.promptId || null, repetido: true };
+        }
+    }
 
     // Si el pedido viene DE LA RED, sólo se acepta un workflow que este fierro
     // comparta Y tenga instalado (si no, se rechaza con el motivo).

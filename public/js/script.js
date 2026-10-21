@@ -1642,7 +1642,10 @@ function checkGlobalQueue() {
     window.JPI_PAUSA_AVISADA = false;
 
     // Get all pending items
-    const pendingItems = globalGenerationQueue.filter(item => item.status === 'pending');
+    // 'enviado' = ya se despachó una vez. Antes, si el item volvía a 'pending'
+    // (o quedaba uno viejo en la cola), se reenviaba el MISMO trabajo y la PC
+    // generaba dos imágenes iguales / con el prompt anterior.
+    const pendingItems = globalGenerationQueue.filter(item => item.status === 'pending' && !item.enviado);
     if (pendingItems.length === 0) return;
     
     // Group by batch and find the earliest batch that still has work
@@ -1695,6 +1698,8 @@ function checkGlobalQueue() {
     if (!nextItem) return;
 
     nextItem.status = 'generating';
+    nextItem.enviado = true;
+    nextItem.enviadoTs = Date.now();
     nextItem.generationStartTime = Date.now(); // Track start time for timeout detection
     currentExecutingId = nextItem.id;
     isGeneratingGlobal = true;

@@ -288,6 +288,16 @@
         var b = e.target && e.target.closest ? e.target.closest('.reg-ojo') : null;
         if (!b) return;
         var src = urlDe(b);
-        abrir(src, /\.(mp4|webm|mov|mkv)(\?|$)/i.test(src));
+        var esVideo = /\.(mp4|webm|mov|mkv)(\?|$)/i.test(src);
+        // PEDIDO DEL USUARIO: la imagen se abre DENTRO DEL PREVIZ (así también se
+        // puede ver la DATA de la generación); los videos siguen en el visor.
+        if (!esVideo && typeof window.loadImageToPreviz === 'function') {
+            var ir = document.getElementById('tabPrevizBtn')
+                || document.querySelector('[data-tab="previz"]')
+                || document.querySelector('.ck-tab[data-tab="previz"]');
+            if (ir) { try { ir.click(); } catch (err) { } }
+            try { window.loadImageToPreviz(src); return; } catch (err2) { }
+        }
+        abrir(src, esVideo);
     });
 })();
