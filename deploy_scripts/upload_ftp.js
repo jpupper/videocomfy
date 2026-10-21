@@ -84,6 +84,22 @@ async function uploadToFtp() {
         return;
     }
 
+    // GUARDIA: si index.html tiene un <div> sin cerrar, el navegador anida las
+    // pestañas siguientes dentro de la anterior y CREATE/CONSOLE quedan vacías
+    // (pasó de verdad: se borró un </div> junto con la fila PLAY/PAUSA).
+    // Mejor no publicar que publicar una página rota.
+    try {
+        const fsx = require('fs');
+        const html = fsx.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+        const abre = (html.match(/<div\b/g) || []).length;
+        const cierra = (html.match(/<\/div>/g) || []).length;
+        if (abre !== cierra) {
+            console.error('[GUARDIA] index.html tiene ' + (abre - cierra) + ' <div> sin cerrar (' + abre + ' abren, ' + cierra + ' cierran). NO se publica.');
+            process.exitCode = 1;
+            return;
+        }
+    } catch (e) { console.error('[GUARDIA] no pude verificar index.html:', e.message); }
+
     const ctx = { manifiesto: leerManifiesto(), subidos: 0, salteados: 0, detalle: true };
 
     try {
