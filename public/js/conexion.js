@@ -47,6 +47,15 @@
         'video_wan2_2_14B_flf2v_api.json': 'Wan 2.2 (chain)'
     };
 
+    // ¿hay sesión? sin sesión el VPS no acepta el websocket ni los pedidos
+    function haySesion() {
+        try {
+            var claves = ['fsc_token_jpi', 'fsc_token', 'token'];
+            for (var i = 0; i < claves.length; i++) if (localStorage.getItem(claves[i])) return true;
+            return /(^|;\s*)fsc_token=/.test(document.cookie || '');
+        } catch (e) { return true; }
+    }
+
     // ---------- estado de la red ----------
     function red() {
         try { return (window.comfyRed && window.comfyRed.estado) || null; } catch (e) { return null; }
@@ -103,6 +112,12 @@
             else cont.parentElement.insertBefore(b, cont);
         }
         if (!esWeb) { b.style.display = 'none'; return; }   // en local no hay a qué conectarse
+        if (!haySesion()) {
+            b.className = 'ck-conexion-banner mal';
+            b.innerHTML = '🔒 <b>Entrá con tu cuenta para generar</b> — sin sesión el servidor no acepta el pedido' +
+                ' <span class="ck-conexion-ir" data-ir="login">LOGIN</span>';
+            return;
+        }
         var n = nodo();
         if (n && !n.desconocido) {
             b.className = 'ck-conexion-banner ok';
