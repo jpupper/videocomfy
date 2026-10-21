@@ -106,8 +106,12 @@
     function pintarVuelo() {
         var caja = document.getElementById('queueRedVuelo');
         if (!caja) return;
-        var lista = window.JPI_RED_VUELO || [];
+        var todos = window.JPI_RED_VUELO || [];
         if (typeof window.JPI_RED_VUELO === 'undefined') return;   // todavía no llegó info
+        // En DEVICE va SÓLO lo que este equipo todavía tiene que hacer. Lo que ya
+        // terminó (listo / sin nube / error) vive en GLOBAL, no acá.
+        var TERMINADOS = ['listo', 'sin_nube', 'error', 'cancelada', 'interrumpida'];
+        var lista = todos.filter(function (j) { return TERMINADOS.indexOf(j && j.estado) < 0; });
         var cant = document.getElementById('redVueloCantidad');
         if (cant) cant.textContent = lista.length ? '(' + lista.length + ')' : '';
         if (!lista.length) { caja.classList.add('hidden'); return; }

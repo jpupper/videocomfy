@@ -3912,6 +3912,20 @@ function datosDeEstaPC() {
 // El pedido NO desaparece cuando empieza a generar: queda en el STAGE local
 // mostrando en qué paso va (pedido -> comfy -> subida a Cloudflare -> listo).
 // ---------------------------------------------------------------------------
+// Los pedidos de la red que YA terminaron no se quedan para siempre en la
+// línea de vuelo del DEVICE: a los 3 minutos se sacan (quedan en GLOBAL).
+function podarVueloTerminados() {
+    const ahora = Date.now();
+    const TERM = ['listo', 'sin_nube', 'error', 'cancelada', 'interrumpida'];
+    const antes = (RED.enVueloDetalle || []).length;
+    RED.enVueloDetalle = (RED.enVueloDetalle || []).filter(function (j) {
+        if (!j || TERM.indexOf(j.estado) < 0) return true;
+        return (ahora - (j.actualizado || j.desde || 0)) < 3 * 60 * 1000;
+    });
+    return antes !== RED.enVueloDetalle.length;
+}
+setInterval(function () { try { if (podarVueloTerminados()) avisarRedATodos(); } catch (e) { } }, 60000);
+
 function marcarPedidoRed(promptId, cambios) {
     const lista = RED.enVueloDetalle || [];
     const j = lista.find((x) => x && (x.promptId === promptId));
