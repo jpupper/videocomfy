@@ -23,9 +23,32 @@
     }
 
     var DATOS = { mio: null, peers: [], usuarios: [] };
+    var BUSCAR = '';          // texto del buscador
+    var BUSCADOS = [];        // resultados de jpconnect
+
+    function chipsHTML(tildados) {
+        var t = tildados || (DATOS.mio && DATOS.mio.usuarios || []).map(function (x) { return String(x).toLowerCase(); });
+        return usuariosFiltrados().map(function (u) {
+            var nombre = String(u.usuario || '');
+            var on = t.indexOf(nombre.toLowerCase()) >= 0;
+            return '<button type="button" class="acc-chip' + (on ? ' on' : '') + '" data-usuario="' + nombre + '">' +
+                (on ? '✓ ' : '') + '@' + nombre + '</button>';
+        }).join('');
+    }
+
+    function usuariosFiltrados() {
+        var t = String(BUSCAR || '').trim().toLowerCase();
+        if (!t) return usuariosDisponibles();
+        return usuariosDisponibles().filter(function (u) {
+            var n = String(u.usuario || '').toLowerCase();
+            var d = String(u.displayName || '').toLowerCase();
+            var m = String(u.email || '').toLowerCase();
+            return n.indexOf(t) >= 0 || d.indexOf(t) >= 0 || m.indexOf(t) >= 0;
+        });
+    }
 
     function usuariosDisponibles() {
-        var lista = (DATOS.usuarios || []).map(function (u) {
+        var lista = (DATOS.usuarios || []).concat(BUSCADOS || []).map(function (u) {
             return typeof u === 'string' ? { usuario: u, displayName: u } : u;
         });
         // los que ya están tildados tienen que verse aunque no estén en la lista
@@ -60,16 +83,11 @@
                 h.push('<p class="red-sub">Cualquier usuario de la comunidad puede ver esta PC y generar en ella.</p>');
             } else {
                 h.push('<p class="red-sub">Sólo estos usuarios la ven en COMUNIDAD y pueden mandarle trabajos:</p>');
-                h.push('<div class="acc-chips">');
-                usuariosDisponibles().forEach(function (u) {
-                    var nombre = String(u.usuario || '');
-                    var on = tildados.indexOf(nombre.toLowerCase()) >= 0;
-                    h.push('<button type="button" class="acc-chip' + (on ? ' on' : '') + '" data-usuario="' + nombre + '">' +
-                        (on ? '✓ ' : '') + '@' + nombre + '</button>');
-                });
-                h.push('</div>');
-                if (!usuariosDisponibles().length) {
-                    h.push('<p class="red-sub">Todavía no hay otros usuarios en la comunidad.</p>');
+                h.push('<input type="text" class="acc-buscar" id="accBuscarUser"' +
+                    ' placeholder="buscar usuario de la comunidad…" value="' + (BUSCAR || '') + '">');
+                h.push('<div class="acc-chips">' + chipsHTML(tildados) + '</div>');
+                if (!usuariosFiltrados().length) {
+                    h.push('<p class="red-sub">' + (BUSCAR ? 'No encontré «' + BUSCAR + '» en jpconnect.' : 'Todavía no hay otros usuarios en la comunidad.') + '</p>');
                 }
             }
             h.push('</div>');
@@ -122,7 +140,26 @@
                 guardar();
             });
         });
+        var inp = slot.querySelector('#accBuscarUser');
+        if (inp && !inp.__ck) {
+            inp.__ck = 1;
+            inp.addEventListener('input', function () {
+                BUSCAR = inp.value;
+                var tildados = (DATOS.mio && DATOS.mio.usuarios || []).map(function (x) { return String(x).toLowerCase(); });
+                document.querySelectorAll('.acc-chips').forEach(function (c) {
+                    c.innerHTML = chipsHTML(tildados);
+                });
+                // reengancho los chips nuevos (en los dos bloques)
+                ['redPermSlot', 'redMioAcceso'].forEach(function (id) {
+                    var c = document.getElementById(id);
+                    if (c) enganchar(c);
+                });
+                buscarEnJpconnect(inp.value);
+            });
+        }
         slot.querySelectorAll('[data-usuario]').forEach(function (b) {
+            if (b.__ck) return;
+            b.__ck = 1;
             b.addEventListener('click', function () {
                 var u = b.getAttribute('data-usuario').toLowerCase();
                 var arr = (DATOS.mio.usuarios || []).slice();
@@ -134,6 +171,31 @@
                 guardar(true);
             });
         });
+    }
+
+    // busca en jpconnect (todas las cuentas) y suma resultados a la lista
+    var tBuscar = 0;
+    function buscarEnJpconnect(texto) {
+        clearTimeout(tBuscar);
+        var t = String(texto || '').trim();
+        if (t.length < 2) return;
+        tBuscar = setTimeout(function () {
+            getJSON('/api/wf/usuarios?buscar=' + encodeURIComponent(t)).then(function (d) {
+                var enc = (d && d.usuarios) || [];
+                if (!enc.length) return;
+                var mapa = {};
+                (DATOS.usuarios || []).concat(BUSCADOS || []).forEach(function (u) { mapa[String(u.usuario).toLowerCase()] = u; });
+                enc.forEach(function (u) { mapa[String(u.usuario).toLowerCase()] = u; });
+                BUSCADOS = Object.keys(mapa).map(function (k) { return mapa[k]; });
+                var tildados = (DATOS.mio && DATOS.mio.usuarios || []).map(function (x) { return String(x).toLowerCase(); });
+                document.querySelectorAll('.acc-chips').forEach(function (c) { c.innerHTML = chipsHTML(tildados); });
+                ['redPermSlot', 'redMioAcceso'].forEach(function (id) {
+                    var c = document.getElementById(id);
+                    if (c) enganchar(c);
+                });
+                // ojo: NO repintar todo acá (se perdía el foco del buscador)
+            });
+        }, 320);
     }
 
     var tGuardar = 0;

@@ -18,6 +18,8 @@
     var ACCESO = {};      // { archivo: { modo: 'todos'|'lista', usuarios: [] } }
     var USUARIOS = [];    // [{ usuario, displayName, avatar }]
     var abiertos = {};    // qué workflow tiene el selector de usuarios desplegado
+    var BUSQUEDA = {};    // archivo -> texto del buscador de usuarios
+    var BUSCADOS = [];    // usuarios que devolvió el buscador (se suman a USUARIOS)
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -50,6 +52,41 @@
         };
     }
 
+    function todosLosUsuarios() {
+        var mapa = {};
+        (USUARIOS || []).concat(BUSCADOS || []).forEach(function (u) {
+            var k = String(u && u.usuario || '').toLowerCase();
+            if (k && !mapa[k]) mapa[k] = u;
+        });
+        return Object.keys(mapa).map(function (k) { return mapa[k]; });
+    }
+
+    function chipsDe(archivo, a) {
+        a = a || accesoDe(archivo);
+        var filtro = String(BUSQUEDA[archivo] || '').trim().toLowerCase();
+        var todos = todosLosUsuarios();
+        var lista = todos.filter(function (u) {
+            if (!filtro) return true;
+            var n = String(u.usuario || '').toLowerCase();
+            var d = String(u.displayName || '').toLowerCase();
+            var m = String(u.email || '').toLowerCase();
+            return n.indexOf(filtro) >= 0 || d.indexOf(filtro) >= 0 || m.indexOf(filtro) >= 0;
+        });
+        // los ya tildados nunca desaparecen
+        a.usuarios.forEach(function (sel) {
+            var existe = lista.some(function (u) { return String(u.usuario).toLowerCase() === String(sel).toLowerCase(); });
+            if (!existe) lista.push({ usuario: sel, displayName: sel });
+        });
+        lista = lista.slice(0, 60);
+        return lista.map(function (u) {
+            var marcado = a.usuarios.some(function (x) { return String(x).toLowerCase() === String(u.usuario).toLowerCase(); });
+            return '<button type="button" class="red-acc-user' + (marcado ? ' on' : '') + '"' +
+                ' data-acc-user="' + esc(archivo) + '" data-user="' + esc(u.usuario) + '">' +
+                (marcado ? '✓ ' : '') + '@' + esc(u.usuario) + '</button>';
+        }).join('') || '<span class="red-acc-vacio">' +
+            (filtro ? 'no encontré «' + esc(filtro) + '»' : 'todavía no hay usuarios registrados') + '</span>';
+    }
+
     // ---- fila de accesos de un workflow ------------------------------------
     function filaAcceso(w) {
         var a = accesoDe(w.archivo);
@@ -58,12 +95,7 @@
         var etiqueta = a.modo === 'todos'
             ? '👥 TODOS'
             : ('🔒 SÓLO ' + cuantos + (cuantos === 1 ? ' USUARIO' : ' USUARIOS'));
-        var chips = USUARIOS.map(function (u) {
-            var marcado = a.usuarios.some(function (x) { return String(x).toLowerCase() === String(u.usuario).toLowerCase(); });
-            return '<button type="button" class="red-acc-user' + (marcado ? ' on' : '') + '"' +
-                ' data-acc-user="' + esc(w.archivo) + '" data-user="' + esc(u.usuario) + '">' +
-                (marcado ? '✓ ' : '') + '@' + esc(u.usuario) + '</button>';
-        }).join('') || '<span class="red-acc-vacio">todavía no hay usuarios registrados</span>';
+        var chips = chipsDe(w.archivo, a);
 
         return '<div class="red-wf-acceso" data-acc-caja="' + esc(w.archivo) + '">' +
             '<button type="button" class="red-acc-modo' + (a.modo === 'lista' ? ' lista' : '') + '"' +
@@ -72,7 +104,10 @@
             etiqueta + '</button>' +
             // el selector se muestra al tocar TODOS (para poder elegir) o si ya
             // está restringido: si no, el primer clic no hacía nada visible
-            ((a.modo === 'lista' || abierto) ? '<div class="red-acc-lista">' + chips +
+            ((a.modo === 'lista' || abierto) ? '<div class="red-acc-lista">' +
+                '<input type="text" class="red-acc-buscar" data-acc-buscar="' + esc(w.archivo) + '"' +
+                ' placeholder="buscar usuario de la comunidad…" value="' + esc(BUSQUEDA[w.archivo] || '') + '">' +
+                '<div class="red-acc-chips" data-acc-chips="' + esc(w.archivo) + '">' + chips + '</div>' +
                 '<span class="red-acc-pista">tocá los usuarios que SÍ pueden usar este workflow</span></div>' : '') +
             '</div>';
     }
@@ -141,8 +176,26 @@
             });
         });
 
-        // tildar/destildar un usuario
-        caja.querySelectorAll('[data-acc-user]').forEach(function (b) {
+        engancharChips(caja);
+
+        // buscador de usuarios: trae CUALQUIER cuenta de jpconnect
+        caja.querySelectorAll('[data-acc-buscar]').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                var archivo = inp.getAttribute('data-acc-buscar');
+                BUSQUEDA[archivo] = inp.value;
+                var cont = caja.querySelector('[data-acc-chips="' + archivo + '"]');
+                if (cont) { cont.innerHTML = chipsDe(archivo); engancharChips(cont); }
+                buscarUsuarios(inp.value);
+            });
+        });
+    }
+
+    // tildar/destildar un usuario (sirve para la lista completa y la del buscador)
+    function engancharChips(raiz) {
+        if (!raiz) return;
+        raiz.querySelectorAll('[data-acc-user]').forEach(function (b) {
+            if (b.__ck) return;
+            b.__ck = 1;
             b.addEventListener('click', function () {
                 var archivo = b.getAttribute('data-acc-user');
                 var user = b.getAttribute('data-user');
@@ -151,13 +204,39 @@
                 var i = lista.findIndex(function (x) { return String(x).toLowerCase() === user.toLowerCase(); });
                 if (i >= 0) lista.splice(i, 1); else lista.push(user);
                 if (!lista.length) {
-                    // sin nadie elegido vuelve a TODOS (no se puede dejar vacío)
                     guardar(archivo, 'todos', []);
                     return;
                 }
                 guardar(archivo, 'lista', lista);
             });
         });
+    }
+
+    // busca en jpconnect (debounce) y repinta los chips de lo que esté abierto
+    var tBuscar = 0;
+    function buscarUsuarios(texto) {
+        clearTimeout(tBuscar);
+        var t = String(texto || '').trim();
+        if (t.length < 2) return;
+        tBuscar = setTimeout(function () {
+            fetch('/api/wf/usuarios?buscar=' + encodeURIComponent(t))
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var encontrados = (d && d.usuarios) || [];
+                    if (!encontrados.length) return;
+                    var mapa = {};
+                    todosLosUsuarios().forEach(function (u) { mapa[String(u.usuario).toLowerCase()] = u; });
+                    encontrados.forEach(function (u) { mapa[String(u.usuario).toLowerCase()] = u; });
+                    BUSCADOS = Object.keys(mapa).map(function (k) { return mapa[k]; });
+                    // repintar sólo los contenedores de chips visibles
+                    document.querySelectorAll('[data-acc-chips]').forEach(function (cont) {
+                        var arch = cont.getAttribute('data-acc-chips');
+                        cont.innerHTML = chipsDe(arch);
+                        engancharChips(cont);
+                    });
+                })
+                .catch(function () { });
+        }, 320);
     }
 
     function guardar(archivo, modo, usuarios) {

@@ -173,6 +173,90 @@ async function rolEnElEcosistema(clave) {
     } catch (e) { return null; }
 }
 
+// ── RUNPODS de cada usuario ─────────────────────────────────────────────────
+// Cada cuenta guarda sus ComfyUI remotos (RunPod y similares). Se listan en
+// CONEXIÓN y el hub les pregunta /system_stats para mostrar si están vivos.
+const RunpodSchema = new mongoose.Schema({
+    dueno: { type: String, index: true },        // username en minúsculas
+    nombre: String,
+    url: String,
+    creado: { type: Date, default: Date.now }
+}, { collection: 'runpods' });
+const Runpod = mongoose.models.Runpod || mongoose.model('Runpod', RunpodSchema);
+
+function normalizarUrlComfy(u) {
+    let s = String(u || '').trim();
+    if (!s) return '';
+    if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+    return s.replace(/\/+$/, '');
+}
+
+async function listarRunpods(dueno) {
+    const k = String(dueno || '').trim().toLowerCase();
+    if (!conectado || !k) return [];
+    try {
+        const lista = await Runpod.find({ dueno: k }).sort({ creado: 1 }).lean();
+        return lista.map((r) => ({ id: String(r._id), nombre: r.nombre || 'RunPod', url: r.url, creado: r.creado }));
+    } catch (e) { return []; }
+}
+
+async function guardarRunpod(dueno, datos) {
+    const k = String(dueno || '').trim().toLowerCase();
+    const url = normalizarUrlComfy(datos && datos.url);
+    const nombre = String((datos && datos.nombre) || '').trim().slice(0, 40) || 'RunPod';
+    if (!k) return { success: false, message: 'sin cuenta' };
+    if (!url) return { success: false, message: 'falta la URL del RunPod' };
+    if (!conectado) return { success: false, message: 'base no disponible' };
+    try {
+        const ya = await Runpod.findOne({ dueno: k, url: url });
+        if (ya) return { success: true, runpod: { id: String(ya._id), nombre: ya.nombre, url: ya.url }, repetido: true };
+        const r = await Runpod.create({ dueno: k, nombre: nombre, url: url });
+        return { success: true, runpod: { id: String(r._id), nombre: r.nombre, url: r.url } };
+    } catch (e) { return { success: false, message: e.message }; }
+}
+
+async function borrarRunpod(dueno, id) {
+    const k = String(dueno || '').trim().toLowerCase();
+    if (!conectado || !k || !id) return { success: false, message: 'faltan datos' };
+    try {
+        await Runpod.deleteOne({ dueno: k, _id: id });
+        return { success: true };
+    } catch (e) { return { success: false, message: e.message }; }
+}
+
+// Buscador de usuarios del ecosistema (TODOS los de jpconnect, no sólo los que
+// ya generaron algo). Se usa en ACCESO → WORKFLOWS/PERMISOS para tildar a quién
+// le das permiso.
+async function buscarUsuarios(texto, limite) {
+    const tope = Math.min(Math.max(Number(limite) || 20, 1), 60);
+    const t = String(texto || '').trim();
+    try {
+        if (!dbGlobal) dbGlobal = mongoose.connection.useDb('fullscreen_global');
+        const filtro = t
+            ? { $or: [{ username: new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+                       { displayName: new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+                       { email: new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }] }
+            : {};
+        const us = await dbGlobal.collection('users')
+            .find(filtro, { projection: { username: 1, displayName: 1, email: 1, avatar: 1, role: 1 } })
+            .sort({ username: 1 })
+            .limit(tope)
+            .toArray();
+        return (us || [])
+            .filter((u) => {
+                const nombre = String(u.username || u.email || '').trim();
+                return nombre && !/^(sin sesi[oó]n|an[oó]nimo|anonimo|desconocido|local|undefined|null|admin)$/i.test(nombre);
+            })
+            .map((u) => ({
+                usuario: String(u.username || (u.email || '').split('@')[0]),
+                displayName: u.displayName || u.username || '',
+                email: u.email || '',
+                avatar: u.avatar || '',
+                rol: u.role || 'USER'
+            }));
+    } catch (e) { return []; }
+}
+
 async function esAdminDelEcosistema(clave) {
     const u = await rolEnElEcosistema(clave);
     const rol = String((u && u.role) || '').toUpperCase();
@@ -722,7 +806,7 @@ async function resumen() {
 
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
-    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora, listarUsuarios,
+    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora, listarUsuarios, buscarUsuarios, listarRunpods, guardarRunpod, borrarRunpod,
     leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
     rolEnElEcosistema, esAdminDelEcosistema,
     estadisticasDe, ranking, resumen,

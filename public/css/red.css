@@ -796,3 +796,22 @@ body.ck-sin-computadora #confirmRegenBtn {
 .acc-nombre { font-weight: 700; color: var(--foreground); }
 .acc-dueno { color: var(--text-muted); font-size: .85em; }
 .acc-badge { margin-left: auto; font-size: .85em; color: var(--text-muted); }
+
+/* ---------- CONEXIÓN: RunPods ---------- */
+.red-runpod-alta { display: flex; gap: 0; margin: 8px 0; flex-wrap: wrap; }
+.red-runpod-alta input { flex: 1 1 200px; min-width: 160px; padding: 8px 10px; background: var(--card);
+  color: var(--foreground); border: 1px solid var(--border); font: inherit; font-size: .9em; }
+.red-runpod-alta input + input { border-left: 0; }
+.red-runpod-alta .red-btn { flex: 0 0 auto; }
+.red-runpods { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.rp-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); }
+.rp-nombre { font-weight: 700; color: var(--foreground); }
+.rp-url { color: var(--text-muted); font-size: .85em; font-family: monospace; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.rp-gpu { color: var(--text-muted); font-size: .82em; }
+.rp-fila .red-btn.chico { margin-left: auto; }
+.rp-fila .red-btn.chico + .red-btn.chico { margin-left: 0; }
+
+/* ---------- buscador de usuarios (WORKFLOWS y PERMISOS) ---------- */
+.red-acc-buscar, .acc-buscar { width: 100%; padding: 7px 10px; margin: 6px 0 8px; background: var(--card);
+  color: var(--foreground); border: 1px solid var(--border); font: inherit; font-size: .88em; }
+.red-acc-chips { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -6,11 +6,11 @@
   "/comfylatam/css/energia.css": "21200adc19b02529a3dbf50b27b9bd583a7c5428",
   "/comfylatam/css/estado.css": "f041a985344939454fa8ffdc704fc87465606ff5",
   "/comfylatam/css/mobile.css": "22dec14ec9d4127468b06870a4d4c7f08391007e",
-  "/comfylatam/css/red.css": "ff3bdb93fecf10255521ab97b477e5ce0e19e98d",
+  "/comfylatam/css/red.css": "96cfba0da2934ffaf2c4e56e2c4fe0146e6e8a24",
   "/comfylatam/css/settings-jpi.css": "a0689dcba78fad6404ae2bdbd5571ea60e4c5ae4",
   "/comfylatam/css/sidebar-collapse.css": "76d91ce81e65aa7827938976ffbcf0b5ec8c0f8c",
   "/comfylatam/css/style.css": "d678167fb973f3749c42c16a1da540904877ee05",
-  "/comfylatam/index.html": "59090e1a7e3df888f7a72b138edba98f6bfa6f05",
+  "/comfylatam/index.html": "c9bfd2411227e41de276ac5a55fdf19f59875a5b",
   "/comfylatam/js/assets-thumbs.js": "fdcc76af07724bf5309a2ea117c65a6583b3d56c",
   "/comfylatam/js/auth-jpi.js": "ceeb369ff57cc28c4a5fbaf8496ed6005eb70461",
   "/comfylatam/js/cola-pausa.js": "77cc625334b52f49f2d3039250a5545da6136586",
@@ -18,7 +18,7 @@
   "/comfylatam/js/estado.js": "9b0e718f612b3b0537376fab0969888f5c3af77f",
   "/comfylatam/js/mobile.js": "2adccbc5080e8279504266daae7976ced42b8d40",
   "/comfylatam/js/motor-imagen.js": "000eba7db0d70cd4c043643bb52f750eca7be781",
-  "/comfylatam/js/red.js": "0147e888ced662c4569a694416463300b3672d07",
+  "/comfylatam/js/red.js": "4c8367c554e147ae39475bbc11ced34b9f4a7bc6",
   "/comfylatam/js/script.js": "076b19d20aa823178c59222411751e9c50537565",
   "/comfylatam/js/scroll-guard.js": "c9e04f6b949050947090dd701980aef678111e2c",
   "/comfylatam/js/sidebar-collapse.js": "7523ce0b2d2f1c4e0f3c7c10a97cfa569f9c3479",
@@ -65,5 +65,6 @@
   "/comfylatam/js/comfystage.js": "55adaced3bf0e6ad58552612cb32aa610b161590",
   "/comfylatam/css/GUIA-DE-ESTILOS.md": "8779b38161cef08835d4a94cab61e6e8856d9bf9",
   "/comfylatam/css/tema.css": "54f607322c39dee4cc25564427131364fdafb648",
-  "/comfylatam/js/temas.js": "070a1145f3d500e9e60970c8fbc245a2437e0ec6"
+  "/comfylatam/js/temas.js": "070a1145f3d500e9e60970c8fbc245a2437e0ec6",
+  "/comfylatam/js/acceso-permisos.js": "e9253765e7cc4b65a5f8a7feb1eb51a98dbd0bfe"
 }

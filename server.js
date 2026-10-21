@@ -1123,8 +1123,12 @@ app.get('/api/red/workflows', async (req, res) => {
 // Los usuarios conocidos los sabe el hub (IACOMFY): se los pedimos con el token.
 app.get('/api/wf/usuarios', async (req, res) => {
     try {
-        const r = await fetch(RED.hub + '/api/red/usuarios', {
-            headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(8000)
+        // buscar= trae CUALQUIER usuario de jpconnect (no sólo los que ya usaron la app)
+        const q = new URLSearchParams();
+        if (req.query.buscar) q.set('buscar', String(req.query.buscar));
+        if (req.query.limite) q.set('limite', String(req.query.limite));
+        const r = await fetch(RED.hub + '/api/red/usuarios' + (q.toString() ? '?' + q.toString() : ''), {
+            headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(10000)
         });
         const d = await r.json().catch(() => ({}));
         res.json({ success: !!d.success, usuarios: d.usuarios || [], motivo: d.message || '' });
@@ -1135,6 +1139,52 @@ app.get('/api/wf/usuarios', async (req, res) => {
 
 app.get('/api/wf/acceso', (req, res) => {
     res.json({ success: true, acceso: ACCESO_WF });
+});
+
+// ── RUNPODS del usuario (viven en el hub, atados a la cuenta) ────────────────
+function cuentaLocal() {
+    const pc = datosDeEstaPC();
+    return String(pc.dueno || (RED.usuario && RED.usuario.username) || '').toLowerCase();
+}
+
+app.get('/api/red/runpods', async (req, res) => {
+    try {
+        if (!RED.hub) return res.json({ success: false, runpods: [], message: 'sin hub' });
+        const u = new URL(RED.hub + '/api/red/runpods');
+        u.searchParams.set('dueno', cuentaLocal());
+        if (req.query.sondear) u.searchParams.set('sondear', String(req.query.sondear));
+        const r = await fetch(u.toString(), { headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(12000) });
+        const d = await r.json().catch(() => ({}));
+        res.json({ success: !!d.success, runpods: d.runpods || [], dueno: d.dueno || '', message: d.message || '' });
+    } catch (e) {
+        res.json({ success: false, runpods: [], message: e.message });
+    }
+});
+
+app.post('/api/red/runpods', bodyParser.json(), async (req, res) => {
+    try {
+        const b = req.body || {};
+        const r = await fetch(RED.hub + '/api/red/runpods', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
+            body: JSON.stringify({ nombre: b.nombre, url: b.url, dueno: cuentaLocal() }),
+            signal: AbortSignal.timeout(10000)
+        });
+        const d = await r.json().catch(() => ({}));
+        res.json(d);
+    } catch (e) { res.json({ success: false, message: e.message }); }
+});
+
+app.post('/api/red/runpods/borrar', bodyParser.json(), async (req, res) => {
+    try {
+        const r = await fetch(RED.hub + '/api/red/runpods/borrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
+            body: JSON.stringify({ id: (req.body || {}).id, dueno: cuentaLocal() }),
+            signal: AbortSignal.timeout(10000)
+        });
+        res.json(await r.json().catch(() => ({ success: false })));
+    } catch (e) { res.json({ success: false, message: e.message }); }
 });
 
 // Quién puede usar MI equipo (por defecto todos).

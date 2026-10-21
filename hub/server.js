@@ -605,6 +605,17 @@ async function identidadesDe(quien) {
     return set;
 }
 
+// Nombre de cuenta (username) del que pide, para guardar cosas en su perfil.
+function cuentaDe(quien) {
+    if (!quien) return '';
+    const u = quien.usuario || {};
+    const mail = String(u.email || '').toLowerCase();
+    let nombre = String(u.username || '').trim().toLowerCase();
+    if (!nombre && mail) nombre = mail.split('@')[0];
+    if (!nombre && quien.dueno) nombre = String(quien.dueno).toLowerCase();
+    return nombre;
+}
+
 function puedeVerNodo(p, nombres) {
     if (process.env.DBG_ACCESO) console.log('[ACCESO]', p && p.id, 'nombres=', nombres ? [...nombres].join(',') : '-', 'acceso=', JSON.stringify((p && p.estado && p.estado.accesoNodo) || null));
     if (!p) return false;
@@ -753,11 +764,70 @@ app.get(rutasRed('/api/red/usuarios'), async (req, res) => {
         return res.status(401).json({ success: false, message: 'token inválido' });
     }
     try {
-        const lista = await db.listarUsuarios();
-        res.json({ success: true, usuarios: lista });
+        const buscar = String(req.query.buscar || '').trim();
+        const limite = Number(req.query.limite) || 20;
+        if (buscar) {
+            const encontrados = await db.buscarUsuarios(buscar, limite);
+            return res.json({ success: true, usuarios: encontrados, buscado: buscar });
+        }
+        const [conocidos, globales] = await Promise.all([
+            db.listarUsuarios().catch(() => []),
+            db.buscarUsuarios('', limite).catch(() => [])
+        ]);
+        const mapa = {};
+        (conocidos || []).concat(globales || []).forEach((u) => {
+            const k = String((u && u.usuario) || '').toLowerCase();
+            if (k && !mapa[k]) mapa[k] = u;
+        });
+        res.json({ success: true, usuarios: Object.values(mapa).slice(0, 60) });
     } catch (e) {
         res.json({ success: false, usuarios: [], message: e.message });
     }
+});
+
+// ── RUNPODS del usuario ─────────────────────────────────────────────────────
+// El dueño de la cuenta agrega sus ComfyUI remotos y quedan en su perfil.
+// Se les pregunta /system_stats para mostrar si están vivos.
+async function sondearRunpod(url) {
+    try {
+        const r = await fetch(url.replace(/\/+$/, '') + '/system_stats', { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return { enLinea: false };
+        const d = await r.json().catch(() => ({}));
+        const dev = (d && d.devices && d.devices[0]) || {};
+        return {
+            enLinea: true,
+            gpu: dev.name || '',
+            vram: dev.vram_total ? Math.round(dev.vram_total / 1073741824) : 0,
+            comfyVersion: (d && d.system && d.system.comfyui_version) || ''
+        };
+    } catch (e) { return { enLinea: false }; }
+}
+
+app.get(rutasRed('/api/red/runpods'), async (req, res) => {
+    const quien = autorizadoRed(req);
+    if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
+    const dueno = cuentaDe(quien) || String(req.query.dueno || '');
+    const lista = await db.listarRunpods(dueno);
+    if (String(req.query.sondear || '1') !== '0') {
+        await Promise.all(lista.map(async (r) => Object.assign(r, await sondearRunpod(r.url))));
+    }
+    res.json({ success: true, dueno: dueno, runpods: lista });
+});
+
+app.post(rutasRed('/api/red/runpods'), express.json({ limit: '8kb' }), async (req, res) => {
+    const quien = autorizadoRed(req);
+    if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
+    const dueno = cuentaDe(quien);
+    const r = await db.guardarRunpod(dueno, req.body || {});
+    if (r.success) console.log('☁️  RunPod de ' + dueno + ': ' + ((req.body || {}).url || ''));
+    res.json(r);
+});
+
+app.post(rutasRed('/api/red/runpods/borrar'), express.json({ limit: '4kb' }), async (req, res) => {
+    const quien = autorizadoRed(req);
+    if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
+    const dueno = cuentaDe(quien);
+    res.json(await db.borrarRunpod(dueno, String((req.body || {}).id || '')));
 });
 
 // Historial de nodos (quién se conectó, cuándo, desde qué fierro). Sale del

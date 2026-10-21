@@ -112,7 +112,7 @@
         panel.id = 'panelRed';
         panel.innerHTML = [
             '<div class="red-head">',
-            '  <h2>COMUNIDAD COMFYLATAM</h2>',
+            '  <h2>CONEXIÓN</h2>',
             '  <span class="red-badge" id="redModo"></span>',
             '  <span class="red-badge" id="redResumen"></span>',
             '  <button class="red-btn secundario" id="redRefrescar">Actualizar</button>',
@@ -124,6 +124,17 @@
 
             '<div class="red-elegido" id="redElegidoCaja"></div>',
             '<div class="red-aviso" id="redAviso"></div>',
+
+            // ── RunPods del usuario (ComfyUI remoto, queda en su perfil) ──────
+            '<h3 class="red-titulo">☁️ MIS RUNPODS <span class="red-sub-chico">(ComfyUI remoto, guardado en tu perfil)</span></h3>',
+            '<div class="red-runpod-alta">',
+            '  <input type="text" id="rpNombre" maxlength="40" placeholder="nombre (ej: RunPod 4090)">',
+            '  <input type="text" id="rpUrl" placeholder="https://xxxx-8188.proxy.runpod.net">',
+            '  <button class="red-btn" id="rpAgregar">AGREGAR RUNPOD</button>',
+            '  <button class="red-btn secundario" id="rpRefrescar" title="volver a probar si están vivos">⟳</button>',
+            '</div>',
+            '<div class="red-sub-chico" id="rpAviso"></div>',
+            '<div class="red-runpods" id="redRunpods"></div>',
 
             '<div class="red-disponibles" id="redDisponibles"></div>',
             '<h3 class="red-titulo">🖥️ NODOS CONECTADOS <span id="redCantidad"></span>',
@@ -216,7 +227,7 @@
         if (izq && !document.getElementById('ckPiRed')) {
             var bi = document.createElement('button');
             bi.id = 'ckPiRed';
-            bi.textContent = '🌐 COMUNIDAD';
+            bi.textContent = '🔌 CONEXIÓN';
             bi.style.marginTop = '6px';
             bi.addEventListener('click', function (e) { e.preventDefault(); abrir(); });
             izq.appendChild(bi);
@@ -233,7 +244,7 @@
             mb.type = 'button';
             mb.id = 'mobRed';
             mb.className = 'mobile-tab';
-            mb.textContent = 'COMUNIDAD';
+            mb.textContent = 'CONEXIÓN';
             barra.appendChild(mb);
             mb.addEventListener('click', function () { abrir(); });
             var mba = document.createElement('button');
