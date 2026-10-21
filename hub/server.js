@@ -785,6 +785,31 @@ app.get(rutasRed('/api/red/usuarios'), async (req, res) => {
     }
 });
 
+// ── REGISTRO GLOBAL (vive en el VPS) ────────────────────────────────────────
+// Cada CREATE —local o web— se anota acá. El STAGE lo lee de acá, no del nodo.
+app.get(rutasRed('/api/red/pedidos-global'), async (req, res) => {
+    const quien = autorizadoRed(req);
+    if (!quien) return res.status(401).json({ success: false, requiereLogin: true, message: 'Entrá con tu cuenta.' });
+    if (!db.estadoDb().conectado) {
+        return res.status(503).json({ success: false, disponible: false, message: 'registro global no disponible' });
+    }
+    const lista = await db.listarPedidosGlobal(req.query.limite);
+    res.set('Cache-Control', 'no-store');
+    res.json({ success: true, disponible: true, pedidos: lista, actualizado: Date.now() });
+});
+
+app.post(rutasRed('/api/red/pedidos-global'), express.json({ limit: '2mb' }), async (req, res) => {
+    if (!tokenDeNodoValido(req) && !usuarioDe(tokenDe(req))) {
+        return res.status(401).json({ success: false, message: 'token inválido' });
+    }
+    const lista = Array.isArray((req.body || {}).pedidos) ? req.body.pedidos : [];
+    const r = await db.registrarPedidosGlobal(lista);
+    if (r.ok) {
+        try { io.emit('pedidos_global', { actualizado: Date.now(), n: r.n }); } catch (e) { }
+    }
+    res.json({ success: !!r.ok, n: r.n, message: r.error || '' });
+});
+
 // ── RUNPODS del usuario ─────────────────────────────────────────────────────
 // El dueño de la cuenta agrega sus ComfyUI remotos y quedan en su perfil.
 // Se les pregunta /system_stats para mostrar si están vivos.
@@ -943,6 +968,16 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
         avatar: quienEs.avatar || '',
         tipo: quien.tipo === 'nodo' ? 'app-local' : 'web'
     };
+    // Registro GLOBAL: el CREATE de la web se persiste en el VPS (Mongo) y se
+    // avisa por socket a todos los clientes conectados.
+    try {
+        db.registrarPedidosGlobal([{
+            id: jobId, jobId: jobId, prompt: String(b.prompt || '').slice(0, 600),
+            estado: 'pedida', origen: 'web', peerId: destino.id, peerNombre: destino.nombre,
+            pedidoPor: pedidoPor, ts: Date.now()
+        }]).then(function (r) { if (r && r.ok) { try { io.emit('pedidos_global', { actualizado: Date.now() }); } catch (e) { } } }).catch(function () { });
+    } catch (e) { }
+
     // El pedido queda anotado en el hub ANTES de mandarlo: así aparece en el
     // REGISTRO/BATCH de la web al instante (antes sólo se veía cuando el nodo
     // contestaba, y si algo fallaba no aparecía nunca).

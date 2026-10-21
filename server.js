@@ -1141,6 +1141,23 @@ app.get('/api/wf/acceso', (req, res) => {
     res.json({ success: true, acceso: ACCESO_WF });
 });
 
+// ── REGISTRO GLOBAL (lectura desde la app local; la verdad está en el VPS) ───
+app.get('/api/red/pedidos-global', async (req, res) => {
+    try {
+        if (!RED.hub) return res.status(503).json({ success: false, disponible: false, pedidos: [], message: 'sin hub' });
+        const u = new URL(RED.hub + '/api/red/pedidos-global');
+        if (req.query.limite) u.searchParams.set('limite', String(req.query.limite));
+        const r = await fetch(u.toString(), { headers: { 'x-agent-token': RED_TOKEN }, signal: AbortSignal.timeout(10000) });
+        const d = await r.json().catch(() => ({}));
+        res.status(r.status === 503 ? 503 : 200).json({
+            success: !!d.success, disponible: d.disponible !== false,
+            pedidos: d.pedidos || [], message: d.message || ''
+        });
+    } catch (e) {
+        res.status(503).json({ success: false, disponible: false, pedidos: [], message: e.message });
+    }
+});
+
 // ── RUNPODS del usuario (viven en el hub, atados a la cuenta) ────────────────
 function cuentaLocal() {
     const pc = datosDeEstaPC();
@@ -2724,7 +2741,41 @@ function avisarPedidos() {
     avisarPedidos._t = setTimeout(() => {
         try { enviarAlFront({ type: 'pedidos', pedidos: PEDIDOS.slice(-80) }); } catch (e) { }
     }, 300);
+
+    // REGISTRO GLOBAL: cada pedido (y cada cambio de estado) viaja al VPS.
+    // Si el VPS no está, falla callado y la web muestra "no disponible".
+    try { anunciarGlobal(); } catch (e) { }   // si todavía no está inicializado, no rompe
 }
+
+// Manda los últimos pedidos al registro global del hub (debounce + sólo si cambió).
+const anunciarGlobal = (function () {
+    var t = 0, firma = '';
+    return function () {
+        clearTimeout(t);
+        t = setTimeout(function () {
+            if (!RED.hub) return;
+            var recorte = PEDIDOS.slice(-25).map(function (p) {
+                return {
+                    id: p.id || p.jobId, jobId: p.jobId || '', archivo: p.archivo || '',
+                    prompt: String(p.prompt || '').slice(0, 600), estado: p.estado || 'pedida',
+                    origen: p.origen || '', peerId: RED.peerId,
+                    peerNombre: (p.computadora && p.computadora.nombre) || RED.nombre,
+                    pedidoPor: p.pedidoPor || null, computadora: p.computadora || null,
+                    ts: p.ts || p.creado || Date.now()
+                };
+            });
+            var nueva = recorte.map(function (p) { return p.id + ':' + p.estado; }).join('|');
+            if (nueva === firma) return;
+            firma = nueva;
+            fetch(RED.hub + '/api/red/pedidos-global', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
+                body: JSON.stringify({ pedidos: recorte }),
+                signal: AbortSignal.timeout(8000)
+            }).catch(function () { });
+        }, 900);
+    };
+})();
 
 async function quitarDeComfy(promptId) {
     if (!promptId) return false;

@@ -173,6 +173,65 @@ async function rolEnElEcosistema(clave) {
     } catch (e) { return null; }
 }
 
+// ── REGISTRO GLOBAL DE PEDIDOS (vive en el VPS) ──────────────────────────────
+// Cada CREATE —venga de la app local o de la web— se anota acá. Es la fuente
+// del registro GLOBAL del STAGE: si el VPS no está, la pestaña se muestra
+// "no disponible" (no se inventa nada en el cliente).
+const PedidoGlobalSchema = new mongoose.Schema({
+    id: { type: String, index: true, unique: true },
+    jobId: String,
+    archivo: String,
+    prompt: String,
+    estado: String,
+    origen: String,            // web | local | red
+    peerId: String,
+    peerNombre: String,
+    pedidoPor: mongoose.Schema.Types.Mixed,
+    computadora: mongoose.Schema.Types.Mixed,
+    ts: Number,
+    actualizado: Number
+}, { collection: 'pedidos_global', minimize: false });
+const PedidoGlobal = mongoose.models.PedidoGlobal || mongoose.model('PedidoGlobal', PedidoGlobalSchema);
+
+async function registrarPedidosGlobal(lista) {
+    if (!conectado || !Array.isArray(lista) || !lista.length) return { ok: false, n: 0 };
+    const ops = lista.filter((p) => p && (p.id || p.jobId)).map((p) => {
+        const id = String(p.id || p.jobId);
+        const doc = {
+            id: id,
+            jobId: p.jobId || '',
+            archivo: p.archivo || '',
+            prompt: String(p.prompt || '').slice(0, 600),
+            estado: p.estado || 'pedida',
+            origen: p.origen || '',
+            peerId: p.peerId || p.computadora && p.computadora.peerId || '',
+            peerNombre: p.peerNombre || p.computadora && p.computadora.nombre || '',
+            pedidoPor: p.pedidoPor || null,
+            computadora: p.computadora || null,
+            ts: p.ts || p.creado || Date.now(),
+            actualizado: Date.now()
+        };
+        return { updateOne: { filter: { id: id }, update: { $set: doc }, upsert: true } };
+    });
+    try {
+        await PedidoGlobal.bulkWrite(ops, { ordered: false });
+        return { ok: true, n: ops.length };
+    } catch (e) { return { ok: false, error: e.message, n: 0 }; }
+}
+
+async function listarPedidosGlobal(limite) {
+    if (!conectado) return [];
+    try {
+        const n = Math.min(Math.max(Number(limite) || 150, 1), 500);
+        const docs = await PedidoGlobal.find({}).sort({ ts: -1 }).limit(n).lean();
+        return docs.map((d) => ({
+            id: d.id, jobId: d.jobId, archivo: d.archivo, prompt: d.prompt, estado: d.estado,
+            origen: d.origen, peerId: d.peerId, peerNombre: d.peerNombre,
+            pedidoPor: d.pedidoPor, computadora: d.computadora, ts: d.ts, actualizado: d.actualizado
+        }));
+    } catch (e) { return []; }
+}
+
 // ── RUNPODS de cada usuario ─────────────────────────────────────────────────
 // Cada cuenta guarda sus ComfyUI remotos (RunPod y similares). Se listan en
 // CONEXIÓN y el hub les pregunta /system_stats para mostrar si están vivos.
@@ -806,7 +865,7 @@ async function resumen() {
 
 module.exports = {
     conectar, estadoDb, segundosEnVivo, cerrarSesionesViejas,
-    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora, listarUsuarios, buscarUsuarios, listarRunpods, guardarRunpod, borrarRunpod,
+    anotarUsuario, anotarAsset, latidoDeComputadora, cerrarSesion, anotarGeneracion, enLineaDe, estadoDeComputadora, listarUsuarios, buscarUsuarios, listarRunpods, guardarRunpod, borrarRunpod, registrarPedidosGlobal, listarPedidosGlobal,
     leerLimiteMB, guardarLimiteMB, puedeSubir, LIMITE_DEFECTO_MB,
     rolEnElEcosistema, esAdminDelEcosistema,
     estadisticasDe, ranking, resumen,

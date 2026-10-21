@@ -815,3 +815,23 @@ body.ck-sin-computadora #confirmRegenBtn {
 .red-acc-buscar, .acc-buscar { width: 100%; padding: 7px 10px; margin: 6px 0 8px; background: var(--card);
   color: var(--foreground); border: 1px solid var(--border); font: inherit; font-size: .88em; }
 .red-acc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- STAGE → GLOBAL: registro del VPS ---------- */
+#regGlobalCaja { margin: 4px 0 14px; }
+.rg-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.rg-titulo { margin: 0; font-size: .95rem; }
+.rg-badge { font-size: .7rem; padding: 2px 6px; border: 1px solid var(--border); color: var(--text-muted); }
+.rg-info { color: var(--text-muted); font-size: .78rem; }
+.rg-cab .red-btn { margin-left: auto; }
+.rg-off { border: 1px dashed var(--border); padding: 14px; color: var(--text-muted); font-size: .85rem; line-height: 1.5; }
+.rg-err { margin-top: 6px; color: #f59e0b; font-family: monospace; font-size: .78rem; }
+.rg-tabla-caja { max-height: 380px; overflow: auto; border: 1px solid var(--border); }
+.rg-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.rg-tabla th { position: sticky; top: 0; background: var(--card); text-align: left; padding: 7px 9px;
+  border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; }
+.rg-tabla td { padding: 6px 9px; border-bottom: 1px solid var(--border); color: var(--foreground); }
+.rg-tabla tr:hover td { background: rgba(255,255,255,.03); }
+.rg-archivo { font-family: monospace; font-size: .78rem; }
+.rg-prompt { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-hora { color: var(--text-muted); white-space: nowrap; }
+.rg-estado { white-space: nowrap; }

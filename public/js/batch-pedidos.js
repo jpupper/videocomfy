@@ -58,7 +58,7 @@
         if (document.getElementById('batchPedidos')) return;
 
         var titulo = caja.querySelector('.inline-queue-title');
-        if (titulo) titulo.textContent = '📦 BATCH';
+        if (titulo) titulo.textContent = '🖥️ DEVICE';
         var sub = caja.querySelector('.inline-queue-badge');
         if (sub) sub.textContent = (esLocal
             ? 'lo que pediste acá + lo que llega de la web'
@@ -80,7 +80,7 @@
             b.id = 'limpiarBatchBtn';
             b.className = 'danger-btn-outline';
             b.style.cssText = 'padding: 6px 16px; font-size: 0.8em; font-weight: 700; margin-left: 8px;';
-            b.textContent = '🧹 LIMPIAR BATCH';
+            b.textContent = '🧹 LIMPIAR DEVICE';
             b.title = 'Cancela lo que falta generar (queda con una cruz en el registro)';
             b.addEventListener('click', limpiar);
             var stop = document.getElementById('stopQueueBtn');
@@ -173,7 +173,7 @@
                 setTimeout(traer, 800);
             })
             .catch(function () { })
-            .then(function () { if (b) { b.disabled = false; b.textContent = '🧹 LIMPIAR BATCH'; } });
+            .then(function () { if (b) { b.disabled = false; b.textContent = '🧹 LIMPIAR DEVICE'; } });
     }
 
     // ---------- reanudar (el mismo botón de la cola, acá y por ítem) ----------

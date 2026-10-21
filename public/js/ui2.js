@@ -27,7 +27,11 @@
         (function juntar(nodo) {
             Array.prototype.slice.call(nodo.children || []).forEach(function (hijo) {
                 if (hijo.id === 'stageSubTabs') return;
-                if (contiene(hijo, ['a dónde va', 'última generación', 'registro'])) bloques.push({ nodo: hijo, tipo: 'community' });
+                // 🎬 ÚLTIMA GENERACIÓN: pedido explícito — se elimina, todo va al GLOBAL
+                if (contiene(hijo, ['última generación'])) { hijo.style.display = 'none'; hijo.setAttribute('data-ck-oculto', '1'); return; }
+                if (contiene(hijo, ['a dónde va'])) bloques.push({ nodo: hijo, tipo: 'batch' });
+                // el REGISTRO local del STAGE lo reemplaza el GLOBAL (VPS)
+                else if (contiene(hijo, ['registro'])) { hijo.style.display = 'none'; hijo.setAttribute('data-ck-oculto', '1'); }
                 else if (contiene(hijo, ['tu batch local', 'completed history', 'nothing to generate', 'en cola', 'pendientes', 'pedidos de la red', 'pedidos que llegan'])) bloques.push({ nodo: hijo, tipo: 'batch' });
                 else juntar(hijo);
             });
@@ -38,6 +42,10 @@
         var community = document.createElement('div');
         community.id = 'stageCommunity';
         community.className = 'sub-tab-content active';
+        // cabecera del registro GLOBAL (lo llena js/registro-global.js)
+        var cab = document.createElement('div');
+        cab.id = 'regGlobalCaja';
+        community.appendChild(cab);
         var batch = document.createElement('div');
         batch.id = 'stageBatch';
         batch.className = 'sub-tab-content';
@@ -59,8 +67,8 @@
         barra.id = 'stageSubTabs';
         barra.className = 'sub-tabs-container';
         barra.innerHTML =
-            '<button class="sub-tab-btn sub-tab-btn-std active" data-sub="stageCommunity">🌎 COMMUNITY</button>' +
-            '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🏠 BATCH</button>' +
+            '<button class="sub-tab-btn sub-tab-btn-std active" data-sub="stageCommunity">🌐 GLOBAL</button>' +
+            '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageBatch">🖥️ DEVICE</button>' +
             (esWebAqui ? '' : '<button class="sub-tab-btn sub-tab-btn-std" data-sub="stageComfy">🖥️ COMFYSTAGE</button>');
 
         stage.appendChild(barra);
