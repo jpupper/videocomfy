@@ -1421,7 +1421,18 @@ function anotarPedidoHub(msg, clientId, destinoForzado) {
         };
         p.dueno = p.computadora.dueno;
         PEDIDOS_HUB.push(p);
-        if (PEDIDOS_HUB.length > 200) PEDIDOS_HUB.splice(0, PEDIDOS_HUB.length - 200);
+        // Y al REGISTRO GLOBAL (Mongo). Antes sólo quedaba en PEDIDOS_HUB (memoria)
+        // y por eso un CREATE de la web nunca aparecía en GLOBAL.
+        try {
+            db.registrarPedidosGlobal([{
+                id: p.id, jobId: p.jobId || '', archivo: '', prompt: p.prompt,
+                estado: 'pedida', origen: 'web',
+                peerId: (p.computadora && p.computadora.peerId) || '',
+                peerNombre: (p.computadora && p.computadora.nombre) || '',
+                pedidoPor: { usuario: p.usuario, displayName: p.displayName, avatar: p.avatar, tipo: 'web' },
+                computadora: p.computadora, ts: ahora
+            }]).catch(function (e) { console.log('⚠️  [GLOBAL] pedido web no se pudo guardar: ' + e.message); });
+        } catch (e) { }
         console.log(`📝 Pedido web anotado en el hub: "${prompt.slice(0, 40)}" · @${p.usuario} · ${p.computadora.nombre}`);
         return p;
     } catch (e) { return null; }
