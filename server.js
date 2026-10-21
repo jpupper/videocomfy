@@ -92,6 +92,7 @@ function guardarConfigLocal() {
 function comfyBase() {
     // Si hay un Comfy externo (RunPod) encendido, ESE es el motor.
     let a = String((comfyExterno && comfyExterno.activo && comfyExterno.url) ? comfyExterno.url : (comfyAddress || '')).trim().replace(/\/+$/, '');
+    a = a.split('#')[0];   // quita el fragmento (#id-del-workflow): si queda, /prompt y /object_info apuntan a la raíz y fallan
     if (/^https?:\/\//i.test(a)) return a;                 // URL completa (RunPod)
     if (a.includes(':')) return 'http://' + a;             // host:puerto
     return 'http://' + a + ':8188';                        // host -> puerto por defecto
@@ -4987,25 +4988,39 @@ async function generarStoryboard(promptText, params = {}, storyboardIndex = 0, b
         return generarImagenModelo(params.modelo, promptText, params);
     }
 
-    // Usar el checkpoint fused fp8 cuando está disponible: el workflow original
-    // (flux1-dev fp16 23.8GB + t5xxl fp16 9.3GB) no entra en 24GB de VRAM y
-    // hace crashear ComfyUI con segfault (exit 139) al cargar el CLIP.
+    // Si hay un Comfy externo (RunPod) activo, usamos el workflow "full"
+    // (flux1-dev.safetensors), que es EL MISMO que corre en esa instancia.
+    // En local seguimos con el fp8: el fp16 (23.8GB + t5xxl) no entra en la 4060 de 8GB.
+    const runpodActivo = !!(comfyExterno && comfyExterno.activo && comfyExterno.url);
     const fp8File = 'workflows/flux_dev_fp8_api.json';
-    const workflowFile = fs.existsSync(path.join(__dirname, fp8File))
-        ? fp8File
-        : 'workflows/flux_dev_full_text_to_image_api.json';
+    const fullFile = 'workflows/flux_dev_full_text_to_image_api.json';
+    const workflowFile = runpodActivo
+        ? fullFile
+        : (fs.existsSync(path.join(__dirname, fp8File)) ? fp8File : fullFile);
     const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
     const promptWorkflow = JSON.parse(data);
 
-    // Configurar workflow de Flux
-    promptWorkflow["41"]["inputs"]["clip_l"] = promptText;
-    promptWorkflow["41"]["inputs"]["t5xxl"] = promptText;
-    promptWorkflow["31"]["inputs"]["seed"] = Math.floor(Math.random() * 1000000000000000);
-    
-    // Dimensiones (opcional, Flux suele ir bien en 1024)
-    if (params.videoWidth) promptWorkflow["27"]["inputs"]["width"] = params.videoWidth;
-    if (params.videoHeight) promptWorkflow["27"]["inputs"]["height"] = params.videoHeight;
-    if (params.storyboardSteps) promptWorkflow["31"]["inputs"]["steps"] = params.storyboardSteps;
+    // Configurar workflow de Flux. Dos estructuras:
+    //  - RunPod (full): CLIPTextEncode 67 (positivo) / 71 (negativo) + KSampler 70 + latent 68
+    //  - fp8 local:     CLIPTextEncodeFlux 41 + ConditioningZeroOut + KSampler 31 + latent 27
+    if (promptWorkflow["67"] && promptWorkflow["67"].class_type === "CLIPTextEncode"
+        && promptWorkflow["70"] && promptWorkflow["70"].class_type === "KSampler") {
+        promptWorkflow["67"]["inputs"]["text"] = promptText;
+        if (params.negativePrompt) promptWorkflow["71"]["inputs"]["text"] = params.negativePrompt;
+        promptWorkflow["70"]["inputs"]["seed"] = (params.seed !== undefined && params.seed !== -1)
+            ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
+        if (params.videoWidth) promptWorkflow["68"]["inputs"]["width"] = Number(params.videoWidth);
+        if (params.videoHeight) promptWorkflow["68"]["inputs"]["height"] = Number(params.videoHeight);
+        if (params.storyboardSteps) promptWorkflow["70"]["inputs"]["steps"] = Number(params.storyboardSteps);
+        if (params.cfgScale) promptWorkflow["70"]["inputs"]["cfg"] = Number(params.cfgScale);
+    } else {
+        promptWorkflow["41"]["inputs"]["clip_l"] = promptText;
+        promptWorkflow["41"]["inputs"]["t5xxl"] = promptText;
+        promptWorkflow["31"]["inputs"]["seed"] = Math.floor(Math.random() * 1000000000000000);
+        if (params.videoWidth) promptWorkflow["27"]["inputs"]["width"] = params.videoWidth;
+        if (params.videoHeight) promptWorkflow["27"]["inputs"]["height"] = params.videoHeight;
+        if (params.storyboardSteps) promptWorkflow["31"]["inputs"]["steps"] = params.storyboardSteps;
+    }
     
     const promptId = await queuePrompt(promptWorkflow);
     console.log(`🚀 Storyboard enviado a ComfyUI. ID: ${promptId}`);
