@@ -1372,6 +1372,17 @@ setInterval(() => { try { relay.avisarPeers(); } catch (e) { } }, 10000);
 // 2) websocket crudo del editor (/ws) -> se relaya al videocomfy local
 const wss = new WebSocketServer({ noServer: true });
 const clientesWs = new Set();
+
+// Frames que se reenvían a los navegadores con la identidad de la PC que los
+// emitió (__peer). El front ignora los de una PC que no es la elegida: sin esto,
+// con dos máquinas conectadas los pasos de una mueven la barra de la otra.
+const TIPOS_CON_PEER = [
+    'progress', 'progress_state', 'executing', 'executed', 'execution_start',
+    'execution_success', 'prompt_queued', 'queued', 'generation_error',
+    'execution_error', 'generation_timeout', 'storyboard_generated',
+    'video_generated', 'media_en_nube', 'comfy_status', 'queue_state', 'preview',
+    'pedidos'
+];
 let wsSeq = 0;
 
 
@@ -1544,12 +1555,31 @@ io.on('connection', (socket) => {
 relay.alRecibirBroadcast((peerId, data) => {
     const nodo = relay.peer(peerId);
     const esPrincipal = !nodo || nodo.principal;
-    if (esPrincipal) {
-        for (const c of clientesWs) {
-            if (c.readyState !== 1) continue;
-            const base = (c._origen || relay.origenPublico()) + BASE_PATH;
-            c.send(relay.reescribirTexto(String(data), base));
+
+    // ── LOS FRAMES DEL NODO VAN A TODOS LOS NAVEGADORES, SEA O NO "PRINCIPAL" ──
+    // Antes sólo se reenviaban si el nodo era `principal` (la PC del dueño), así
+    // que con un nodo que no está marcado como principal el navegador de la web
+    // no recibía ni `progress` ni `executed`: la barra del STAGE se quedaba en
+    // "📤 Pidiendo el trabajo a JPIA… 10%" aunque la imagen se generara y subiera.
+    // Ahora se reenvía siempre, con la identidad del nodo en `__peer` (el front
+    // ignora los frames de una PC que no es la elegida) y con el prefijo /p/<id>/
+    // para que la media de otra máquina no se mezcle con la local.
+    let texto = String(data);
+    try {
+        const mm = JSON.parse(texto);
+        if (mm && TIPOS_CON_PEER.indexOf(mm.type) >= 0) {
+            mm.__peer = peerId || '';
+            texto = JSON.stringify(mm);
         }
+    } catch (e) { }
+    // base: el origen del cliente + el prefijo de la app; el tercer argumento es
+    // el nodo, que agrega /p/<id>/ a la media cuando NO es el principal (así la
+    // media de otra máquina no se mezcla con la local).
+    const prePeer = (nodo && nodo.principal) ? null : (peerId || null);
+    for (const c of clientesWs) {
+        if (c.readyState !== 1) continue;
+        const base = (c._origen || relay.origenPublico()) + BASE_PATH;
+        try { c.send(relay.reescribirTexto(texto, base, prePeer)); } catch (e) { }
     }
 
     // Solo emitir red:evento cuando una generación termina (storyboard o video).

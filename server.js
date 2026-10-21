@@ -2692,6 +2692,15 @@ function nuevoPedido(d) {
         usuario: d.usuario || '—',
         displayName: d.displayName || d.usuario || '—',
         avatar: d.avatar || '',
+        // pedidoPor viaja CON el pedido: es lo que muestra el REGISTRO GLOBAL
+        // del VPS en la columna "Lo pidió". Sin este campo el registro llegaba
+        // con pedidoPor:null y el global decía siempre "—".
+        pedidoPor: d.pedidoPor || {
+            usuario: d.usuario || '—',
+            displayName: d.displayName || d.usuario || '—',
+            avatar: d.avatar || '',
+            tipo: origen
+        },
         origen: origen,
         desde: (origen === 'web' ? 'la web' : 'esta app (local)'),
         computadora: pcPedido,
@@ -2762,12 +2771,24 @@ const anunciarGlobal = (function () {
         t = setTimeout(function () {
             if (!RED.hub) return;
             var recorte = PEDIDOS.slice(-25).map(function (p) {
+                // el REGISTRO GLOBAL muestra "Lo pidió" desde pedidoPor: los pedidos
+                // viejos (y los de la red) no lo traen, así que se arma con
+                // usuario/displayName/avatar en vez de mandar null.
+                var quien = p.pedidoPor || (p.usuario ? {
+                    usuario: p.usuario,
+                    displayName: p.displayName || p.usuario,
+                    avatar: p.avatar || '',
+                    tipo: p.origen || 'local'
+                } : null);
                 return {
                     id: p.id || p.jobId, jobId: p.jobId || '', archivo: p.archivo || '',
                     prompt: String(p.prompt || '').slice(0, 600), estado: p.estado || 'pedida',
                     origen: p.origen || '', peerId: RED.peerId,
                     peerNombre: (p.computadora && p.computadora.nombre) || RED.nombre,
-                    pedidoPor: p.pedidoPor || null, computadora: p.computadora || null,
+                    pedidoPor: quien, computadora: p.computadora || null,
+                    // url de la nube: es lo único que se puede abrir desde la web
+                    // (el ojito del registro global). Lo local-only no tiene url.
+                    url: p.url || '',
                     ts: p.ts || p.creado || (p.pasos && p.pasos.pedida) || p.actualizado || Date.now()
                 };
             });

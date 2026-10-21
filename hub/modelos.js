@@ -188,6 +188,9 @@ const PedidoGlobalSchema = new mongoose.Schema({
     peerNombre: String,
     pedidoPor: mongoose.Schema.Types.Mixed,
     computadora: mongoose.Schema.Types.Mixed,
+    // url de Cloudflare (R2) del archivo: es lo que abre el ojito del registro
+    // global desde la web. Vacío = la imagen quedó sólo en la PC y la web no la ve.
+    url: String,
     ts: Number,
     actualizado: Number
 }, { collection: 'pedidos_global', minimize: false });
@@ -208,6 +211,7 @@ async function registrarPedidosGlobal(lista) {
             peerNombre: p.peerNombre || p.computadora && p.computadora.nombre || '',
             pedidoPor: p.pedidoPor || null,
             computadora: p.computadora || null,
+            url: p.url || '',
             ts: p.ts || p.creado || Date.now(),
             actualizado: Date.now()
         };
@@ -227,7 +231,8 @@ async function listarPedidosGlobal(limite) {
         return docs.map((d) => ({
             id: d.id, jobId: d.jobId, archivo: d.archivo, prompt: d.prompt, estado: d.estado,
             origen: d.origen, peerId: d.peerId, peerNombre: d.peerNombre,
-            pedidoPor: d.pedidoPor, computadora: d.computadora, ts: d.ts, actualizado: d.actualizado
+            pedidoPor: d.pedidoPor, computadora: d.computadora, url: d.url || '',
+            ts: d.ts, actualizado: d.actualizado
         }));
     } catch (e) { return []; }
 }

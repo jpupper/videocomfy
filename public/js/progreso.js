@@ -218,6 +218,13 @@
     // ---------- mensajes del WebSocket ----------
     function msg(m) {
         if (!m || !m.type) return;
+        // Cada frame que reenvía el hub trae de qué PC viene (__peer): si no es la
+        // computadora elegida, no mueve esta barra (con varias PCs conectadas los
+        // pasos de una se mezclaban con los de la otra).
+        if (esWeb && m.__peer) {
+            var eleg = nodoElegido();
+            if (eleg && eleg.id && m.__peer !== eleg.id) return;
+        }
         var nodo = nodoElegido();
         var nombreNodo = (nodo && nodo.nombre) || S.nodo;
 
@@ -311,14 +318,19 @@
 
     function detenido() { etapa('detenido'); }
 
-    // ── NADA QUEDA COLGADO EN "SUBIENDO A CLOUDFLARE" ─────────────────────
-    // El estado real del pedido vive en /api/pedidos. Si el evento final se
-    // pierde (o el nodo se reconecta), el panel se quedaba en 'nube' para
-    // siempre aunque la imagen ya estuviera subida. Acá se reconcilia.
+    // ── NINGUNA ETAPA SE QUEDA COLGADA ────────────────────────────────────
+    // El estado real del pedido vive en /api/pedidos. Los eventos del WebSocket
+    // NO son confiables en la web: el hub sólo relayaba los frames del nodo
+    // "principal" y JPIA no lo es, así que el navegador no recibía NADA y la
+    // barra quedaba para siempre en "📤 Pidiendo el trabajo a JPIA… 10%"
+    // mientras la imagen se generaba y se subía bien.
+    // Ahora se reconcilia en TODAS las etapas activas: lo que diga el registro
+    // de pedidos manda, haya llegado o no el evento.
     var ultimaReconcil = 0;
+    var ETAPAS_ACTIVAS = ['pidiendo', 'enviado', 'comfy', 'nube'];
     function reconciliar() {
-        if (S.etapa !== 'nube') return;
-        if (Date.now() - ultimaReconcil < 2500) return;
+        if (ETAPAS_ACTIVAS.indexOf(S.etapa) < 0) return;
+        if (Date.now() - ultimaReconcil < 2000) return;
         ultimaReconcil = Date.now();
         var base = (window.JPI && (window.JPI.API_BASE || '')) || '';   // en la web el API vive en el VPS
         fetch(base + '/api/pedidos?_=' + Date.now(), { credentials: 'include' })
@@ -326,28 +338,46 @@
             .then(function (d) {
                 var lista = (d && (d.pedidos || d.lista)) || [];
                 if (!lista.length) return;
+                var desde = S.desde || 0;
+                var cands = lista.filter(function (x) {
+                    var t = x.ts || x.creado || 0;
+                    return !desde || t >= (desde - 120000);
+                }).sort(function (a, b) {
+                    return (b.ts || b.creado || 0) - (a.ts || a.creado || 0);
+                });
                 var p = null;
                 // 1) el mismo archivo que estamos esperando
                 if (S.archivo) {
-                    p = lista.filter(function (x) { return x.archivo === S.archivo; })[0] || null;
+                    p = cands.filter(function (x) { return x.archivo === S.archivo; })[0] || null;
                 }
-                // 2) si no, el más nuevo que haya arrancado después de esta generación
-                if (!p) {
-                    var desde = S.desde || 0;
-                    p = lista.filter(function (x) {
-                        var t = x.ts || x.creado || 0;
-                        return t >= (desde - 120000) && x.estado !== 'pedida';
-                    })[0] || null;
-                }
+                // 2) si no, el pedido más nuevo de esta generación
+                if (!p) p = cands[0] || null;
                 if (!p) return;
                 if (p.archivo && !S.archivo) S.archivo = p.archivo;
-                if (p.estado === 'listo') {
+
+                var est = p.estado || '';
+                if (est === 'listo' || est === 'sin_nube') {
                     etapa('listo', { archivo: p.archivo || S.archivo, nodo: S.nodo });
-                } else if (p.estado === 'sin_nube') {
-                    etapa('listo', { archivo: p.archivo || S.archivo, nodo: S.nodo });
-                } else if (p.estado === 'error' || p.estado === 'cancelada' || p.estado === 'interrumpida') {
-                    etapa('error', { error: 'el trabajo ' + p.estado });
+                } else if (est === 'error' || est === 'cancelada' || est === 'interrumpida') {
+                    etapa('error', { error: p.motivo || ('el trabajo ' + est) });
+                } else if (est === 'subiendo') {
+                    if (S.etapa !== 'nube') etapa('nube', { nodo: S.nodo, archivo: p.archivo || S.archivo });
+                } else if (est === 'devuelta') {
+                    // Comfy terminó y volvió a la PC: falta subirlo
+                    if (S.etapa === 'pidiendo' || S.etapa === 'enviado') {
+                        etapa('comfy', { nodo: S.nodo, pct: 92, desde: S.desde || Date.now() });
+                    }
+                } else if (est === 'en_comfy') {
+                    if (S.etapa === 'pidiendo' || S.etapa === 'enviado') {
+                        etapa('comfy', {
+                            nodo: S.nodo, pct: Math.max(S.pct, 22),
+                            paso: p.paso, total: p.total,
+                            prompt: p.prompt || S.prompt,
+                            desde: S.desde || Date.now()
+                        });
+                    }
                 }
+                // 'pedida' = todavía no arrancó: se deja como está
             })
             .catch(function () { });
     }

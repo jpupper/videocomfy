@@ -831,6 +831,10 @@ body.ck-sin-computadora #confirmRegenBtn {
   border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; }
 .rg-tabla td { padding: 6px 9px; border-bottom: 1px solid var(--border); color: var(--foreground); }
 .rg-tabla tr:hover td { background: rgba(255,255,255,.03); }
+/* ojito del registro global: sólo en las generadas; el punto gris marca que la
+   imagen quedó en una PC y no se puede abrir desde la web */
+.rg-tabla td.rg-ojo { text-align: center; width: 34px; }
+.rg-sin-ojo { color: var(--muted-foreground, #8b8b8b); opacity: .45; cursor: help; }
 .rg-archivo { font-family: monospace; font-size: .78rem; }
 .rg-prompt { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rg-hora { color: var(--text-muted); white-space: nowrap; }

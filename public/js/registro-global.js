@@ -3,12 +3,26 @@
  * Cada CREATE —de la web o de cualquier app local— queda anotado ahí.
  * Si el VPS no está (sin internet), la pestaña dice "no disponible":
  * no se inventa ni se muestra un registro local como si fuera global.
+ *
+ * El OJITO: sólo en las que terminaron bien (lista / lista local). Se puede
+ * abrir lo que está en la NUBE (link de Cloudflare, sirve desde cualquier
+ * lado) y, cuando estás en la app LOCAL, también lo que quedó en el disco.
+ * Una imagen que se generó en la PC y mirás desde la web NO se puede abrir:
+ * nunca se subió, así que no hay ojo.
  */
 (function () {
     'use strict';
 
+    var ESTADOS_FINALES = ['listo', 'sin_nube'];
+
     function base() {
         return (window.JPI && (window.JPI.API_BASE || '')) || '';
+    }
+    function esWeb() {
+        try {
+            var h = location.hostname;
+            return !(h === 'localhost' || h === '127.0.0.1' || h.indexOf('localhost') !== -1);
+        } catch (e) { return true; }
     }
     function esc(t) {
         return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
@@ -24,9 +38,31 @@
 
     var ESTADO = { pedidos: [], disponible: null, error: '', cargado: 0 };
 
+    // quién lo pidió: el hub manda pedidoPor; los registros guardados antes del
+    // arreglo no lo tienen, así que se mira también usuario/de.
+    function quienLoPidio(p) {
+        var pp = p.pedidoPor || {};
+        return pp.usuario || pp.displayName || p.usuario || p.de || '';
+    }
+
+    // el ojo sólo aparece si hay algo que abrir DESDE ACÁ
+    function ojo(p) {
+        if (ESTADOS_FINALES.indexOf(p.estado) < 0) return '';
+        var urlNube = p.url || '';
+        var arch = p.archivo || '';
+        if (urlNube) {
+            return '<button class="reg-ojo" data-url="' + esc(urlNube) + '" title="Ver la imagen (nube)">👁️</button>';
+        }
+        // sin link de nube: la imagen vive en la PC, se ve sólo desde la app local
+        if (!esWeb() && arch) {
+            return '<button class="reg-ojo" data-arch="' + esc(arch) + '" title="Ver la imagen (quedó en la PC)">👁️</button>';
+        }
+        return '<span class="rg-sin-ojo" title="se generó en una PC y no se subió a la nube: desde la web no se puede ver">·</span>';
+    }
+
     function fila(p) {
         var e = E();
-        var quien = (p.pedidoPor && (p.pedidoPor.usuario || p.pedidoPor.displayName)) || p.de || '';
+        var quien = quienLoPidio(p);
         var pc = p.peerNombre || (p.computadora && p.computadora.nombre) || '';
         var origen = p.origen === 'web' ? '🌐 la web' : (p.origen === 'red' ? '🔗 la red' : '🏠 local');
         return '<tr>' +
@@ -37,6 +73,7 @@
             '<td>' + origen + '</td>' +
             '<td>' + esc(pc) + '</td>' +
             '<td class="rg-hora">' + hora(p.ts) + '</td>' +
+            '<td class="rg-ojo">' + ojo(p) + '</td>' +
             '</tr>';
     }
 
@@ -75,7 +112,7 @@
             '<div class="rg-tabla-caja"><table class="rg-tabla">' +
             '<thead><tr>' +
             '<th>Estado</th><th>Archivo</th><th>Prompt</th><th>Lo pidió</th>' +
-            '<th>Salió de</th><th>Se hizo en</th><th>Cuándo</th>' +
+            '<th>Salió de</th><th>Se hizo en</th><th>Cuándo</th><th></th>' +
             '</tr></thead><tbody>' +
             ESTADO.pedidos.map(fila).join('') +
             '</tbody></table></div>';
