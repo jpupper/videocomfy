@@ -2772,7 +2772,8 @@ const anunciarGlobal = (function () {
                 headers: { 'Content-Type': 'application/json', 'x-agent-token': RED_TOKEN },
                 body: JSON.stringify({ pedidos: recorte }),
                 signal: AbortSignal.timeout(8000)
-            }).catch(function () { });
+            }).then(function (r) { console.log('🌐 [GLOBAL] ' + recorte.length + ' pedido(s) -> ' + r.status); })
+                .catch(function (e) { console.log('⚠️  [GLOBAL] ' + e.message + ' (hub ' + RED.hub + ')'); });
         }, 900);
     };
 })();
