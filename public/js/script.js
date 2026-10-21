@@ -232,7 +232,9 @@ function handleWsMessage(event) {
             if (currentExecutingId || message.prompt_id) {
                 const itemIndex = globalGenerationQueue.findIndex(i =>
                     i.status !== 'completed' &&
-                    (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
+                    (i.id === currentExecutingId
+                        || (message.queueItemId && String(i.id) === String(message.queueItemId))
+                        || (message.prompt_id && i.prompt_id === message.prompt_id))
                 );
 
                 if (itemIndex !== -1) {
@@ -285,6 +287,19 @@ function handleWsMessage(event) {
                 isGeneratingGlobal = false;
                 currentExecutingId = null;
                 window.dispatchEvent(new CustomEvent('jpi-generado', { detail: { tipo: 'video' } }));
+            // RED DE SEGURIDAD (asíncrona: corre después de este handler, para no
+            // pisar el cierre del item correcto). Si el aviso de fin no matcheó
+            // ningún item, la cola quedaba 'generating' para siempre y la próxima
+            // imagen se pedía con el prompt viejo hasta recargar la página.
+            setTimeout(function () {
+                if (!isGeneratingGlobal) return;
+                const h = globalGenerationQueue.find(i => i.status === 'generating');
+                if (h) { h.status = 'completed'; h.resultUrl = h.resultUrl || message.url; }
+                isGeneratingGlobal = false;
+                currentExecutingId = null;
+                updateGlobalQueueUI();
+                setTimeout(checkGlobalQueue, 300);
+            }, 0);
                 setTimeout(() => checkGlobalQueue(), 1000);
             }
         }
@@ -332,10 +347,25 @@ function handleWsMessage(event) {
             }
 
             window.dispatchEvent(new CustomEvent('jpi-generado', { detail: { tipo: 'imagen' } }));
+            // RED DE SEGURIDAD (asíncrona: corre después de este handler, para no
+            // pisar el cierre del item correcto). Si el aviso de fin no matcheó
+            // ningún item, la cola quedaba 'generating' para siempre y la próxima
+            // imagen se pedía con el prompt viejo hasta recargar la página.
+            setTimeout(function () {
+                if (!isGeneratingGlobal) return;
+                const h = globalGenerationQueue.find(i => i.status === 'generating');
+                if (h) { h.status = 'completed'; h.resultUrl = h.resultUrl || message.url; }
+                isGeneratingGlobal = false;
+                currentExecutingId = null;
+                updateGlobalQueueUI();
+                setTimeout(checkGlobalQueue, 300);
+            }, 0);
             if (currentExecutingId || message.prompt_id) {
                 const itemIndex = globalGenerationQueue.findIndex(i =>
                     i.status !== 'completed' &&
-                    (i.id === currentExecutingId || (message.prompt_id && i.prompt_id === message.prompt_id))
+                    (i.id === currentExecutingId
+                        || (message.queueItemId && String(i.id) === String(message.queueItemId))
+                        || (message.prompt_id && i.prompt_id === message.prompt_id))
                 );
 
                 if (itemIndex !== -1) {
@@ -1589,6 +1619,13 @@ function updateGlobalQueueUI() {
 }
 
 function checkGlobalQueue() {
+    // ANTI-TRABA: si la cola dice "generando" pero NO hay ningún item en ese
+    // estado, el evento de fin se perdió o no matcheó y antes la cola quedaba
+    // clavada para siempre (síntoma: la 2da imagen sale con el prompt de la 1ra).
+    if (isGeneratingGlobal && !globalGenerationQueue.some(i => i.status === 'generating')) {
+        isGeneratingGlobal = false;
+        currentExecutingId = null;
+    }
     if (isGeneratingGlobal) return;
 
     // PAUSA: si la cola esta pausada, no arranca el siguiente item. Lo que ya

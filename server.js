@@ -1633,8 +1633,13 @@ async function leerCatalogoComfy() {
         } else if (ultimoDone >= 0 && ultimoDone > ultimaPagina) {
             // el registro terminó, faltan tareas de arranque del Manager
             estado = 'cargando';
-        } else if (ultimaPagina < 0 && ultimaMarcaT && (Date.now() - ultimaMarcaT) > 60000) {
-            // sin Manager / sin marcadores y el log quedó quieto: está listo
+        } else if (ultimaPagina < 0 && ultimoDone < 0) {
+            // NO hay señales del Manager en el log: no hay nada que esperar. Antes
+            // este caso caía en 'cargando' y el COMFYSTAGE se quedaba en
+            // "ARRANCANDO · catálogo de nodos" para siempre, incluso generando.
+            estado = 'listo';
+        } else if (ultimaMarcaT && (Date.now() - ultimaMarcaT) > 60000) {
+            // log quieto hace más de un minuto: no está arrancando nada
             estado = 'listo';
         } else {
             estado = 'cargando';   // servidor arriba pero todavía sin señales
@@ -1722,9 +1727,20 @@ app.get('/api/comfy/consola', async (req, res) => {
 
     let fase = 'apagado', detalle = '';
     if (vivo) {
-        if (comfyCatalogo.estado === 'cargando') {
-            fase = 'arrancando';
-            detalle = 'catalogo de nodos ' + (comfyCatalogo.progreso || '...');
+        // Si hay un trabajo EN EL MOTOR o el sampler ya avanzó, ESTÁ GENERANDO:
+        // eso gana sobre cualquier marca de arranque. Antes el catálogo de nodos
+        // del Manager ('cargando') ganaba siempre y la consola decía
+        // "ARRANCANDO · catálogo de nodos" mientras el log mostraba "paso 10/25".
+        // OJO: progVigente puede venir de la barra tqdm del LOG (vieja) aunque no
+        // haya nada en el motor: sólo cuenta como "generando" si el progreso es
+        // RECIENTE (<20 s) y hay pasos reales.
+        const hayProgreso = progVigente.total >= 2 && progVigente.paso >= 1 &&
+            (Date.now() - (comfyProgreso.actualizado || 0)) < 20000;
+        const catalogoCargando = comfyCatalogo.estado === 'cargando' &&
+            (Date.now() - (comfyCatalogo.actualizado || 0)) < 120000;   // marca vieja = ya no aplica
+        if (hayProgreso || (ej && ej.promptId && !cargandoModelo)) {
+            fase = 'generando';
+            detalle = (ej && ej.prompt) || '';
         } else if (cargandoModelo) {
             // pasando pesos a la VRAM: es una fase distinta de "generando"
             fase = 'modelo';
@@ -2547,6 +2563,10 @@ function connectToComfy() {
                                         storyboardIndex: metaToSave.storyboardIndex,
                                         batchId: metaToSave.batchId,
                                         prompt_id: promptId,
+                                        // Quién lo pidió desde el navegador: con esto el front cierra
+                                        // EXACTAMENTE ese item de la cola (antes iba sólo prompt_id y,
+                                        // si no matcheaba, la cola quedaba trabada).
+                                        queueItemId: (metaToSave && metaToSave.queueItemId) || null,
                                         // Registro de la generación: quién la pidió, en qué PC
                                         // se hizo y a quién está registrada esa computadora.
                                         origen: metaToSave.origen || 'local',

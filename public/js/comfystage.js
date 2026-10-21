@@ -95,8 +95,17 @@
         return '';
     }
 
-    function pintarEstado(d) {
-        var f = FASES[d.fase] || FASES.apagado;
+        function pintarEstado(d) {
+        // La fase del server puede venir 'arrancando' (catálogo del Manager)
+        // mientras el sampler ya avanzó: si hay paso x/N o algo ejecutando,
+        // ESTÁ GENERANDO. Antes la pantalla se quedaba en ARRANCANDO mientras
+        // la consola mostraba "paso 10/25".
+        var faseReal = d.fase;
+        var tj = d.trabajo || null;
+        var hayPaso = !!(tj && tj.total && tj.paso > 0);
+        var ejecutando = !!(d.cola && Number(d.cola.ejecutando) > 0);
+        if (faseReal !== 'generando' && (hayPaso || (ejecutando && faseReal === 'arrancando'))) faseReal = 'generando';
+        var f = FASES[faseReal] || FASES.apagado;
         var dot = document.getElementById('cfsDot');
         var fase = document.getElementById('cfsFase');
         var det = document.getElementById('cfsDetalle');
@@ -113,7 +122,7 @@
         if (det) det.textContent = d.detalle || f.pista;
 
         var t = d.trabajo || null;
-        var pct = (t && t.total) ? Math.round((t.paso / t.total) * 100) : (d.fase === 'listo' ? 100 : 0);
+        var pct = (t && t.total) ? Math.round((t.paso / t.total) * 100) : (faseReal === 'listo' ? 100 : 0);
         if (barra) {
             barra.style.width = pct + '%';
             barra.style.background = f.color;
