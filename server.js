@@ -2701,6 +2701,10 @@ function nuevoPedido(d) {
         archivo: null,
         url: null,
         cuando: ahora,
+        // ts/creado: hora de CREACIÓN estable. Sin esto el registro global
+        // usaba Date.now() en cada anuncio y los pedidos viejos parecían nuevos.
+        ts: ahora,
+        creado: ahora,
         actualizado: ahora,
         pasos: { pedida: ahora }
     };
@@ -2761,7 +2765,7 @@ const anunciarGlobal = (function () {
                     origen: p.origen || '', peerId: RED.peerId,
                     peerNombre: (p.computadora && p.computadora.nombre) || RED.nombre,
                     pedidoPor: p.pedidoPor || null, computadora: p.computadora || null,
-                    ts: p.ts || p.creado || Date.now()
+                    ts: p.ts || p.creado || (p.pasos && p.pasos.pedida) || p.actualizado || Date.now()
                 };
             });
             var nueva = recorte.map(function (p) { return p.id + ':' + p.estado; }).join('|');

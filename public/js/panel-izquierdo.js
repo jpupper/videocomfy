@@ -199,7 +199,7 @@
             // El refresco reescribe este bloque: los botones tienen que ir acá,
             // si no el ⟳ RESTART del HTML desaparece en el primer refresco.
             dom.comfyDetail.innerHTML = '<span><code>' + comfyDir + '</code></span>' +
-                '<button type="button" class="pi-server-action-btn" id="piComfyConfigBtn">⚙️ Ajustes</button>' +
+
                 (esWeb ? '' : '<button type="button" class="pi-server-action-btn pi-comfy-restart" id="piComfyRestartBtn" title="Cerrar ComfyUI y volver a abrirlo">⟳ RESTART</button>');
         }
 

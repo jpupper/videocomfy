@@ -202,21 +202,7 @@
         ].join('\n');
         if (contenedor) contenedor.appendChild(panel);
 
-        // ⚙️ AJUSTES vivía en la pestaña SETTINGS (se borró): ahora es una
-        // sección más de CONEXIÓN. El bloque está en el HTML y se mueve acá,
-        // así los ids (#ckComfyAddress, etc.) siguen funcionando igual.
-        (function () {
-            var ajustes = document.getElementById('ckAjustesBloque');
-            if (ajustes && !panel.contains(ajustes)) {
-                var titulo = document.createElement('h3');
-                titulo.className = 'red-titulo';
-                titulo.textContent = '⚙️ MI MOTOR — dónde genera esta PC';
-                var gen = panel.querySelector('.red-gen');
-                if (gen && gen.parentNode === panel) panel.insertBefore(titulo, gen);
-                else panel.appendChild(titulo);
-                panel.insertBefore(ajustes, titulo.nextSibling);
-            }
-        })();
+
 
         // ── ACCESO: quién puede usar mi PC y cada workflow ───────────────────
         // Pedido del usuario: pestaña propia con 3 sub-pestañas (EQUIPO,

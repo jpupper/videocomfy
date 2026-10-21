@@ -115,7 +115,6 @@
                             </div>
                             <div class="pi-server-detail" id="piComfyDetail">
                                 <span><code>127.0.0.1:8188</code></span>
-                                <button type="button" class="pi-server-action-btn" id="piComfyConfigBtn">⚙️ Ajustes</button>
                                 <!-- sólo en local: cierra ComfyUI y lo vuelve a abrir -->
                                 <button type="button" class="pi-server-action-btn pi-comfy-restart" id="piComfyRestartBtn" title="Cerrar ComfyUI y volver a abrirlo">⟳ RESTART</button>
                             </div>
@@ -918,61 +917,7 @@
                 </div>
 
                 <!-- ============ SETTINGS ============ -->
-                <!-- AJUSTES: no es una pestaña propia; red.js lo mueve adentro de CONEXIÓN -->
-                <div id="ckAjustesBloque" class="ck-set-wrap">
-                        <div class="ck-set-card ck-set-comfy">
-                            <div class="ck-set-titulo ck-set-comfy">⚙️ <span>COMFO</span> — dónde está tu ComfyUI</div>
-                            <div class="ck-set-desc">
-                                Poné la dirección del ComfyUI que va a generar. Puede ser <b>local</b>
-                                (<code>127.0.0.1</code>), otra máquina de tu red (<code>192.168.0.50:8188</code>) o
-                                una nube tipo <b>RunPod</b> (<code>https://xxxx-8188.proxy.runpod.net</code>).
-                                Se guarda en la app y el websocket se reconecta solo.
-                                <br><b>En la web</b> esto configura el ComfyUI de la computadora conectada (el trabajo lo hace ella).
-                            </div>
-                            <label class="ck-set-label">Dirección de ComfyUI</label>
-                            <input id="ckComfyAddress" class="ck-set-input" type="text" placeholder="127.0.0.1  ·  https://xxxx-8188.proxy.runpod.net">
-                            <div class="ck-set-row">
-                                <button id="ckComfyGuardar" class="ck-set-btn">GUARDAR Y CONECTAR</button>
-                                <button id="ckComfyProbar" class="ck-set-btn ghost">PROBAR</button>
-                            </div>
-                            <div id="ckComfyMsg" class="ck-set-msg"></div>
-                            <div class="ck-set-estado" id="ckComfyEstado"></div>
-                        </div>
-
-                        <!-- SEGUNDO MOTOR: un ComfyUI externo (RunPod u otra nube),
-                             aparte de la red de computadoras. Si está activo, la app
-                             le manda los trabajos a ESE en vez del Comfy de la PC. -->
-                        <div class="ck-set-card ck-set-externo">
-                            <div class="ck-set-titulo">☁️ COMFY EXTERNO — RunPod / otra nube</div>
-                            <div class="ck-set-desc">
-                                Un ComfyUI aparte, <b>fuera</b> de la red de computadoras. Sirve para poner un
-                                pod de RunPod (u otro ComfyUI con IP pública) y generar ahí. Si lo activás, los
-                                trabajos van a ese motor en lugar del Comfy de tu PC.
-                            </div>
-                            <label class="ck-set-label">Dirección del Comfy externo</label>
-                            <input id="ckComfyExtUrl" class="ck-set-input" type="text" placeholder="https://xxxx-8188.proxy.runpod.net">
-                            <label class="ck-set-check" style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.82rem;color:#cbd5e1;">
-                                <input type="checkbox" id="ckComfyExtActivo">
-                                <span>Usar este Comfy externo como motor</span>
-                            </label>
-                            <div class="ck-set-row">
-                                <button id="ckComfyExtGuardar" class="ck-set-btn">GUARDAR</button>
-                                <button id="ckComfyExtProbar" class="ck-set-btn ghost">PROBAR</button>
-                            </div>
-                            <div id="ckComfyExtMsg" class="ck-set-msg"></div>
-                            <div class="ck-set-estado" id="ckComfyExtEstado"></div>
-                        </div>
-
-                        <div class="ck-set-card">
-                            <div class="ck-set-titulo">🧭 ENTORNO</div>
-                            <div class="ck-set-desc">
-                                Esta copia del editor está corriendo en <b id="ckSetEntorno">—</b>.
-                                En <b>web</b> el trabajo lo hace la PC conectada (por el VPS); en <b>local</b> usa
-                                directamente el ComfyUI de esta máquina.
-                            </div>
-                            <div class="ck-set-estado" id="ckSetDetalle"></div>
-                        </div>
-                    </div>
+                
 
             </div>
 
