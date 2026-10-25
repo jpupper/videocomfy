@@ -29,9 +29,14 @@
     // El include (jpshadereditor) pinta un canvas con z-index:-1.
     var BASE_SHADER = 'https://vps-4455523-x.dattaweb.com/jpshadereditor';
     var FONDOS = [
-        { id: '',               nombre: 'SIN FONDO',   desc: 'el color del tema, nada más' },
-        { id: 'neon-matrix-v6', nombre: 'NEON MATRIX', desc: 'líneas verticales y horizontales que se conectan' }
+        { id: '',                 nombre: 'SIN FONDO',   desc: 'el color del tema, nada más' },
+        { id: 'videosinte-gris',  nombre: 'GLITCH GRIS', desc: 'sinusoidales grises con glitch de cinta, muy lento' },
+        { id: 'neon-matrix-v6',   nombre: 'NEON MATRIX', desc: 'líneas verticales y horizontales que se conectan' }
     ];
+
+    // Fondo por defecto cuando el usuario todavía no eligió nada.
+    // Para apagarlo está la tarjeta SIN FONDO (queda guardada por navegador).
+    var FONDO_DEFECTO = 'videosinte-gris';
 
     function leer(k, def) { try { var v = localStorage.getItem(k); return v === null ? def : v; } catch (e) { return def; } }
     function guardar(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
@@ -49,12 +54,12 @@
     }
 
     function veloActual() {
-        var v = parseFloat(leer(CLAVE_VELO, '0.62'));
-        return isNaN(v) ? 0.62 : v;
+        var v = parseFloat(leer(CLAVE_VELO, '0.45'));
+        return isNaN(v) ? 0.45 : v;
     }
 
     function aplicarVelo(v) {
-        v = Math.max(0.15, Math.min(0.95, Number(v) || 0.62));
+        v = Math.max(0.15, Math.min(0.95, Number(v) || 0.45));
         document.documentElement.style.setProperty('--ck-velo', String(v));
         guardar(CLAVE_VELO, String(v));
     }
@@ -84,7 +89,7 @@
         guardar(CLAVE_FONDO, shader);
     }
 
-    function fondoActual() { return leer(CLAVE_FONDO, ''); }
+    function fondoActual() { return leer(CLAVE_FONDO, FONDO_DEFECTO); }
 
     // ---- modal -------------------------------------------------------------
     var modal = null;
