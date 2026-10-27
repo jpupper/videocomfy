@@ -920,6 +920,7 @@ const MODELO_A_WORKFLOW = {
     zimage: 'z_image_turbo_api.json',
     qwen21: 'qwen_image_21_api.json',
     ideogram4: 'ideogram4_api.json',
+    vangogh: 'vangogh_api.json',
     flux: 'flux_dev_fp8_api.json',
     fluxfull: 'flux_dev_full_text_to_image_api.json',
     ltx2t2v: 'video_ltx2_t2v_api.json',
@@ -933,6 +934,7 @@ const NOMBRE_WORKFLOW = {
     'z_image_turbo_api.json': 'Z-Image Turbo (imagen)',
     'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
     'ideogram4_api.json': 'Ideogram 4 (imagen con sectores)',
+    'vangogh_api.json': 'Vango IA (foto → óleo)',
     'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
     'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
     'video_ltx2_t2v_api.json': 'LTX-2.5 texto→video',
@@ -3853,6 +3855,9 @@ function modelosDeLaRed() {
         return wf ? ofrecidos.includes(wf) : true;
     };
     const base = Object.keys(MODELOS_IMAGEN)
+        // los modelos internos (img2img de otra app: vangogh) no se ofrecen en el
+        // desplegable del editor: necesitan una foto de entrada que sólo manda su app
+        .filter((k) => !MODELOS_IMAGEN[k].interno)
         .filter(permitido)
         .map((k) => ({
             id: k,
@@ -4169,6 +4174,28 @@ async function encolarTrabajoRed(b) {
     const params = Object.assign({
         videoWidth: 1024, videoHeight: 1024, samplerSteps: 10, seed: -1
     }, (b && b.params) || {});
+
+    // VANGO IA (img2img por la red): el puente de vangogh no puede subir un
+    // multipart por el túnel del hub, así que manda la foto en base64 dentro de
+    // params. Acá se guarda en disco y se sube al MISMO input de ComfyUI que usa
+    // /api/upload-image; el workflow img2img la busca por nombre (params.imagen).
+    if (!params.imagen && params.imagen_base64) {
+        try {
+            const b64 = String(params.imagen_base64).replace(/^data:[^,]*,/, '');
+            const bin = Buffer.from(b64, 'base64');
+            if (bin.length < 100) throw new Error('la foto llegó vacía');
+            const nombre = `vangoia_${Date.now()}.jpg`;
+            const rutaFoto = path.join(uploadDir, nombre);
+            await fs.promises.writeFile(rutaFoto, bin);
+            const subida = await uploadImageToComfy(rutaFoto, nombre);
+            params.imagen = (subida && (subida.name || subida.filename)) || nombre;
+            console.log(`🖼️  foto de entrada para img2img: ${params.imagen} (${Math.round(bin.length / 1024)} KB)`);
+        } catch (e) {
+            console.log('⚠️  no pude preparar la foto de entrada: ' + e.message);
+        }
+    }
+    delete params.imagen_base64;
+
     const modelo = (b.modelo && MODELOS_IMAGEN[b.modelo]) ? b.modelo
         : (String((b && b.tipo) || '').toLowerCase() === 'video' ? null : 'zimage');
 
@@ -5249,6 +5276,35 @@ const MODELOS_IMAGEN = {
                 ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
             return { width: w, height: h, steps };
         }
+    },
+    vangogh: {
+        // VANGO IA: foto → óleo. img2img sobre SD1.5 (dreamshaper_8): la foto
+        // entra por LoadImage (ya subida al input de ComfyUI en params.imagen) y
+        // el denoise es la FUERZA que manda el usuario (0.2 = apenas toca,
+        // 0.95 = repinta casi todo).
+        archivo: 'workflows/vangogh_api.json',
+        etiqueta: 'Vango IA (foto → óleo)',
+        tipoSalida: 'storyboard',
+        interno: true,
+        ayuda: 'img2img SD1.5: dreamshaper_8 + la foto que sube el usuario (denoise = fuerza)',
+        aplicar(wf, prompt, params) {
+            if (params.imagen) wf['1'].inputs.image = String(params.imagen);
+            if (params.ckpt) wf['3'].inputs.ckpt_name = String(params.ckpt);
+            wf['4'].inputs.text = prompt;
+            wf['5'].inputs.text = params.negativePrompt || '';
+            const mega = parseFloat(params.megapixels) || 0.6;
+            wf['2'].inputs.megapixels = Math.min(1.2, Math.max(0.2, mega));
+            const crudo = (params.denoise !== undefined && params.denoise !== null) ? params.denoise : params.fuerza;
+            const d = Number(crudo);
+            wf['7'].inputs.denoise = Math.min(0.95, Math.max(0.05, isFinite(d) && d > 0 ? d : 0.62));
+            const steps = Math.min(parseInt(params.samplerSteps) || 28, 50);
+            wf['7'].inputs.steps = steps;
+            if (params.cfgScale) wf['7'].inputs.cfg = parseFloat(params.cfgScale);
+            wf['7'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
+                ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
+            // el tamaño sale de la foto (ImageScaleToTotalPixels), no de un latent
+            return { width: 'foto', height: 'foto', steps };
+        }
     }
 };
 
@@ -5289,7 +5345,8 @@ async function generarImagenModelo(modelo, promptText, params = {}) {
         console.log(`🎛️  Este workflow genera ${salidas.salidas} salidas (batch ${salidas.lote} x ${salidas.guardan} nodo(s) de guardado)`);
     }
     const promptId = await queuePrompt(promptWorkflow);
-    console.log(`🚀 ${m.etiqueta} enviado a ComfyUI. ID: ${promptId} (${info.width}x${info.height}, ${info.steps} steps${salidas.salidas > 1 ? ', ' + salidas.salidas + ' salidas' : ''})`);
+    const dim = (String(info.width) === 'foto') ? 'tamaño de la foto' : `${info.width}x${info.height}`;
+    console.log(`🚀 ${m.etiqueta} enviado a ComfyUI. ID: ${promptId} (${dim}, ${info.steps} steps${salidas.salidas > 1 ? ', ' + salidas.salidas + ' salidas' : ''})`);
     // Se anota en el trabajo para que la cola pueda decir "1 de N"
     if (promptDetails[promptId]) {
         promptDetails[promptId].salidas = salidas.salidas;
