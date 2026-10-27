@@ -998,7 +998,10 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
             de: de,
             origen: 'web',
             estado: 'pedida',
-            ts: Date.now()
+            ts: Date.now(),
+            // img2img de otra app (Vango IA): cada pedido trae una foto distinta,
+            // aunque el prompt sea el mismo. El dedupe NO aplica.
+            noDup: !!(b.params && (b.params.imagen_base64 || b.params.imagen))
         }, 'hub-generar', destino);
     } catch (e) { }
 
@@ -1409,8 +1412,12 @@ function anotarPedidoHub(msg, clientId, destinoForzado) {
         const pp = msg.pedidoPor || {};
         const ahora = Date.now();
         const prompt = String(msg.prompt || '').slice(0, 400);
-        // si el mismo navegador repite el mismo prompt en <90s, no se duplica
-        const dup = PEDIDOS_HUB.find((p) => p.prompt === prompt && p.cliente === clientId && (ahora - p.cuando) < 90000);
+        // si el mismo navegador repite el mismo prompt en <90s, no se duplica.
+        // EXCEPCIÓN: si el pedido trae una FOTO de entrada (img2img de otra app,
+        // p. ej. Vango IA), dos pedidos con el mismo prompt son DOS fotos
+        // distintas: deduplicarlos dejaba el segundo sin generar nunca.
+        const traeFoto = !!(msg.noDup || (msg.params && (msg.params.imagen_base64 || msg.params.imagen)));
+        const dup = traeFoto ? null : PEDIDOS_HUB.find((p) => p.prompt === prompt && p.cliente === clientId && (ahora - p.cuando) < 90000);
         if (dup) {
             // MARCAR, no reenviar: antes el handler tomaba este pedido repetido y lo
             // volvía a despachar al nodo -> la misma PC generaba DOS imágenes para
