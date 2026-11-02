@@ -52,12 +52,10 @@ function normalizar(entrada, tipo) {
             avatar: pp.avatar || '',
             tipo: pp.tipo || (e.origen === 'red' || e.red ? 'web' : 'local')
         },
-        // se conservan los extras que ya existían (WAN, storyboard, batch...)
+        // se conservan los extras que ya existían (storyboard, batch...)
         batchId: e.batchId || null,
         batchName: e.batchName || null,
         storyboardIndex: e.storyboardIndex !== undefined ? e.storyboardIndex : null,
-        isForWan: e.isForWan !== undefined ? !!e.isForWan : undefined,
-        wanRole: e.wanRole || undefined,
         prompt_id: e.prompt_id || null,
         timestamp: normalizarFecha(e.timestamp || e.savedAt || e.generationStartTime)
     };

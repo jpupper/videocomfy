@@ -921,26 +921,28 @@ const MODELO_A_WORKFLOW = {
     qwen21: 'qwen_image_21_api.json',
     ideogram4: 'ideogram4_api.json',
     vangogh: 'vangogh_api.json',
+    flux3klein: 'flux3_klein_edit_api.json',
     flux: 'flux_dev_fp8_api.json',
     fluxfull: 'flux_dev_full_text_to_image_api.json',
     ltx2t2v: 'video_ltx2_t2v_api.json',
     ltx2i2v: 'video_ltx2_i2v_api.json',
     ltx25i2v: 'video_ltx25_i2v_api.json',
-    wan22: 'video_wan2_2_14B_flf2v_api.json'
+    fasth3: 'fasth3_workflow_api.json',
 };
 
 // nombres lindos para mostrar
 const NOMBRE_WORKFLOW = {
     'z_image_turbo_api.json': 'Z-Image Turbo (imagen)',
-    'qwen_image_21_api.json': 'Qwen-Image 2.1 (imagen)',
+    'qwen_image_21_api.json': 'Qwen 2.1 (imagen)',
     'ideogram4_api.json': 'Ideogram 4 (imagen con sectores)',
     'vangogh_api.json': 'Vango IA (foto → óleo)',
+    'flux3_klein_edit_api.json': 'FLUX 3 Klein Edit (imagen)',
     'flux_dev_fp8_api.json': 'FLUX dev fp8 (imagen)',
     'flux_dev_full_text_to_image_api.json': 'FLUX dev full (imagen)',
     'video_ltx2_t2v_api.json': 'LTX-2.5 texto→video',
     'video_ltx2_i2v_api.json': 'LTX-2 imagen→video',
     'video_ltx25_i2v_api.json': 'LTX-2.5 imagen→video',
-    'video_wan2_2_14B_flf2v_api.json': 'WAN 2.2 (video)'
+    'fasth3_workflow_api.json': 'FastH3-workflow (video)',
 };
 
 let OBJECT_INFO = null, OBJECT_INFO_TS = 0, WORKFLOWS_ESTADO = null, WORKFLOWS_TS = 0;
@@ -1800,7 +1802,7 @@ app.get('/api/comfy/consola', async (req, res) => {
 // devuelven listos para la pestaña DATA del PREVIZ.
 // ============================================================================
 const CLASES_SAMPLER = ['KSampler', 'KSamplerAdvanced', 'SamplerCustom', 'SamplerCustomAdvanced', 'CFGGuider'];
-const CLASES_LATENT = ['EmptyLatentImage', 'EmptySD3LatentImage', 'EmptyLatentImageSDXL', 'LatentUpscale'];
+const CLASES_LATENT = ['EmptyLatentImage', 'EmptySD3LatentImage', 'EmptyLatentImageSDXL', 'EmptyFlux2LatentImage', 'LatentUpscale'];
 const CLASES_MODELO = ['CheckpointLoaderSimple', 'UNETLoader', 'CheckpointLoader', 'UnetLoaderGGUF', 'UnetLoaderGGUFAdvanced'];
 
 function paramsDePromptComfy(grafo, salida) {
@@ -2678,9 +2680,6 @@ function connectToComfy() {
                                     model: metaToSave.model || metaToSave.modelo,
                                     batchName: metaToSave.batchName,
                                     prompt_id: promptId,
-                                    isForWan: metaToSave.isForWan,
-                                    wanRole: metaToSave.wanRole,
-                                    wanId: metaToSave.wanId
                                 });
                             }
 
@@ -2714,13 +2713,6 @@ function connectToComfy() {
                                         computadora: metaToSave.computadora || datosDeEstaPC(),
                                         modelo: metaToSave.modelo || ''
                                     };
-                                    // Include WAN2.2 specific info if applicable
-                                    if (metaToSave.isForWan) {
-                                        msg.isForWan = true;
-                                        msg.wanRole = metaToSave.wanRole;
-                                        msg.wanId = metaToSave.wanId;
-                                        msg.wanStepIndex = metaToSave.wanStepIndex;
-                                    }
                                     client.send(JSON.stringify(msg));
                                 }
                             });
@@ -4214,7 +4206,7 @@ async function encolarTrabajoRed(b) {
         params,
         type: modelo ? MODELOS_IMAGEN[modelo].tipoSalida : 'video',
         modelo: modelo || 'ltx2',
-        model: modelo ? MODELOS_IMAGEN[modelo].etiqueta : 'LTX-2.5 distilled',
+        model: (params.modelo === 'fasth3') ? 'FAST H3 Omni' : (modelo ? MODELOS_IMAGEN[modelo].etiqueta : modeloLTX25Display(params)),
         origen: 'red',
         pedidoPor,
         computadora: datosDeEstaPC(),
@@ -4668,11 +4660,13 @@ wss.on('connection', (ws) => {
                     computadora: { nombre: (datosDeEstaPC() || {}).nombre, peerId: RED.peerId, gpu: (datosDeEstaPC() || {}).gpu }
                 });
                 try {
-                    const promptId = modeloImagen
-                        ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
-                        : (message.imageFilename
-                            ? await generarVideoLTX25(message.prompt, message.params, message.imageFilename)
-                            : await generarVideoT2VLTX25(message.prompt, message.params));
+                    const promptId = (message.params && message.params.modelo === 'fasth3')
+                        ? await generarVideoFasth3(message.prompt, message.params, message.imageFilename)
+                        : modeloImagen
+                            ? await generarImagenModelo(modeloImagen, message.prompt, message.params)
+                            : (message.imageFilename
+                                ? await generarVideoLTX25(message.prompt, message.params, message.imageFilename)
+                                : await generarVideoT2VLTX25(message.prompt, message.params));
                     console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
                     const details = { 
                         prompt: message.prompt,
@@ -4690,7 +4684,7 @@ wss.on('connection', (ws) => {
                         type: modeloImagen ? MODELOS_IMAGEN[modeloImagen].tipoSalida : 'video',
                         modelo: modeloImagen || 'ltx2',
                         // Nombre lindo para el panel de metadata (el DATA del previz)
-                        model: modeloImagen ? MODELOS_IMAGEN[modeloImagen].etiqueta : 'LTX-2.5 distilled',
+                        model: (message.params && message.params.modelo === 'fasth3') ? 'FAST H3 Omni' : (modeloImagen ? MODELOS_IMAGEN[modeloImagen].etiqueta : modeloLTX25Display(message.params)),
                         batchId: message.batchId,
                         batchName: message.batchName,
                         generationStartTime: Date.now()
@@ -4716,8 +4710,7 @@ wss.on('connection', (ws) => {
                     ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando video: ${e.message}` }));
                 }
             } else if (message.type === 'generarStoryboard') {
-                const wanTag = message.isForWan ? ` [WAN2.2 ${message.wanRole} step=${message.wanStepIndex}]` : '';
-                console.log(`\n🖼️ [FLUX${wanTag}] Nueva generación recibida`);
+                console.log(`\n🖼️ [FLUX] Nueva generación recibida`);
                 console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
                 console.log(`   Prompt  : ${message.prompt}`);
                 console.log(`   Params  : steps=${message.params?.storyboardSteps || 'default'}`);
@@ -4741,10 +4734,6 @@ wss.on('connection', (ws) => {
                         storyboardIndex: message.storyboardIndex,
                         batchId: message.batchId,
                         batchName: message.batchName,
-                        isForWan: message.isForWan || false,
-                        wanRole: message.wanRole || null,
-                        wanId: message.wanId || null,
-                        wanStepIndex: message.wanStepIndex !== undefined ? message.wanStepIndex : null,
                         generationStartTime: Date.now()
                     };
                     promptDetails[promptId] = details;
@@ -4761,38 +4750,6 @@ wss.on('connection', (ws) => {
                     actualizarPedido({ id: pedidoPrevS.id }, { estado: 'error', motivo: e.message }, true);
                     console.error(`❌ Error generando storyboard: ${e.message}`);
                     ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando storyboard: ${e.message}` }));
-                }
-            } else if (message.type === 'generarWan22') {
-                console.log(`\n🔥 [WAN2.2] Nueva generación recibida`);
-                console.log(`   Batch   : ${message.batchName || message.batchId || 'sin batch'}`);
-                console.log(`   Prompt  : ${message.prompt}`);
-                console.log(`   Start   : ${message.startImageFilename || 'ninguna'}`);
-                console.log(`   End     : ${message.endImageFilename || 'ninguna'}`);
-                console.log(`   Params  : steps=${message.params?.samplerSteps} cfg=${message.params?.cfgScale} size=${message.params?.videoWidth}x${message.params?.videoHeight} length=${message.params?.videoLength}`);
-                try {
-                    const promptId = await generarWan22Video(message.prompt, message.params, message.startImageFilename, message.endImageFilename);
-                    console.log(`   ✅ Enviado a ComfyUI — prompt_id: ${promptId}`);
-                    const details = { 
-                        prompt: message.prompt,
-                        params: message.params,
-                        type: 'wan22',
-                        startImageFilename: message.startImageFilename,
-                        endImageFilename: message.endImageFilename,
-                        batchId: message.batchId,
-                        batchName: message.batchName
-                    };
-                    promptDetails[promptId] = details;
-                    lastPromptDetails = details;
-                    
-                    // NOTIFICAR AL FRONTEND: enviar el prompt_id real de ComfyUI
-                    ws.send(JSON.stringify({
-                        type: 'prompt_queued',
-                        prompt_id: promptId,
-                        queueItemId: message.queueItemId || null
-                    }));
-                } catch (e) {
-                    console.error(`❌ Error generando WAN2.2 video: ${e.message}`);
-                    ws.send(JSON.stringify({ type: 'generation_error', error: `❌ Error generando WAN2.2 video: ${e.message}` }));
                 }
             } else if (message.type === 'generarLongCat') {
                 const mode = message.imageFilename ? 'AI2V' : 'AT2V';
@@ -5045,9 +5002,39 @@ async function liberarVram() {
 //   params.ltx25Audio   (bool) — decodear/embeber el audio
 // Steps y CFG van FIJO (distilled usa ManualSigmas + video_cfg/audio_cfg=1).
 // ============================================================
+// Sigma schedule lineal (para el Dev 22B a 25 steps). ManualSigmas espera
+// una lista '1.0, 0.96, ... 0.0' de steps+1 valores.
+function sigmasLineales(steps) {
+    const arr = [];
+    for (let i = steps; i >= 0; i--) arr.push(Math.round((i / steps) * 1000000) / 1000000);
+    return arr.join(', ');
+}
+
+// LTX 2.5: variante de modelo. 'distilled' (default) queda tal cual el JSON;
+// 'dev22b' cambia el unet a UNETLoader (transformer completo int8), euler a 25
+// steps y CFG 3 en el guider dual (video/audio). Los node ids son los MISMOS
+// en T2V e I2V (413/397/396/341/352/388/391).
+function aplicarVarianteLTX25(wf, params) {
+    if (params.ltx25Model !== 'dev22b') return;
+    wf['413'].class_type = 'UNETLoader';
+    wf['413'].inputs = { unet_name: 'ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors', weight_dtype: 'default' };
+    wf['397'].inputs.sigmas = sigmasLineales(25);
+    wf['341'].inputs.sampler_name = 'euler';
+    wf['352'].inputs.sampler_name = 'euler';
+    wf['388'].inputs.video_cfg = 3;
+    wf['388'].inputs.audio_cfg = 3;
+    wf['391'].inputs.video_cfg = 3;
+    wf['391'].inputs.audio_cfg = 3;
+}
+
+function modeloLTX25Display(params) {
+    return (params && params.ltx25Model === 'dev22b') ? 'LTX-2.5 Dev 22B' : 'LTX-2.5 distilled';
+}
+
 async function generarVideoLTX25(promptText, params = {}, imageFilename = null) {
     const data = await fs.promises.readFile(path.join(__dirname, 'workflows/video_ltx25_i2v_api.json'), 'utf8');
     const wf = JSON.parse(data);
+    aplicarVarianteLTX25(wf, params);
 
     const seedValue = (params.seed !== undefined && params.seed !== -1)
         ? params.seed : Math.floor(Math.random() * 1000000000);
@@ -5115,6 +5102,7 @@ async function generarVideoLTX25(promptText, params = {}, imageFilename = null) 
 async function generarVideoT2VLTX25(promptText, params = {}) {
     const data = await fs.promises.readFile(path.join(__dirname, 'workflows/video_ltx2_t2v_api.json'), 'utf8');
     const wf = JSON.parse(data);
+    aplicarVarianteLTX25(wf, params);
 
     const seedValue = (params.seed !== undefined && params.seed !== -1)
         ? params.seed : Math.floor(Math.random() * 1000000000);
@@ -5165,6 +5153,57 @@ async function generarVideoT2VLTX25(promptText, params = {}) {
     return promptId;
 }
 
+async function generarVideoFasth3(promptText, params = {}, imageFilename = null) {
+    const data = await fs.promises.readFile(path.join(__dirname, 'workflows/fasth3_workflow_api.json'), 'utf8');
+    const wf = JSON.parse(data);
+
+    // Imágenes de referencia (la 0 es la principal); el panel manda un array.
+    const refs = (Array.isArray(params.imageFilenames) ? params.imageFilenames : []).filter(Boolean);
+    if (!refs.length && imageFilename) refs.push(imageFilename);
+    const nRefs = Math.min(refs.length, 9);
+
+    // prompt
+    wf['138']['inputs']['value'] = promptText;
+
+    // resolución en múltiplos de 32 (VAE espacial 32x)
+    const round32 = (v) => Math.max(32, Math.round(Number(v) / 32) * 32);
+    const W = round32(Number(params.videoWidth) || 1344);
+    const H = round32(Number(params.videoHeight) || 768);
+    wf['136']['inputs']['width'] = W;
+    wf['136']['inputs']['height'] = H;
+
+    // duración en frames (el front ya la convierte a la grilla 17k+5)
+    wf['136']['inputs']['length'] = Number(params.videoLength) || 124;
+
+    // seed
+    wf['129']['inputs']['noise_seed'] = (params.seed !== undefined && params.seed !== -1)
+        ? Number(params.seed) : Math.floor(Math.random() * 1000000000);
+
+    // referencias: nodos LoadImage dinámicos + inputs ref_images.ref_image_N (0..8)
+    for (let i = 0; i < 9; i++) delete wf['136']['inputs']['ref_images.ref_image_' + i];
+    for (let i = 0; i < nRefs; i++) {
+        const loadId = (i === 0) ? '137' : (i === 1 ? '149' : 'fh3_ref_' + i);
+        wf[loadId] = { class_type: 'LoadImage', inputs: { image: String(refs[i]) } };
+        wf['136']['inputs']['ref_images.ref_image_' + i] = [loadId, 0];
+    }
+    if (nRefs < 2) delete wf['149'];
+    if (nRefs < 1) delete wf['137'];
+
+    // toggle de audio (si params.audio === false se saca el audio del CreateVideo)
+    if (params.audio === false) delete wf['130']['inputs']['audio'];
+
+    if (ultimoTrabajo !== 'video') {
+        console.log('🧹 Liberando VRAM antes del video FAST H3...');
+        await liberarVram();
+    }
+    ultimoTrabajo = 'video';
+
+    const promptId = await queuePrompt(wf);
+    console.log(`🚀 Prompt FAST H3 enviado a ComfyUI. ID: ${promptId}`);
+    return promptId;
+}
+
+
 // Arma el JSON caption que Ideogram 4 entiende: background + elements con bbox,
 // desc y (si es texto) el texto exacto. El bbox va en la grilla 0-1000 de Ideogram
 // como [ymin, xmin, ymax, xmax]; los sectores llegan del front con x/y/w/h en 0-1.
@@ -5204,6 +5243,23 @@ function construirCaptionIdeogram(params) {
     return JSON.stringify(cap);
 }
 
+// FLUX 3 Klein: convierte los sectores del front (x,y,w,h en 0-1) a la tabla de
+// layout que espera el upsampler (bbox en 0-1000: ymin,xmin,ymax,xmax).
+function construirTablaFlux3Klein(sectores) {
+    const lista = [];
+    (Array.isArray(sectores) ? sectores : []).forEach((s, i) => {
+        if (!s) return;
+        const desc = String((s.type === 'text' ? s.text : s.desc) || '').trim();
+        if (!desc) return;
+        const ymin = Math.max(0, Math.round((Number(s.y) || 0) * 1000));
+        const xmin = Math.max(0, Math.round((Number(s.x) || 0) * 1000));
+        const ymax = Math.min(1000, Math.round(((Number(s.y) || 0) + (Number(s.h) || 0)) * 1000));
+        const xmax = Math.min(1000, Math.round(((Number(s.x) || 0) + (Number(s.w) || 0)) * 1000));
+        lista.push({ id: 'obj_' + (i + 1), bbox: [ymin, xmin, ymax, xmax], desc: desc });
+    });
+    return lista.length ? JSON.stringify(lista) : '';
+}
+
 const MODELOS_IMAGEN = {
     zimage: {
         archivo: 'workflows/z_image_turbo_api.json',
@@ -5230,9 +5286,9 @@ const MODELOS_IMAGEN = {
     },
     qwen21: {
         archivo: 'workflows/qwen_image_21_api.json',
-        etiqueta: 'Qwen-Image 2.1',
+        etiqueta: 'Qwen 2.1',
         tipoSalida: 'storyboard',
-        ayuda: 'Modelos: qwen_image_2.1_Q8_0.gguf + qwen3vl_8b_int8_convrot + qwen_image_2.1_vae_bf16',
+        ayuda: 'Modelos: qwen_image_2.1_int8_convrot + qwen3vl_8b_int8_convrot + qwen_image_2.1_vae_bf16',
         aplicar(wf, prompt, params) {
             wf['452'].inputs.prompt = prompt;
             wf['452'].inputs.negative_prompt = params.negativePrompt || '';
@@ -5242,6 +5298,18 @@ const MODELOS_IMAGEN = {
             wf['456'].inputs.width = w;
             wf['456'].inputs.height = h;
             wf['452'].inputs.resolution = Math.max(w, h);   // como escala las referencias
+            // EDIT (Image to Image): referencias -> autogrow images.image_N + VAE; el
+            // latent del sampler sale del propio nodo (salida 2), no del EmptyLatent.
+            const refs = (Array.isArray(params.imageFilenames) ? params.imageFilenames : []).filter(Boolean);
+            if (refs.length) {
+                wf['452'].inputs.vae = ['454', 0];
+                refs.forEach((fn, i) => {
+                    const id = 'qref_' + (i + 1);
+                    wf[id] = { class_type: 'LoadImage', inputs: { image: String(fn) } };
+                    wf['452'].inputs['images.image_' + (i + 1)] = [id, 0];
+                });
+                wf['458'].inputs.latent_image = ['452', 2];
+            }
             wf['458'].inputs.steps = steps;
             wf['458'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
                 ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
@@ -5304,6 +5372,69 @@ const MODELOS_IMAGEN = {
                 ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
             // el tamaño sale de la foto (ImageScaleToTotalPixels), no de un latent
             return { width: 'foto', height: 'foto', steps };
+        }
+    },
+    flux3klein: {
+        archivo: 'workflows/flux3_klein_edit_api.json',
+        etiqueta: 'FLUX 3 Klein Edit',
+        tipoSalida: 'storyboard',
+        ayuda: 'Modelos: flux3-image-klein (base/distilled int8) + qwen3vl_4b + upsampler qwen3.5-9b + flux2-vae',
+        aplicar(wf, prompt, params) {
+            // variante: base (50 steps, CFG 4) o distilled (16 steps, CFG 1)
+            const base = params.fkModel === 'base';
+            wf['1'].inputs.unet_name = base
+                ? 'flux3-image-klein-base-int8-convrot.safetensors'
+                : 'flux3-image-klein-int8-convrot.safetensors';
+
+            // referencias: la 0 es la imagen a editar; las demás entran por
+            // LoadImage dinámicos (ref_1, ref_2...) y se suman al batch del
+            // upsampler (nodo 6) y al ReferenceMultiLatent (nodo 11).
+            const refs = (Array.isArray(params.imageFilenames) ? params.imageFilenames : []).filter(Boolean);
+            wf['5'].inputs.image = String(refs[0] || '');
+            for (let i = 1; i < refs.length; i++) {
+                const id = 'ref_' + i;
+                wf[id] = { class_type: 'LoadImage', inputs: { image: String(refs[i]) } };
+                wf['6'].inputs['images.image' + i] = [id, 0];
+                wf['11'].inputs['images.image' + i] = [id, 0];
+            }
+
+            // prompt + tabla de layout (sectores -> bounding boxes 0-1000)
+            const tabla = construirTablaFlux3Klein(params.sectores);
+            wf['8'].inputs.prompt = tabla ? (String(prompt || '') + '\nLayout: ' + tabla) : String(prompt || '');
+            wf['10'].inputs.text = params.negativePrompt || '';
+
+            // steps / cfg / seed en el KSampler
+            const stepsMax = base ? 50 : 16;
+            const steps = Math.min(parseInt(params.samplerSteps) || stepsMax, stepsMax);
+            wf['13'].inputs.steps = steps;
+            wf['13'].inputs.cfg = base ? 4.0 : 1.0;
+            wf['13'].inputs.seed = (params.seed !== undefined && params.seed !== -1)
+                ? Number(params.seed) : Math.floor(Math.random() * 1000000000000000);
+
+            // resolución -> megapixels del ReferenceMultiLatent
+            const MEGA = { '0.75K': 0.6, '1K': 1.0, '1.5K': 2.4, '2K': 4.2, '4K': 16.8 };
+            const mega = MEGA[params.resolution] || 1.0;
+
+            // aspecto: 'auto' sigue la referencia (keep resolution); un ratio fijo
+            // usa EmptyFlux2LatentImage con las dimensiones del ratio * megapixels.
+            const ratio = String(params.aspectRatio || 'auto').toLowerCase();
+            const RATIOS = { '21:9': 21 / 9, '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '3:4': 3 / 4, '9:16': 9 / 16, '9:21': 9 / 21 };
+            const r = RATIOS[ratio];
+            if (r) {
+                wf['11'].inputs.resolution = 'resize';
+                wf['11'].inputs['resolution.megapixels'] = mega;
+                const total = mega * 1e6;
+                const w = Math.max(256, Math.round(Math.sqrt(total * r) / 16) * 16);
+                const h = Math.max(256, Math.round(Math.sqrt(total / r) / 16) * 16);
+                wf['12'].inputs.width = w;
+                wf['12'].inputs.height = h;
+                wf['13'].inputs.latent_image = ['12', 0];
+                return { width: w, height: h, steps };
+            }
+            wf['11'].inputs.resolution = 'keep resolution';
+            delete wf['11'].inputs['resolution.megapixels'];
+            wf['13'].inputs.latent_image = ['11', 2];
+            return { width: 'referencia', height: 'referencia', steps };
         }
     }
 };
@@ -5416,50 +5547,6 @@ function broadcastComfyStatus(status) {
             client.send(JSON.stringify({ type: 'comfy_status', status }));
         }
     });
-}
-
-async function generarWan22Video(promptText, params = {}, startImageFilename = null, endImageFilename = null) {
-    const workflowFile = 'workflows/video_wan2_2_14B_flf2v_api.json';
-    const data = await fs.promises.readFile(path.join(__dirname, workflowFile), 'utf8');
-    const promptWorkflow = JSON.parse(data);
-
-    // Configurar el workflow WAN2.2
-    // Texto del prompt
-    promptWorkflow["90"]["inputs"]["text"] = promptText;
-    
-    // Configurar imágenes de inicio y fin si están disponibles
-    if (startImageFilename) {
-        promptWorkflow["80"]["inputs"]["image"] = startImageFilename;
-    }
-    if (endImageFilename) {
-        promptWorkflow["89"]["inputs"]["image"] = endImageFilename;
-    }
-    
-    // Configurar dimensiones y parámetros
-    if (params.videoWidth) {
-        promptWorkflow["81"]["inputs"]["width"] = params.videoWidth;
-    }
-    if (params.videoHeight) {
-        promptWorkflow["81"]["inputs"]["height"] = params.videoHeight;
-    }
-    if (params.videoLength) {
-        promptWorkflow["81"]["inputs"]["length"] = params.videoLength;
-    }
-    if (params.samplerSteps) {
-        promptWorkflow["84"]["inputs"]["steps"] = params.samplerSteps;
-    }
-    if (params.cfgScale) {
-        promptWorkflow["84"]["inputs"]["cfg"] = params.cfgScale;
-    }
-    
-    // Seed
-    const seedValue = (params.seed !== undefined && params.seed !== -1) ? params.seed : Math.floor(Math.random() * 1000000000000000);
-    promptWorkflow["84"]["inputs"]["noise_seed"] = seedValue;
-
-    const promptId = await queuePrompt(promptWorkflow);
-    console.log(`🚀 WAN2.2 prompt enviado a ComfyUI. ID: ${promptId}`);
-    ultimoTrabajo = 'video';
-    return promptId;
 }
 
 // ============================================

@@ -373,62 +373,8 @@ function handleWsMessage(event) {
                     item.status = 'completed';
                     item.resultUrl = message.url;
 
-                    // Handle FLUX images generated for WAN2.2
-                    if (message.isForWan && message.wanId) {
-                        appendConsoleLine(`🖼️ FLUX ${message.wanRole} image ready for WAN2.2: ${message.filename}`, 'system');
-                        
-                        // Find waiting WAN2.2 video items and update their image references
-                        globalGenerationQueue.forEach(q => {
-                            if (q.model === 'wan2.2' && q.status === 'waiting') {
-                                if (message.wanRole === 'start' && q.startImageId === message.wanId) {
-                                    q.startImageFilename = message.filename;
-                                    appendConsoleLine(`✅ WAN2.2 start image assigned (step ${q.wanStepIndex}): ${message.filename}`, 'debug');
-                                } else if (message.wanRole === 'end' && q.endImageId === message.wanId) {
-                                    q.endImageFilename = message.filename;
-                                    appendConsoleLine(`✅ WAN2.2 end image assigned (step ${q.wanStepIndex}): ${message.filename}`, 'debug');
-                                }
-                                
-                                // CADENA CONTINUA: Si es un paso continuo (no el primero) y tiene prevEndImageId,
-                                // usar la imagen end del paso anterior como start
-                                if (q.isChainContinued && q.prevEndImageId && !q.startImageFilename) {
-                                    // Buscar el filename de la imagen end del paso anterior
-                                    const prevEndItem = globalGenerationQueue.find(prev => 
-                                        prev.id === q.prevEndImageId && prev.status === 'completed'
-                                    );
-                                    if (prevEndItem && prevEndItem.resultUrl) {
-                                        q.startImageFilename = prevEndItem.resultFilename || 
-                                            prevEndItem.resultUrl.split('/').pop();
-                                        appendConsoleLine(`🔗 CADENA: Usando fin del paso anterior como inicio: ${q.startImageFilename}`, 'system');
-                                    }
-                                }
-                                
-                                // If both images are ready, activate the WAN2.2 generation
-                                if (q.startImageFilename && q.endImageFilename) {
-                                    q.status = 'pending';
-                                    appendConsoleLine(`🚀 WAN2.2 video generation activated (step ${q.wanStepIndex})`, 'system');
-                                }
-                            }
-                        });
-                        
-                        // CADENA CONTINUA: Si es una imagen 'end', buscar el siguiente paso WAN2.2
-                        // y asignarle esta imagen como su 'start'
-                        if (message.wanRole === 'end') {
-                            const currentStepIndex = message.wanStepIndex;
-                            const nextWanStep = globalGenerationQueue.find(q => 
-                                q.model === 'wan2.2' && 
-                                q.wanStepIndex === currentStepIndex + 1 &&
-                                q.isChainContinued &&
-                                q.status === 'waiting'
-                            );
-                            if (nextWanStep && !nextWanStep.startImageFilename) {
-                                nextWanStep.startImageFilename = message.filename;
-                                nextWanStep.prevEndImageFilename = message.filename;
-                                appendConsoleLine(`🔗 CADENA CONTINUA: Paso ${currentStepIndex + 1} usa fin del paso ${currentStepIndex} como inicio`, 'system');
-                            }
-                        }
-                    }
                     // AUTO-VIDEO PIPELINE: If this storyboard item was flagged for auto-video
-                    else if (item.autoVideo) {
+                    if (item.autoVideo) {
                         // Use videoPrompt if specifically set for this I2V step, else fallback to storyboard prompt
                         const generationPrompt = item.videoPrompt || message.prompt || item.prompt;
                         appendConsoleLine(`🎬 Auto-transitioning to Video for: ${generationPrompt.substring(0, 30)}...`, 'system');
@@ -1468,15 +1414,12 @@ function updateGlobalQueueUI() {
     // Update completed history
     updateCompletedHistory(completedItems);
 
-    // Calculate counters for images, videos, and WAN2.2 (including waiting items)
-    const imgItems = activeItems.filter(i => i.type === 'storyboard' || i.type === 'flux_for_wan');
-    const wanItems = activeItems.filter(i => i.model === 'wan2.2');
-    const videoItems = activeItems.filter(i => i.type !== 'storyboard' && i.type !== 'flux_for_wan' && i.model !== 'wan2.2');
-    const imgCompleted = globalGenerationQueue.filter(i => (i.type === 'storyboard' || i.type === 'flux_for_wan') && i.status === 'completed').length;
-    const wanCompleted = globalGenerationQueue.filter(i => i.model === 'wan2.2' && i.status === 'completed').length;
-    const videoCompleted = globalGenerationQueue.filter(i => i.type !== 'storyboard' && i.type !== 'flux_for_wan' && i.model !== 'wan2.2' && i.status === 'completed').length;
+    // Calculate counters for images and videos (including waiting items)
+    const imgItems = activeItems.filter(i => i.type === 'storyboard');
+    const videoItems = activeItems.filter(i => i.type !== 'storyboard');
+    const imgCompleted = globalGenerationQueue.filter(i => i.type === 'storyboard' && i.status === 'completed').length;
+    const videoCompleted = globalGenerationQueue.filter(i => i.type !== 'storyboard' && i.status === 'completed').length;
     const totalImg = imgItems.length + imgCompleted;
-    const totalWan = wanItems.length + wanCompleted;
     const totalVideo = videoItems.length + videoCompleted;
 
     if (queueCount) queueCount.textContent = activeItems.length;
@@ -1499,7 +1442,7 @@ function updateGlobalQueueUI() {
         queueList.parentElement.insertBefore(countersDiv, queueList);
     }
     
-    if (totalImg > 0 || totalVideo > 0 || totalWan > 0) {
+    if (totalImg > 0 || totalVideo > 0) {
         countersDiv.style.display = 'flex';
         countersDiv.innerHTML = '';
         
@@ -1512,14 +1455,6 @@ function updateGlobalQueueUI() {
             countersDiv.appendChild(imgCounter);
         }
         
-        if (totalWan > 0) {
-            const wanCounter = document.createElement('div');
-            wanCounter.style.cssText = 'color: #a855f7;';
-            wanCounter.innerHTML = wanItems.length
-                ? `🎬 WAN2.2 pendientes: <span style="color: #f59e0b;">${wanItems.length}/${totalWan}</span>`
-                : `🎬 WAN2.2: <span style="color: #34d399;">${totalWan} listos</span>`;
-            countersDiv.appendChild(wanCounter);
-        }
         
         if (totalVideo > 0) {
             const videoCounter = document.createElement('div');
@@ -1554,20 +1489,8 @@ function updateGlobalQueueUI() {
         let modeLabel = item.imageFilename ? 'I2V' : 'T2V';
         if (item.type === 'storyboard') modeLabel = 'T2I';
         if (item.type === 'export') modeLabel = 'EXPORT';
-        if (item.model === 'wan2.2') {
-            const chainInfo = item.isChainContinued ? '🔗' : '🔥';
-            modeLabel = `WAN2.2 ${chainInfo}`;
-        }
-        if (item.type === 'flux_for_wan') modeLabel = `FLUX ${item.wanRole === 'start' ? '🔥' : '🔗'} (${item.wanRole})`;
         if (item.status === 'waiting' && item.type !== 'export') {
-            if (item.model === 'wan2.2') {
-                const hasStart = item.startImageFilename ? '✓' : (item.isChainContinued ? '🔗' : '○');
-                const hasEnd = item.endImageFilename ? '✓' : '○';
-                const chainStatus = item.isChainContinued ? '🔗' : '🔥';
-                modeLabel = `WAN2.2 ${chainStatus} (start:${hasStart} end:${hasEnd})`;
-            } else {
-                modeLabel = 'I2V (waiting for image)';
-            }
+            modeLabel = 'I2V (waiting for image)';
         }
 
         const progressIndicator = item.status === 'generating' ?
@@ -1653,12 +1576,10 @@ function checkGlobalQueue() {
     pendingItems.forEach(item => {
         const batchKey = item.batchId || 'no_batch';
         if (!batchGroups[batchKey]) {
-            batchGroups[batchKey] = { images: [], fluxForWan: [], videos: [], wan22Waiting: [], exports: [] };
+            batchGroups[batchKey] = { images: [], videos: [], exports: [] };
         }
         if (item.type === 'storyboard') {
             batchGroups[batchKey].images.push(item);
-        } else if (item.type === 'flux_for_wan') {
-            batchGroups[batchKey].fluxForWan.push(item);
         } else if (item.type === 'export') {
             batchGroups[batchKey].exports.push(item);
         } else {
@@ -1667,17 +1588,12 @@ function checkGlobalQueue() {
     });
     
     // Find the first batch (chronologically) and process in order:
-    // 1. FLUX images for WAN2.2, 2. Regular images, 3. Videos (incl. WAN2.2 when pending), 4. Exports
+    // 1. Regular images, 2. Videos, 3. Exports
     const sortedBatchIds = Object.keys(batchGroups).sort();
     let nextItem = null;
     
     for (const batchId of sortedBatchIds) {
         const batch = batchGroups[batchId];
-        // First, process FLUX images for WAN
-        if (batch.fluxForWan.length > 0) {
-            nextItem = batch.fluxForWan[0];
-            break;
-        }
         // Then, process regular images
         if (batch.images.length > 0) {
             nextItem = batch.images[0];
@@ -1725,52 +1641,6 @@ function checkGlobalQueue() {
             updateGlobalQueueUI();
             setTimeout(() => checkGlobalQueue(), 1000);
         }
-    } else if (nextItem.type === 'flux_for_wan') {
-        // Generate FLUX image for WAN2.2
-        const message = {
-            type: 'generarStoryboard',
-            prompt: nextItem.prompt,
-            params: nextItem.params,
-            batchId: nextItem.batchId,
-            batchName: batchName,
-            isForWan: true,
-            wanRole: nextItem.wanRole,
-            wanId: nextItem.id,
-            wanStepIndex: nextItem.wanStepIndex,
-            queueItemId: nextItem.id
-        };
-        try { ws.send(JSON.stringify(message)); } catch (e) {
-            console.error('WS send failed (flux_for_wan):', e);
-            nextItem.status = 'pending';
-            isGeneratingGlobal = false;
-            currentExecutingId = null;
-            updateGlobalQueueUI();
-            setTimeout(() => checkGlobalQueue(), 2000);
-            return;
-        }
-        appendConsoleLine(`>> Generating FLUX image for WAN2.2 (${nextItem.wanRole}): ${nextItem.prompt.substring(0, 30)}...`, 'system');
-    } else if (nextItem.model === 'wan2.2') {
-        // Generate WAN2.2 video
-        const message = {
-            type: 'generarWan22',
-            prompt: nextItem.prompt,
-            params: nextItem.params,
-            startImageFilename: nextItem.startImageFilename,
-            endImageFilename: nextItem.endImageFilename,
-            batchId: nextItem.batchId,
-            batchName: batchName,
-            queueItemId: nextItem.id
-        };
-        try { ws.send(JSON.stringify(message)); } catch (e) {
-            console.error('WS send failed (wan2.2):', e);
-            nextItem.status = 'pending';
-            isGeneratingGlobal = false;
-            currentExecutingId = null;
-            updateGlobalQueueUI();
-            setTimeout(() => checkGlobalQueue(), 2000);
-            return;
-        }
-        appendConsoleLine(`>> Launching WAN2.2 video: ${nextItem.prompt.substring(0, 30)}...`, 'system');
     } else {
         const message = {
             // Quién pide ESTE trabajo: la sesión de este navegador (no un usuario
@@ -1832,10 +1702,6 @@ function handleSequencerGenerate() {
     const globalImagePrompt = document.getElementById('globalImagePrompt')?.value.trim() || '';
     const globalVideoPrompt = document.getElementById('globalVideoPrompt')?.value.trim() || '';
     
-    // Variable para rastrear la cadena continua de imágenes WAN2.2
-    // Cada paso WAN2.2 (excepto el primero) usa el final del anterior como su inicio
-    let previousWanEndImageId = null;
-    let previousWanEndImageFilename = null;
 
     promptItems.forEach((item, index) => {
         const tImg = item.querySelector('.image-prompt');
@@ -1843,14 +1709,12 @@ function handleSequencerGenerate() {
         const modeSelect = item.querySelector('.step-mode-select-compact');
         const modelSelect = item.querySelector('.step-model-select');
         const outputSelect = item.querySelector('.step-output-select');
-        const wanFluxCheck = item.querySelector('.wan-flux-images-check');
         
         const valImg = tImg?.value.trim();
         const valVid = tVid?.value.trim();
         const mode = modeSelect?.value || 't2i2v';
         const model = modelSelect?.value || 'ltx2';
         const outputType = outputSelect?.value || 'video';
-        const useFluxForWanImages = wanFluxCheck?.checked ?? true;
 
         if (valImg || valVid) {
             // Global style prefix
@@ -1865,76 +1729,6 @@ function handleSequencerGenerate() {
                     autoOverlap: autoOverlapRatio,
                     model: 'flux'
                 });
-            } else if (mode === 'wan2.2' || mode === 'chainvideo' || model === 'wan2.2') {
-                // WAN2.2 I2V with FLUX-generated start/end images
-                // CADENA CONTINUA: Cada video usa el final del anterior como su inicio
-                const isFirstWanStep = index === 0 || !previousWanEndImageId;
-                const startImageId = isFirstWanStep ? 'wan_start_' + Date.now() + '_' + index + Math.random() : null;
-                const endImageId = 'wan_end_' + Date.now() + '_' + index + Math.random();
-                
-                if (isFirstWanStep) {
-                    // Primer paso: generar ambas imágenes (inicio y fin)
-                    globalGenerationQueue.push({
-                        id: startImageId,
-                        prompt: finalImgPrompt,
-                        type: 'flux_for_wan',
-                        params: {},
-                        status: 'pending',
-                        projectId: activeProjectId,
-                        batchId,
-                        isForWan: true,
-                        wanRole: 'start',
-                        wanStepIndex: index,
-                        isChainStart: true
-                    });
-                }
-                
-                // Siempre generar imagen de fin (será el inicio del siguiente)
-                globalGenerationQueue.push({
-                    id: endImageId,
-                    prompt: finalVidPrompt || finalImgPrompt,
-                    type: 'flux_for_wan',
-                    params: {},
-                    status: 'pending',
-                    projectId: activeProjectId,
-                    batchId,
-                    isForWan: true,
-                    wanRole: 'end',
-                    wanStepIndex: index,
-                    isChainEnd: true,
-                    prevStartImageId: startImageId // Referencia para el primer paso
-                });
-                
-                // Add WAN2.2 video generation
-                globalGenerationQueue.push({
-                    id: Date.now() + Math.random() + 0.5,
-                    prompt: finalVidPrompt || finalImgPrompt,
-                    params: {
-                        videoWidth: parseInt(document.getElementById('videoWidth').value),
-                        videoHeight: parseInt(document.getElementById('videoHeight').value),
-                        videoLength: parseInt(document.getElementById('videoLength').value),
-                        samplerSteps: parseInt(document.getElementById('samplerSteps').value),
-                        cfgScale: parseFloat(document.getElementById('cfgScale').value),
-                        refStrength: parseFloat(document.getElementById('refStrength').value),
-                        seed: document.getElementById('randomSeed').checked ? -1 : parseInt(document.getElementById('seed').value)
-                    },
-                    model: 'wan2.2',
-                    useFluxImages: useFluxForWanImages,
-                    startImageId: isFirstWanStep ? startImageId : null, // null = usar end del anterior
-                    endImageId: endImageId,
-                    prevEndImageId: previousWanEndImageId, // Referencia al final del paso anterior
-                    wanStepIndex: index,
-                    isChainContinued: !isFirstWanStep,
-                    status: 'waiting',
-                    projectId: activeProjectId,
-                    isAutoAssemble,
-                    isAutoRender,
-                    batchId,
-                    autoOverlap: autoOverlapRatio
-                });
-                
-                // Guardar referencia para el siguiente paso
-                previousWanEndImageId = endImageId;
             } else if (mode === 'i2v') {
                 const stepImageFilename = item.querySelector('.step-uploaded-filename')?.value;
                 addToQueue(finalVidPrompt || finalImgPrompt, stepImageFilename, { 
@@ -2050,7 +1844,6 @@ const WORKFLOW_CONFIG = {
     t2v: { name: '🎬 T2V', model: 'ltx2', output: 'video', desc: 'Text to Video direct with LTX-2' },
     t2i2v: { name: '🔄 T2I→I2V', model: 'ltx2', output: 'video', desc: 'Image then Video with LTX-2' },
     i2v: { name: '📸 I2V', model: 'ltx2', output: 'video', desc: 'Image to Video with manual image upload' },
-    chainvideo: { name: '🔗 CHAINVIDEO', model: 'wan2.2', output: 'video', desc: 'Linked videos with Wan2.2 (start/end images)' }
 };
 
 // Update workflow info display
@@ -2105,7 +1898,6 @@ function addPromptStep(val = '', mode = 't2v') {
     const workflow = WORKFLOW_CONFIG[mode] || WORKFLOW_CONFIG['t2v'];
     const initialModel = workflow.model;
     const initialOutput = workflow.output;
-    const isChainVideo = mode === 'chainvideo';
     
     div.dataset.mode = mode;
     div.dataset.model = initialModel;
@@ -2115,18 +1907,16 @@ function addPromptStep(val = '', mode = 't2v') {
             <div class="prompt-header-left">
                 <div class="prompt-number">${count}</div>
                 <span class="prompt-status-text">STEP</span>
-                <span class="workflow-badge" style="font-size: 0.65em; margin-left: 8px; padding: 2px 6px; border-radius: 4px; background: ${isChainVideo ? 'rgba(168,85,247,0.2)' : 'rgba(99,102,241,0.1)'}; border: 1px solid ${isChainVideo ? '#a855f7' : 'rgba(99,102,241,0.3)'}; color: ${isChainVideo ? '#a855f7' : '#818cf8'};">${workflow.name}</span>
-                <span class="wan-chain-indicator ${isChainVideo ? '' : 'hidden'}" style="font-size: 0.65em; color: #a855f7; margin-left: 8px; padding: 2px 6px; background: rgba(168,85,247,0.1); border-radius: 4px; border: 1px solid rgba(168,85,247,0.3);">${count === 1 && isChainVideo ? '🔥 START' : '🔗 CHAIN'}</span>
+                <span class="workflow-badge" style="font-size: 0.65em; margin-left: 8px; padding: 2px 6px; border-radius: 4px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); color: #818cf8;">${workflow.name}</span>
             </div>
             <div class="prompt-header-right" style="display: flex; gap: 8px; align-items: center;">
                 <!-- Model Display (Locked per workflow) -->
                 <span class="step-model-display" style="padding: 4px 8px; font-size: 0.75em; border-radius: 4px; border: 1px solid rgba(99,102,241,0.3); background: rgba(15,23,42,0.8); color: #e2e8f0; font-weight: 600;">
-                    ${initialModel === 'flux' ? '🖼️ FLUX' : initialModel === 'wan2.2' ? '🎬 Wan 2.2' : '🎬 LTX-2'}
+                    ${initialModel === 'flux' ? '🖼️ FLUX' : '🎬 LTX-2'}
                 </span>
                 <!-- Hidden selects for compatibility -->
                 <select class="step-model-select hidden" title="AI Model">
                     <option value="ltx2" ${initialModel === 'ltx2' ? 'selected' : ''}>LTX-2</option>
-                    <option value="wan2.2" ${initialModel === 'wan2.2' ? 'selected' : ''}>Wan 2.2</option>
                     <option value="flux" ${initialModel === 'flux' ? 'selected' : ''}>FLUX</option>
                 </select>
                 <select class="step-output-select hidden" title="Output Type">
@@ -2138,7 +1928,6 @@ function addPromptStep(val = '', mode = 't2v') {
                     <option value="t2i" ${mode === 't2i' ? 'selected' : ''}>T2I</option>
                     <option value="t2i2v" ${mode === 't2i2v' ? 'selected' : ''}>T2I→I2V</option>
                     <option value="i2v" ${mode === 'i2v' ? 'selected' : ''}>I2V</option>
-                    <option value="chainvideo" ${mode === 'chainvideo' ? 'selected' : ''}>CHAINVIDEO</option>
                 </select>
                 <button class="step-magic-btn" title="Magic Prompt (Improve with AI)" style="background: rgba(168, 85, 247, 0.1); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.9em; cursor: pointer; transition: all 0.2s;">🪄</button>
                 <button class="remove-prompt-btn" title="Remove prompt">×</button>
@@ -2152,11 +1941,6 @@ function addPromptStep(val = '', mode = 't2v') {
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <span style="font-size: 0.75em; color: #818cf8; font-weight: 600;">⚡ Workflow:</span>
                             <span style="font-size: 0.7em; color: #e2e8f0;">${workflow.desc}</span>
-                        </div>
-                        <div class="wan22-settings ${isChainVideo ? '' : 'hidden'}" style="display: flex; gap: 10px; align-items: center;">
-                            <label style="font-size: 0.7em; color: #a855f7; font-weight: 600;">
-                                🔗 Cadena continua activada
-                            </label>
                         </div>
                     </div>
                 </div>
@@ -2195,8 +1979,6 @@ function addPromptStep(val = '', mode = 't2v') {
     const modeSelect = div.querySelector('.step-mode-select-compact');
     const modelSelect = div.querySelector('.step-model-select');
     const outputSelect = div.querySelector('.step-output-select');
-    const wanSettings = div.querySelector('.wan22-settings');
-    const chainIndicator = div.querySelector('.wan-chain-indicator');
     const tImg = div.querySelector('.image-prompt');
     const tVid = div.querySelector('.video-prompt');
     const lImg = div.querySelector('.prompt-split-label.image');
@@ -2206,7 +1988,6 @@ function addPromptStep(val = '', mode = 't2v') {
         const currentModel = modelSelect.value;
         const currentMode = modeSelect.value;
         const outputType = outputSelect.value;
-        const isWan22 = currentModel === 'wan2.2' || currentMode === 'chainvideo';
         const isI2VManual = currentMode === 'i2v';
         
         // Show/hide I2V Manual Upload UI
@@ -2215,26 +1996,6 @@ function addPromptStep(val = '', mode = 't2v') {
             stepImgUpload.classList.toggle('hidden', !isI2VManual);
         }
 
-        // Show/hide WAN2.2 specific settings
-        if (wanSettings) {
-            wanSettings.classList.toggle('hidden', !isWan22);
-        }
-        
-        // Show/hide chain indicator for WAN2.2 / CHAINVIDEO
-        if (chainIndicator) {
-            chainIndicator.classList.toggle('hidden', !isWan22);
-            if (isWan22) {
-                const stepNum = parseInt(div.querySelector('.prompt-number')?.textContent || '1');
-                const isChainStart = stepNum === 1 || currentMode === 'chainvideo' && stepNum === 1;
-                if (isChainStart) {
-                    chainIndicator.textContent = '🔥 START';
-                    chainIndicator.style.background = 'rgba(168,85,247,0.2)';
-                } else {
-                    chainIndicator.textContent = '🔗 CHAIN';
-                    chainIndicator.style.background = 'rgba(168,85,247,0.1)';
-                }
-            }
-        }
         
         // Update visibility based on output type
         if (outputType === 'image' || currentModel === 'flux') {
@@ -2250,15 +2011,13 @@ function addPromptStep(val = '', mode = 't2v') {
             
             lVid.style.display = 'flex';
             tVid.style.display = 'block';
-            lImg.querySelector('span').textContent = isWan22 ? 'START IMAGE PROMPT' : 'PROMPT IMAGE (STATIC)';
-            lVid.querySelector('span').textContent = isWan22 ? 'END IMAGE PROMPT / VIDEO' : 'VIDEO IMAGE (ANIMATION & PLOT)';
+            lImg.querySelector('span').textContent = 'PROMPT IMAGE (STATIC)';
+            lVid.querySelector('span').textContent = 'VIDEO IMAGE (ANIMATION & PLOT)';
         }
         
         // Sync mode select for backward compatibility
         if (currentModel === 'flux' || outputType === 'image') {
             modeSelect.value = 't2i';
-        } else if (isWan22) {
-            modeSelect.value = currentMode === 'chainvideo' ? 'chainvideo' : 'wan2.2';
         } else if (currentMode === 'i2v') {
             modeSelect.value = 'i2v';
         } else {
@@ -4897,6 +4656,48 @@ function setupI2VUpload() {
     });
 }
 
+function setupFastH3Upload() {
+    const area = document.getElementById('fh3UploadArea');
+    const input = document.getElementById('fh3ImageInput');
+    if (!area || !input) return;
+    
+    area.addEventListener('click', () => {
+        if (!area.classList.contains('has-image')) input.click();
+    });
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) handleWfUpload(e.dataTransfer.files[0], 'fh3', area);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleWfUpload(e.target.files[0], 'fh3', area);
+    });
+}
+
+function setupQwen21Upload() {
+    const modeSel = document.getElementById('q21Mode');
+    const editSection = document.getElementById('q21EditSection');
+    if (modeSel && editSection) {
+        const toggle = () => { editSection.style.display = modeSel.value === 'edit' ? '' : 'none'; };
+        modeSel.addEventListener('change', toggle);
+        toggle();
+    }
+    const area = document.getElementById('q21UploadArea');
+    const input = document.getElementById('q21ImageInput');
+    if (!area || !input) return;
+    area.addEventListener('click', () => { if (!area.classList.contains('has-image')) input.click(); });
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) handleWfUpload(e.dataTransfer.files[0], 'q21', area);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleWfUpload(e.target.files[0], 'q21', area);
+    });
+}
+
 // ============================================
 // GENERATE HANDLERS PER WORKFLOW
 // ============================================
@@ -4959,12 +4760,15 @@ function generateZImage() {
     document.getElementById('tabOutputBtn')?.click();
 }
 
-// Generate con Qwen-Image 2.1 (GGUF)
+// Generate con Qwen 2.1 (int8) — Text to Image o Image to Image (EDIT)
 function generateQwen21() {
     const prompt = document.getElementById('q21Prompt')?.value.trim();
     if (!prompt) { appendConsoleLine('⚠️ Please enter an image prompt', 'warning'); return; }
+    const modo = document.getElementById('q21Mode')?.value || 't2i';
+    const filenames = wfUploadedImages['q21'] ? [wfUploadedImages['q21']] : [];
+    if (modo === 'edit' && !filenames.length) { appendConsoleLine('⚠️ Cargá una imagen para editar (Image to Image)', 'warning'); return; }
 
-    addToQueue(prompt, '', {
+    addToQueue(prompt, modo === 'edit' ? filenames[0] : '', {
         modelo: 'qwen21',
         params: {
             modelo: 'qwen21',
@@ -4973,11 +4777,12 @@ function generateQwen21() {
             samplerSteps: getSliderVal('q21Steps') || 25,
             cfgScale: 1.0,
             negativePrompt: document.getElementById('q21Negative')?.value.trim() || '',
-            seed: getSeed('q21')
+            seed: getSeed('q21'),
+            imageFilenames: filenames
         }
     });
 
-    appendConsoleLine(`🧠 Qwen-Image 2.1 queued: ${prompt.substring(0, 50)}...`, 'system');
+    appendConsoleLine(`🧠 Qwen 2.1 queued (${modo === 'edit' ? 'edit' : 't2i'}): ${prompt.substring(0, 50)}...`, 'system');
     document.getElementById('tabOutputBtn')?.click();
 }
 
@@ -4991,7 +4796,8 @@ function generateT2V() {
             videoWidth: getSliderVal('t2vWidth') || 1280,
             videoHeight: getSliderVal('t2vHeight') || 704,
             videoLength: getSliderVal('t2vFrames') || 121,
-            samplerSteps: 8,
+            ltx25Model: document.getElementById('t2vModel')?.value || 'distilled',
+            samplerSteps: (document.getElementById('t2vModel')?.value === 'dev22b') ? 25 : 8,
             cfgScale: 1,
             seed: getSeed('t2v'),
             ltx25Enhance: document.getElementById('t2vEnhance')?.checked ?? true,
@@ -5078,7 +4884,8 @@ function generateI2V() {
             videoWidth: getSliderVal('i2vWidth') || 1280,
             videoHeight: getSliderVal('i2vHeight') || 704,
             videoLength: getSliderVal('i2vFrames') || 121,
-            samplerSteps: 'fijo',
+            ltx25Model: document.getElementById('i2vModel')?.value || 'distilled',
+            samplerSteps: (document.getElementById('i2vModel')?.value === 'dev22b') ? 25 : 'fijo',
             cfgScale: 1,
             refStrength: getSliderVal('i2vRef') || 1.0,
             seed: getSeed('i2v'),
@@ -5093,256 +4900,58 @@ function generateI2V() {
     document.getElementById('tabOutputBtn')?.click();
 }
 
-// ============================================
-// CHAIN VIDEO STEPS
-// ============================================
-function addChainStep(startPrompt = '', endPrompt = '') {
-    const container = document.getElementById('chainSequence');
-    if (!container) return;
+// Generate FAST H3 (MiniMax H3 OmniRef — referencia a video, hasta 9 refs)
+function generateFastH3() {
+    const prompt = document.getElementById('fh3Prompt')?.value.trim();
+    const imagen = wfUploadedImages['fh3'];
     
-    const count = container.querySelectorAll('.chain-step-item').length + 1;
-    const div = document.createElement('div');
-    div.className = 'chain-step-item';
-    div.innerHTML = `
-        <div class="chain-step-header">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div class="chain-step-number">${count}</div>
-                <span style="font-size: 0.7em; color: #a855f7; font-weight: 700;">WAN2.2 CHAIN</span>
-            </div>
-            <button class="chain-remove-step" style="background: rgba(239,68,68,0.1); color: #ef4444; border: none; border-radius: 6px; width: 24px; height: 24px; cursor: pointer;">×</button>
-        </div>
-        <div class="chain-step-content">
-            <div class="chain-prompt-row">
-                <div style="flex: 1;">
-                    <label style="font-size: 0.6em; color: #818cf8; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">🟢 START IMAGE PROMPT</label>
-                    <textarea class="chain-start-prompt" placeholder="Describe the starting frame...">${startPrompt}</textarea>
-                </div>
-                <div style="flex: 1;">
-                    <label style="font-size: 0.6em; color: #a855f7; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">🔴 END IMAGE PROMPT</label>
-                    <textarea class="chain-end-prompt" placeholder="Describe the ending frame...">${endPrompt}</textarea>
-                </div>
-            </div>
-        </div>
-    `;
+    if (!imagen) { appendConsoleLine('⚠️ Subí una imagen de referencia primero', 'warning'); return; }
+    if (!prompt) { appendConsoleLine('⚠️ Escribí un prompt para el video', 'warning'); return; }
     
-    div.querySelector('.chain-remove-step').addEventListener('click', () => {
-        div.remove();
-        container.querySelectorAll('.chain-step-item').forEach((item, idx) => {
-            item.querySelector('.chain-step-number').textContent = idx + 1;
-        });
-    });
+    // Duración (segundos) → frames en la grilla 17k+5 (misma fórmula del workflow)
+    const duracion = parseFloat(document.getElementById('fh3Duration')?.value) || 5;
+    const base = Math.max(5, Math.round(duracion * 24));
+    const frames = base + ((5 - (base % 17)) % 17);
     
-    container.appendChild(div);
-}
-
-function generateChainVideo() {
-    const steps = document.querySelectorAll('.chain-step-item');
-    if (steps.length === 0) { appendConsoleLine('⚠️ Please add at least one chain step', 'warning'); return; }
-    
-    const batchId = 'chain_' + Date.now();
-    let previousWanEndImageId = null;
-    let addedCount = 0;
-    
-    steps.forEach((item, index) => {
-        const startPrompt = item.querySelector('.chain-start-prompt')?.value.trim();
-        const endPrompt = item.querySelector('.chain-end-prompt')?.value.trim();
-        
-        if (!startPrompt && !endPrompt) return;
-        
-        const isFirstStep = index === 0 || !previousWanEndImageId;
-        const endImageId = 'wan_end_' + Date.now() + '_' + index;
-        const startImageId = isFirstStep ? 'wan_start_' + Date.now() + '_' + index : null;
-        
-        // Generate start image if first step
-        if (isFirstStep) {
-            globalGenerationQueue.push({
-                id: startImageId,
-                prompt: startPrompt,
-                type: 'flux_for_wan',
-                params: {},
-                status: 'pending',
-                projectId: activeProjectId,
-                batchId,
-                isForWan: true,
-                wanRole: 'start',
-                wanStepIndex: index,
-                isChainStart: true
-            });
+    addToQueue(prompt, imagen, {
+        modelo: 'fasth3',
+        params: {
+            modelo: 'fasth3',
+            imageFilenames: [imagen],
+            videoWidth: getSliderVal('fh3Width') || 1344,
+            videoHeight: getSliderVal('fh3Height') || 768,
+            videoLength: frames,
+            seed: getSeed('fh3'),
+            audio: document.getElementById('fh3Audio')?.checked ?? true
         }
-        
-        // Always generate end image
-        globalGenerationQueue.push({
-            id: endImageId,
-            prompt: endPrompt || startPrompt,
-            type: 'flux_for_wan',
-            params: {},
-            status: 'pending',
-            projectId: activeProjectId,
-            batchId,
-            isForWan: true,
-            wanRole: 'end',
-            wanStepIndex: index,
-            isChainEnd: true
-        });
-        
-        // Add WAN2.2 video generation
-        globalGenerationQueue.push({
-            id: Date.now() + Math.random() + index,
-            prompt: endPrompt || startPrompt,
-            params: {
-                videoWidth: getSliderVal('chainWidth') || 1280,
-                videoHeight: getSliderVal('chainHeight') || 720,
-                videoLength: getSliderVal('chainFrames') || 121,
-                samplerSteps: getSliderVal('chainSteps') || 20,
-                cfgScale: getSliderVal('chainCFG') || 4.0,
-                seed: getSeed('chain')
-            },
-            model: 'wan2.2',
-            useFluxImages: true,
-            startImageId: isFirstStep ? startImageId : null,
-            endImageId: endImageId,
-            prevEndImageId: previousWanEndImageId,
-            wanStepIndex: index,
-            isChainContinued: !isFirstStep,
-            status: 'waiting',
-            projectId: activeProjectId,
-            isAutoAssemble: false,
-            isAutoRender: false,
-            batchId
-        });
-        
-        previousWanEndImageId = endImageId;
-        addedCount++;
     });
     
-    if (addedCount === 0) { appendConsoleLine('⚠️ No valid prompts in chain steps', 'warning'); return; }
-    
-    appendConsoleLine(`🔗 CHAINVIDEO queued: ${addedCount} steps`, 'system');
-    updateGlobalQueueUI();
-    checkGlobalQueue();
+    appendConsoleLine(`🚀 FAST H3 queued: ${prompt.substring(0, 50)}...`, 'system');
     document.getElementById('tabOutputBtn')?.click();
 }
 
-// Chain magic prompt (uses Ollama)
-function setupChainMagic() {
-    const magicBtn = document.getElementById('chainMagicBtn');
-    const promptArea = document.getElementById('chainPromptArea');
-    const enhancerBtn = document.getElementById('chainEnhanceBtn');
-    const modelSelect = document.getElementById('chainOllamaModel');
-    const batchPrompt = document.getElementById('chainBatchPrompt');
-    
-    if (magicBtn && promptArea) {
-        magicBtn.addEventListener('click', () => {
-            promptArea.classList.toggle('hidden');
-            if (!promptArea.classList.contains('hidden')) loadChainModels();
-        });
-    }
-    
-    if (enhancerBtn && modelSelect && batchPrompt) {
-        enhancerBtn.addEventListener('click', async () => {
-            const text = batchPrompt.value.trim();
-            const modelName = modelSelect.value;
-            
-            if (!modelName) { appendConsoleLine('⚠️ Please select an Ollama model', 'warning'); return; }
-            if (!text) { appendConsoleLine('⚠️ Please describe your video sequence idea', 'warning'); return; }
-            
-            enhancerBtn.disabled = true;
-            enhancerBtn.textContent = '⏳ Generating...';
-            
-            try {
-                const response = await fetch(window.JPI.API_BASE + '/api/enhance-prompt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, modelName })
-                });
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
-                
-                if (data.steps && Array.isArray(data.steps)) {
-                    // Clear existing chain steps
-                    const container = document.getElementById('chainSequence');
-                    if (container) container.innerHTML = '';
-                    
-                    data.steps.forEach(step => {
-                        const imgP = step['PROMPT IMAGE'] || step.promptImage || step.prompt || '';
-                        const vidP = step['VIDEO IMAGE'] || step.videoImage || step.video || '';
-                        addChainStep(imgP, vidP);
-                    });
-                    appendConsoleLine(`✨ Generated ${data.steps.length} chain steps from idea`, 'system');
-                }
-            } catch (err) {
-                appendConsoleLine(`❌ Magic prompt error: ${err.message}`, 'error');
-            } finally {
-                enhancerBtn.disabled = false;
-                enhancerBtn.textContent = '✨ GENERATE CHAIN FROM IDEA';
-            }
-        });
-    }
-}
-
-async function loadChainModels() {
-    const select = document.getElementById('chainOllamaModel');
-    if (!select) return;
-    try {
-        const response = await fetch(window.JPI.API_BASE + '/api/list-ollama-models');
-        const data = await response.json();
-        const models = data.models || [];
-        select.innerHTML = '<option value="" disabled selected>-- Select a model --</option>';
-        if (models.length === 0) {
-            select.innerHTML = '<option value="">No models found</option>';
-        } else {
-            models.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.name;
-                opt.textContent = m.name;
-                select.appendChild(opt);
-            });
+// Sincronizar los labels de Steps/CFG con el selector de modelo LTX 2.5
+// (distilled = 8 steps / CFG 1 · dev22b = 25 steps / CFG 3). El valor real lo
+// aplica el server en aplicarVarianteLTX25; acá es solo cosmético.
+['t2v', 'i2v'].forEach(function (prefix) {
+    var sel = document.getElementById(prefix + 'Model');
+    if (!sel) return;
+    function pintar() {
+        var dev = sel.value === 'dev22b';
+        var steps = document.querySelector('.wf-param-slider[data-bind="' + prefix + 'Steps"]');
+        if (steps) {
+            var lbl = steps.parentElement.querySelector('.wf-val');
+            if (lbl) lbl.textContent = dev ? '25' : (prefix === 'i2v' ? 'fijo' : '8');
         }
-    } catch (e) {
-        select.innerHTML = '<option value="">Ollama not available</option>';
+        var cfg = document.querySelector('.wf-param-slider[data-bind="' + prefix + 'CFG"]');
+        if (cfg) {
+            var lc = cfg.parentElement.querySelector('.wf-val');
+            if (lc) lc.textContent = dev ? '3.0' : '1.0';
+        }
     }
-}
-
-// Chain JSON import
-function setupChainJsonImport() {
-    const importBtn = document.getElementById('chainImportJsonBtn');
-    const jsonArea = document.getElementById('chainJsonImport');
-    const confirmBtn = document.getElementById('chainConfirmJson');
-    const cancelBtn = document.getElementById('chainCancelJson');
-    const jsonInput = document.getElementById('chainJsonInput');
-    
-    if (importBtn && jsonArea) {
-        importBtn.addEventListener('click', () => jsonArea.classList.remove('hidden'));
-    }
-    if (cancelBtn && jsonArea) {
-        cancelBtn.addEventListener('click', () => {
-            jsonArea.classList.add('hidden');
-            if (jsonInput) jsonInput.value = '';
-        });
-    }
-    if (confirmBtn && jsonInput) {
-        confirmBtn.addEventListener('click', () => {
-            try {
-                const data = JSON.parse(jsonInput.value);
-                if (!data.steps || !Array.isArray(data.steps)) throw new Error("Invalid format");
-                
-                const container = document.getElementById('chainSequence');
-                if (container) container.innerHTML = '';
-                
-                data.steps.forEach(step => {
-                    const imgP = step['PROMPT IMAGE'] || step.promptImage || step.prompt || '';
-                    const vidP = step['VIDEO IMAGE'] || step.videoImage || step.video || '';
-                    addChainStep(imgP, vidP);
-                });
-                appendConsoleLine(`✅ Imported ${data.steps.length} chain steps from JSON`, 'system');
-                jsonArea.classList.add('hidden');
-                jsonInput.value = '';
-            } catch (e) {
-                appendConsoleLine(`❌ JSON import error: ${e.message}`, 'error');
-            }
-        });
-    }
-}
+    sel.addEventListener('change', pintar);
+    pintar();
+});
 
 // ============================================
 // WORKFLOW PRESETS (Save/Load per-workflow)
@@ -5397,16 +5006,6 @@ const WORKFLOW_PRESET_CONFIG = {
             ref: { bind: 'i2vRef', type: 'slider' },
             seed: { prefix: 'i2v', type: 'seed' }
         }
-    },
-    chainvideo: {
-        fields: {
-            width: { bind: 'chainWidth', type: 'slider' },
-            height: { bind: 'chainHeight', type: 'slider' },
-            frames: { bind: 'chainFrames', type: 'slider' },
-            steps: { bind: 'chainSteps', type: 'slider' },
-            cfg: { bind: 'chainCFG', type: 'slider' },
-            seed: { prefix: 'chain', type: 'seed' }
-        }
     }
 };
 
@@ -5441,17 +5040,6 @@ function collectWorkflowPresetData(workflow) {
                 break;
             }
         }
-    }
-
-    // For chainvideo, also capture chain steps
-    if (workflow === 'chainvideo') {
-        const steps = [];
-        document.querySelectorAll('.chain-step-item').forEach(item => {
-            const start = item.querySelector('.chain-start-prompt')?.value || '';
-            const end = item.querySelector('.chain-end-prompt')?.value || '';
-            steps.push({ startPrompt: start, endPrompt: end });
-        });
-        data.chainSteps = steps;
     }
 
     return data;
@@ -5504,18 +5092,6 @@ function applyWorkflowPresetData(workflow, data) {
         }
     }
 
-    // For chainvideo, restore chain steps
-    if (workflow === 'chainvideo' && data.chainSteps && Array.isArray(data.chainSteps)) {
-        // Clear existing steps
-        const container = document.getElementById('chainSequence');
-        if (container) {
-            container.innerHTML = '';
-            // Re-add steps from preset
-            data.chainSteps.forEach(step => {
-                addChainStep(step.startPrompt || '', step.endPrompt || '');
-            });
-        }
-    }
 }
 
 // Prompt user for a preset name
@@ -5681,8 +5257,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup per-workflow handlers
     setupT2IUpload();
     setupI2VUpload();
-    setupChainMagic();
-    setupChainJsonImport();
+    setupFastH3Upload();
+    setupQwen21Upload();
     
     // Setup preset save/load handlers
     setupPresetHandlers();
@@ -5696,16 +5272,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 't2v': generateT2V(); break;
                 case 't2i2v': generateT2I2V(); break;
                 case 'i2v': generateI2V(); break;
-                case 'chainvideo': generateChainVideo(); break;
+                case 'fasth3': generateFastH3(); break;
                 case 'zimage': generateZImage(); break;
                 case 'qwen21': generateQwen21(); break;
                 case 'ideogram4': if (window.generateIdeogram4) generateIdeogram4(); break;
             }
         });
     });
-    
-    // Chain add step button
-    document.getElementById('chainAddStepBtn')?.addEventListener('click', () => addChainStep());
     
     // NO se restaura la cola desde localStorage: el servidor ya es la fuente de verdad
     // (queue_state por WS). Restaurarla hacía que un trabajo guardado como 'generating'

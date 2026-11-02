@@ -1,28 +1,23 @@
 // ============================================================
-// CREATE: a qué archivo de workflow corresponde cada cosa
+// CREATE: qué modelo usa la tarjeta activa (nombre legible)
 // ------------------------------------------------------------
-// Cuando elegís un workflow (las tarjetas de CREATE) o un motor de imagen,
-// acá te dice EXACTAMENTE qué archivo de workflows/ se va a usar.
+// Muestra un cartel con el MODELO que se va a usar. Ya no se
+// muestran nombres de archivo .json (confundían).
 // ============================================================
 (function () {
     'use strict';
 
-    // qué archivo(s) usa cada tarjeta de CREATE
-    var POR_TARJETA = {
-        t2i: ['flux_dev_fp8_api.json'],
-        t2v: ['video_ltx2_t2v_api.json'],
-        t2i2v: ['flux_dev_fp8_api.json', 'video_ltx2_t2v_api.json'],
-        i2v: ['video_ltx25_i2v_api.json'],
-        chainvideo: ['video_wan2_2_14B_flf2v_api.json'],
-        storyboard: ['flux_dev_full_text_to_image_api.json'],
-        ideogram4: ['ideogram4_api.json']
-    };
-    // motores de imagen (el select del pipeline)
-    var POR_MOTOR = {
-        zimage: 'z_image_turbo_api.json',
-        qwen21: 'qwen_image_21_api.json',
-        ideogram4: 'ideogram4_api.json',
-        flux: 'flux_dev_fp8_api.json'
+    var NOMBRES = {
+        t2i: 'FLUX dev fp8 (imagen)',
+        t2v: 'LTX 2.5 (texto→video)',
+        t2i2v: 'FLUX + LTX 2.5 (imagen→video)',
+        i2v: 'LTX 2.5 (imagen→video)',
+        fasth3: 'FAST H3 (MiniMax OmniRef)',
+        storyboard: 'FLUX dev full (storyboard)',
+        ideogram4: 'Ideogram 4 (sectores)',
+        flux3klein: 'FLUX 3 Klein Edit (edición)',
+        zimage: 'Z-Image Turbo',
+        qwen21: 'Qwen 2.1'
     };
 
     function esc(s) {
@@ -36,25 +31,6 @@
         return b ? b.getAttribute('data-workflow') : null;
     }
 
-    function motorElegido() {
-        var sel = document.getElementById('imgEngineSelect');
-        return sel ? sel.value : null;
-    }
-
-    // anota cada tarjeta con su archivo
-    function anotarTarjetas() {
-        document.querySelectorAll('.wf-card').forEach(function (c) {
-            var wf = POR_TARJETA[c.getAttribute('data-workflow')];
-            if (!wf || c.querySelector('.wf-card-archivo')) return;
-            var s = document.createElement('span');
-            s.className = 'wf-card-archivo';
-            s.textContent = '🔧 ' + wf.join(' + ');
-            s.title = 'Archivo(s) en la carpeta workflows/ que usa esta opción';
-            c.appendChild(s);
-        });
-    }
-
-    // el cartel grande con el workflow actual
     function cartel() {
         var c = document.getElementById('wfArchivoActual');
         if (c) return c;
@@ -73,43 +49,21 @@
         var c = cartel();
         if (!c) return;
         var t = tarjetaActiva();
-        var archivos = POR_TARJETA[t] || [];
-        var lineas = [];
-        if (archivos.length) {
-            lineas.push('<span class="wf-arch-tag">workflow</span> <b>' + esc(archivos.join('</b> + <b>')) + '</b>');
-        }
-        var m = motorElegido();
-        if (m && POR_MOTOR[m]) {
-            lineas.push('<span class="wf-arch-tag">imagen</span> <b>' + esc(POR_MOTOR[m]) + '</b>');
-        }
-        // los que la tarjeta usa pero son de video, se aclaran aparte
-        if (t === 't2v') lineas.push('<span class="wf-arch-tag">imagen</span> <b>no usa</b> (video directo)');
-        c.innerHTML = lineas.length
-            ? '🔧 Se va a usar: ' + lineas.join(' &nbsp;·&nbsp; ') +
-              '<span class="wf-arch-nota">todo desde la carpeta <b>workflows/</b></span>'
+        var nombre = NOMBRES[t] || '';
+        c.innerHTML = nombre
+            ? '🎯 Se va a usar: <b>' + esc(nombre) + '</b>'
             : '';
-        c.style.display = lineas.length ? 'flex' : 'none';
-    }
-
-    function refrescar() {
-        anotarTarjetas();
-        pintar();
+        c.style.display = nombre ? 'flex' : 'none';
     }
 
     function arrancar() {
-        refrescar();
-        // al elegir tarjeta o cambiar el motor, se actualiza
+        pintar();
         document.addEventListener('click', function (e) {
-            if (e.target.closest && e.target.closest('.wf-card')) setTimeout(refrescar, 60);
+            if (e.target.closest && e.target.closest('.wf-card')) setTimeout(pintar, 60);
         });
-        var sel = document.getElementById('imgEngineSelect');
-        if (sel) sel.addEventListener('change', function () { setTimeout(refrescar, 60); });
-        // por si el HTML se re-renderiza
-        setInterval(refrescar, 4000);
+        setInterval(pintar, 4000);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(arrancar, 1500); });
     else setTimeout(arrancar, 1500);
-
-    window.WF_CREATE = { refrescar: refrescar, mapa: POR_TARJETA, motores: POR_MOTOR };
 })();

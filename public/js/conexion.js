@@ -28,7 +28,6 @@
         t2v: { todos: ['video_ltx2_t2v_api.json'] },
         t2i2v: { todos: ['flux_dev_fp8_api.json', 'video_ltx2_t2v_api.json'] },
         i2v: { alguno: ['video_ltx25_i2v_api.json', 'video_ltx2_i2v_api.json'] },
-        chainvideo: { todos: ['video_wan2_2_14B_flf2v_api.json'] },
         storyboard: { todos: ['flux_dev_full_text_to_image_api.json'] },
         zimage: { todos: ['z_image_turbo_api.json'] },
         qwen21: { todos: ['qwen_image_21_api.json'] },
@@ -37,14 +36,13 @@
     // nombre lindo de cada archivo (para decir POR QUÉ no se puede)
     var NOMBRE_WF = {
         'z_image_turbo_api.json': 'Z-Image Turbo',
-        'qwen_image_21_api.json': 'Qwen-Image 2.1',
+        'qwen_image_21_api.json': 'Qwen 2.1',
         'ideogram4_api.json': 'Ideogram 4',
         'flux_dev_fp8_api.json': 'FLUX dev',
         'flux_dev_full_text_to_image_api.json': 'FLUX dev (full)',
         'video_ltx2_t2v_api.json': 'LTX-2 texto→video',
         'video_ltx2_i2v_api.json': 'LTX-2 imagen→video',
         'video_ltx25_i2v_api.json': 'LTX-2.5 imagen→video',
-        'video_wan2_2_14B_flf2v_api.json': 'Wan 2.2 (chain)'
     };
 
     // ¿hay sesión? sin sesión el VPS no acepta el websocket ni los pedidos
@@ -203,9 +201,9 @@
         });
     }
 
-    // Los botones de generar que NO están dentro de una tarjeta (storyboard, chain…)
+    // Los botones de generar que NO están dentro de una tarjeta (storyboard…)
     function pintarBotonesSueltos() {
-        var ids = ['generateVidsFromStoryboardBtn', 'chainEnhanceBtn', 'confirmRegenBtn'];
+        var ids = ['generateVidsFromStoryboardBtn', 'confirmRegenBtn'];
         ids.forEach(function (id) {
             var b = document.getElementById(id);
             if (!b || b.closest('.wf-card')) return;

@@ -214,7 +214,7 @@
     /* 5. Áreas táctiles cómodas y textos que no se pisan. */
     .wf-card { min-height: 62px; }
     .wf-card-name { font-size: .74rem !important; }
-    .wf-card-desc, .wf-card-archivo { font-size: .64rem !important; }
+    .wf-card-desc { font-size: .64rem !important; }
     .progress-header { flex-wrap: wrap; gap: 4px; }
     #progressText { font-size: .74rem !important; line-height: 1.25; }
     .ck-conexion-banner { font-size: .72rem !important; padding: 8px 10px !important; }

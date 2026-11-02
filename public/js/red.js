@@ -187,7 +187,7 @@
             '    <label class="red-etiqueta">Modelo</label>',
             '    <select id="redModelo">',
             '      <option value="zimage">Z-Image Turbo (imagen, rápido)</option>',
-            '      <option value="qwen21">Qwen-Image 2.1 (imagen, mejor calidad)</option>',
+            '      <option value="qwen21">Qwen 2.1 (imagen, mejor calidad)</option>',
             '      <option value="ltx2">LTX-2 (video)</option>',
             '    </select>',
             '    <input type="number" id="redSteps" value="10" min="1" max="40" style="width:78px" title="steps">',

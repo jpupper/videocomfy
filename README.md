@@ -67,7 +67,7 @@ que tocar el router ni el firewall).
 ### En local (tu PC, tu ComfyUI)
 
 1. `npm start` → `http://127.0.0.1:5634`
-2. **CREATE** → escribí el prompt, elegí modelo (Z-Image Turbo, Qwen-Image 2.1, LTX-2) y generá.
+2. **CREATE** → escribí el prompt, elegí modelo (Z-Image Turbo, Qwen 2.1, LTX-2) y generá.
 3. Todo se genera en tu ComfyUI y queda en `public/uploads/` y `public/videos/`.
 
 En local **no hace falta loguearse**. Si te logueás en la pestaña **👤 Perfil**, tu nombre y
@@ -91,7 +91,7 @@ y a quién está registrada esa PC (📋 REGISTRO).
 - **Node 18+** (probado en Node 22/26)
 - **ComfyUI** en `127.0.0.1:8188` (para generar; sin él la app arranca igual y tu PC no aparece
   como *libre* hasta que responda)
-- Modelos en ComfyUI: Z-Image Turbo, Qwen-Image 2.1, LTX-2 (video) — los workflows están en `workflows/`
+- Modelos en ComfyUI: Z-Image Turbo, Qwen 2.1, LTX-2 (video) — los workflows están en `workflows/`
 - Internet (para entrar a la red)
 
 ---

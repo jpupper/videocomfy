@@ -941,7 +941,6 @@ app.post(rutasRed('/api/red/generar'), express.json({ limit: '32mb' }), async (r
         flux: 'flux_dev_fp8_api.json', fluxfull: 'flux_dev_full_text_to_image_api.json',
         ltx2t2v: 'video_ltx2_t2v_api.json', ltx2i2v: 'video_ltx2_i2v_api.json',
         ltx2: 'video_ltx2_t2v_api.json', ltx25i2v: 'video_ltx25_i2v_api.json',
-        wan22: 'video_wan2_2_14B_flf2v_api.json'
     };
     const wfPedido = MODELO_A_WORKFLOW_HUB[b.modelo];
     const ofrece = (destino.estado && Array.isArray(destino.estado.workflows)) ? destino.estado.workflows : null;
@@ -1408,7 +1407,7 @@ let pedidoHubSeq = 0;
 function anotarPedidoHub(msg, clientId, destinoForzado) {
     try {
         const tipo = String(msg.type || '');
-        if (tipo !== 'generarImagen' && tipo !== 'generarStoryboard' && tipo !== 'generarWan22') return null;
+        if (tipo !== 'generarImagen' && tipo !== 'generarStoryboard') return null;
         const pp = msg.pedidoPor || {};
         const ahora = Date.now();
         const prompt = String(msg.prompt || '').slice(0, 400);
@@ -1487,7 +1486,7 @@ wss.on('connection', (ws, req) => {
         try {
             const m = JSON.parse(texto);
             const tipo = String((m && m.type) || '');
-            if (tipo === 'generarImagen' || tipo === 'generarStoryboard' || tipo === 'generarWan22') {
+            if (tipo === 'generarImagen' || tipo === 'generarStoryboard') {
                 const p = anotarPedidoHub(m, clientId);
                 // Pedido repetido del mismo navegador (<90 s, mismo prompt): ya está
                 // encolado o terminando. NO se despacha otra vez.

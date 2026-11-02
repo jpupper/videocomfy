@@ -29,7 +29,6 @@
         t2v: { todos: ['video_ltx2_t2v_api.json'] },
         t2i2v: { todos: ['flux_dev_fp8_api.json', 'video_ltx2_t2v_api.json'] },
         i2v: { alguno: ['video_ltx25_i2v_api.json', 'video_ltx2_i2v_api.json'] },
-        chainvideo: { todos: ['video_wan2_2_14B_flf2v_api.json'] },
         storyboard: { todos: ['flux_dev_full_text_to_image_api.json'] },
         zimage: { todos: ['z_image_turbo_api.json'] },
         qwen21: { todos: ['qwen_image_21_api.json'] },

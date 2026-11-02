@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="css/red.css?v=33">
     <link rel="stylesheet" href="css/panel-izquierdo.css?v=9">
     <link rel="stylesheet" href="css/ideogram4.css?v=1">
+    <link rel="stylesheet" href="css/flux3klein.css?v=1">
     <link rel="stylesheet" href="css/comfystage.css?v=3">
     <link rel="stylesheet" href="css/ck-estado.css?v=14">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -366,7 +367,7 @@
                         <button class="wf-card" data-workflow="t2v">
                             <span class="wf-card-icon">🎬</span>
                             <span class="wf-card-name">T2V LTX 2.5</span>
-                            <span class="wf-card-desc">Text To Video (8 steps)</span>
+                            <span class="wf-card-desc">Text To Video (8 / 25 steps)</span>
                         </button>
                         <button class="wf-card" data-workflow="t2i2v">
                             <span class="wf-card-icon">🔄</span>
@@ -376,12 +377,12 @@
                         <button class="wf-card" data-workflow="i2v">
                             <span class="wf-card-icon">📸</span>
                             <span class="wf-card-name">I2V LTX 2.5</span>
-                            <span class="wf-card-desc">Upload Image + Prompt (GGUF)</span>
+                            <span class="wf-card-desc">Upload Image + Prompt (8 / 25 steps)</span>
                         </button>
-                        <button class="wf-card" data-workflow="chainvideo">
-                            <span class="wf-card-icon">🔗</span>
-                            <span class="wf-card-name">CHAINVIDEO</span>
-                            <span class="wf-card-desc">Wan2.2 Linked Videos</span>
+                        <button class="wf-card" data-workflow="fasth3">
+                            <span class="wf-card-icon">🚀</span>
+                            <span class="wf-card-name">FAST H3</span>
+                            <span class="wf-card-desc">MiniMax H3 Omni (ref2va)</span>
                         </button>
                         <button class="wf-card" data-workflow="zimage">
                             <span class="wf-card-icon">⚡</span>
@@ -390,13 +391,18 @@
                         </button>
                         <button class="wf-card" data-workflow="qwen21">
                             <span class="wf-card-icon">🧠</span>
-                            <span class="wf-card-name">QWEN IMAGE 2.1</span>
-                            <span class="wf-card-desc">Text to Image (GGUF Q8)</span>
+                            <span class="wf-card-name">QWEN 2.1</span>
+                            <span class="wf-card-desc">Text to Image / Image to Image</span>
                         </button>
                         <button class="wf-card" data-workflow="ideogram4">
                             <span class="wf-card-icon">🎯</span>
                             <span class="wf-card-name">IDEOGRAM 4</span>
                             <span class="wf-card-desc">Text to Image (sectores)</span>
+                        </button>
+                        <button class="wf-card" data-workflow="flux3klein">
+                            <span class="wf-card-icon">🎨</span>
+                            <span class="wf-card-name">FLUX 3 KLEIN</span>
+                            <span class="wf-card-desc">Image to Image (edición)</span>
                         </button>
                     </div>
 
@@ -440,11 +446,25 @@
                         <div class="wf-panel-scroll">
                             <div class="wf-section">
                                 <label class="wf-label">Image Prompt</label>
-                                <textarea class="wf-textarea" id="q21Prompt" placeholder="Describe la imagen que querés (Qwen-Image 2.1)..."></textarea>
+                                <textarea class="wf-textarea" id="q21Prompt" placeholder="Describe la imagen que querés (Qwen 2.1)..."></textarea>
                             </div>
                             <div class="wf-section">
                                 <label class="wf-label">Negative Prompt (opcional)</label>
                                 <textarea class="wf-textarea" id="q21Negative" placeholder="blurry, low quality, watermark"></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Modo</label>
+                                <select id="q21Mode" class="wf-preset-select" style="width:100%;">
+                                    <option value="t2i">Text to Image</option>
+                                    <option value="edit">Image to Image</option>
+                                </select>
+                            </div>
+                            <div class="wf-section" id="q21EditSection" style="display:none;">
+                                <label class="wf-label">Imagen a editar <span class="wf-badge-req">REQUERIDA</span></label>
+                                <div class="wf-upload-area" id="q21UploadArea">
+                                    <div class="wf-upload-placeholder"><p>Drop la imagen a editar</p></div>
+                                </div>
+                                <input type="file" id="q21ImageInput" accept="image/*" class="hidden-input">
                             </div>
                             <div class="wf-params-grid">
                                 <div class="wf-param">
@@ -465,7 +485,7 @@
                                     <label class="wf-check-label"><input type="checkbox" id="q21RandomSeed" checked> Random</label>
                                 </div>
                             </div>
-                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🧠 Qwen-Image 2.1 (GGUF Q8_0, 25 steps, cfg 1). Modelos: <code>qwen_image_2.1_Q8_0.gguf</code> + <code>qwen3vl_8b_int8_convrot</code> + <code>qwen_image_2.1_vae_bf16</code></div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🧠 Qwen 2.1 (int8, 25 steps, cfg 1). Modelos: <code>qwen_image_2.1_int8_convrot</code> + <code>qwen3vl_8b_int8_convrot</code> + <code>qwen_image_2.1_vae_bf16</code>. Text to Image / Image to Image.</div>
                             <button class="wf-gen-btn generate-btn-main" data-workflow="qwen21">🚀 GENERATE IMAGE</button>
                         </div>
                     </div>
@@ -522,6 +542,78 @@
                             </div>
                             <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🎯 Ideogram 4 local (nvfp4, ~28 steps). Modelos: <code>ideogram4_nvfp4_mixed</code> + <code>qwen3vl_8b_nvfp4</code> + <code>flux2-vae</code>. CFG 7 + override 3.</div>
                             <button class="wf-gen-btn generate-btn-main" data-workflow="ideogram4">🚀 GENERATE IMAGE</button>
+                        </div>
+                    </div>
+
+                    <!-- FLUX 3 KLEIN (edición de imagen) -->
+                    <div class="wf-panel" data-panel="flux3klein">
+                        <div class="wf-panel-scroll">
+                            <div class="wf-section">
+                                <label class="wf-label">Prompt de edición</label>
+                                <textarea class="wf-textarea" id="fkPrompt" placeholder="Describí el cambio (ej. 'cambiá el cielo a atardecer, mantené el rostro')..."></textarea>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Imagen a editar</label>
+                                <div class="wf-upload-area" id="fkUploadArea">
+                                    <div class="wf-upload-placeholder">
+                                        <p>Drop o click para subir la imagen (referencia 0)</p>
+                                    </div>
+                                    <input type="file" accept="image/*" hidden>
+                                </div>
+                            </div>
+                            <div class="wf-section">
+                                <div id="fkExtraRefs"></div>
+                                <button type="button" class="fk-add-ref" id="fkAddRef">+ Agregar referencia (0/10)</button>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Variante</label>
+                                <select id="fkModel" class="wf-preset-select" style="width:100%;">
+                                    <option value="distilled">Distilled (16 steps, rápido)</option>
+                                    <option value="base">Base (50 steps, más calidad)</option>
+                                </select>
+                            </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Sectores (bounding boxes, opcional)</label>
+                                <div class="ideo-grid-presets" id="fkGridPresets"></div>
+                                <div class="ideo-grid" id="fkGrid"></div>
+                                <div style="font-size:11px; opacity:.65; margin-top:8px;">Cada celda es un sector. "objeto" = describe lo que va ahí; "texto" = renderiza la cadena exacta.</div>
+                            </div>
+                            <div class="wf-params-grid">
+                                <div class="wf-param">
+                                    <label>Aspect <span class="wf-val">auto</span></label>
+                                    <select id="fkAspect" class="wf-preset-select" style="width:100%;">
+                                        <option value="auto">Auto (sigue la imagen)</option>
+                                        <option value="21:9">21:9</option>
+                                        <option value="16:9">16:9</option>
+                                        <option value="4:3">4:3</option>
+                                        <option value="1:1">1:1</option>
+                                        <option value="3:4">3:4</option>
+                                        <option value="9:16">9:16</option>
+                                        <option value="9:21">9:21</option>
+                                    </select>
+                                </div>
+                                <div class="wf-param">
+                                    <label>Resolución <span class="wf-val">1K</span></label>
+                                    <select id="fkResolution" class="wf-preset-select" style="width:100%;">
+                                        <option value="0.75K">0.75K</option>
+                                        <option value="1K" selected>1K</option>
+                                        <option value="1.5K">1.5K</option>
+                                        <option value="2K">2K</option>
+                                        <option value="4K">4K</option>
+                                    </select>
+                                </div>
+                                <div class="wf-param">
+                                    <label>Steps <span class="wf-val">16</span></label>
+                                    <input type="range" min="8" max="50" step="1" value="16" class="wf-param-slider" data-bind="fkSteps">
+                                </div>
+                                <div class="wf-param">
+                                    <label>Seed <span class="wf-val">-1</span></label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="fkSeed">
+                                    <label class="wf-check-label"><input type="checkbox" id="fkRandomSeed" checked> Random</label>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🎨 FLUX 3 Klein (edición con referencias). Modelos: <code>flux3-image-klein-int8-convrot</code> + <code>qwen3vl_4b</code> + <code>qwen3.5_9b (upsampler)</code> + <code>flux2-vae</code>. Hasta 10 referencias.</div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="flux3klein">🚀 GENERATE EDIT</button>
                         </div>
                     </div>
 
@@ -601,6 +693,13 @@
                                 <label class="wf-label">Video Prompt</label>
                                 <textarea class="wf-textarea" id="t2vPrompt" placeholder="Describe the video scene and camera movement..."></textarea>
                             </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Modelo LTX 2.5</label>
+                                <select id="t2vModel" class="wf-preset-select" style="width:100%;">
+                                    <option value="distilled">Distilled — 8 steps (rápido)</option>
+                                    <option value="dev22b">Dev 22B — 25 steps (más calidad)</option>
+                                </select>
+                            </div>
                             <div class="wf-params-grid">
                                 <div class="wf-param">
                                     <label>Width <span class="wf-val">1280</span></label>
@@ -666,7 +765,7 @@
                                     <label class="wf-label">Motor de imagen de esta etapa</label>
                                     <select id="imgEngineSelect" class="wf-preset-select" style="width:100%; max-width:320px;">
                                         <option value="zimage">⚡ Z-Image Turbo (10 steps, rápido)</option>
-                                        <option value="qwen21">🧠 Qwen-Image 2.1 (25 steps, más fiel)</option>
+                                        <option value="qwen21">🧠 Qwen 2.1 (25 steps, más fiel)</option>
                                         <option value="flux">🎨 Flux (el de siempre)</option>
                                     </select>
                                     <div style="font-size:11px; opacity:.65; margin-top:4px;">Aplica a la imagen de este pipeline y a las regeneraciones de storyboard.</div>
@@ -740,6 +839,13 @@
                                 <label class="wf-label">Video Prompt</label>
                                 <textarea class="wf-textarea" id="i2vPrompt" placeholder="Describe the animation and camera movement..."></textarea>
                             </div>
+                            <div class="wf-section">
+                                <label class="wf-label">Modelo LTX 2.5</label>
+                                <select id="i2vModel" class="wf-preset-select" style="width:100%;">
+                                    <option value="distilled">Distilled — 8 steps (rápido)</option>
+                                    <option value="dev22b">Dev 22B — 25 steps (más calidad)</option>
+                                </select>
+                            </div>
                             <div class="wf-params-grid">
                                 <div class="wf-param">
                                     <label>Width <span class="wf-val">1280</span></label>
@@ -783,67 +889,59 @@
                         </div>
                     </div>
 
-                    <!-- CHAINVIDEO (Wan2.2) -->
-                    <div class="wf-panel" data-panel="chainvideo">
+                    <div class="wf-panel" data-panel="fasth3">
                         <div class="wf-panel-scroll">
-                            <!-- Preset bar -->
-                            <div class="wf-preset-bar" data-workflow="chainvideo">
+                            <div class="wf-preset-bar" data-workflow="fasth3">
                                 <select class="wf-preset-select" title="Load a saved preset">
                                     <option value="">-- Presets --</option>
                                 </select>
                                 <button class="wf-preset-save-btn" title="Save current settings as preset">💾 Save</button>
                                 <button class="wf-preset-delete-btn" title="Delete selected preset" style="display:none;">🗑️</button>
                             </div>
-                            <div class="wf-chain-toolbar">
-                                <button id="chainAddStepBtn" class="primary-btn-sm">+ ADD CHAIN STEP</button>
-                                <button id="chainImportJsonBtn" class="primary-btn-outline" style="border-color: rgba(168,85,247,0.5); color: #a855f7;">📥 IMPORT JSON</button>
-                                <button id="chainMagicBtn" class="primary-btn-outline magic-btn" style="border-color: rgba(34,197,94,0.5); color: #22c55e;">🪄 MAGIC</button>
-                            </div>
-                            <div id="chainPromptArea" class="manual-prompt-area hidden">
-                                <select id="chainOllamaModel" class="model-select-std">
-                                    <option value="">Loading Ollama models...</option>
-                                </select>
-                                <textarea id="chainBatchPrompt" class="manual-prompt-textarea" placeholder="Describe your video sequence idea..."></textarea>
-                                <button id="chainEnhanceBtn" class="enhance-btn-std">✨ GENERATE CHAIN FROM IDEA</button>
-                            </div>
-                            <div id="chainJsonImport" class="json-import-panel hidden">
-                                <textarea id="chainJsonInput" placeholder='{ "steps": [...] }' class="json-textarea-field"></textarea>
-                                <div class="export-actions-row">
-                                    <button id="chainConfirmJson" class="confirm-btn-sm">IMPORT</button>
-                                    <button id="chainCancelJson" class="cancel-btn-sm">CANCEL</button>
+                            <div class="wf-section">
+                                <label class="wf-label">Imagen de referencia <span class="wf-badge-req">REQUERIDA</span></label>
+                                <div class="wf-upload-area" id="fh3UploadArea">
+                                    <div class="wf-upload-placeholder">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 32px; height: 32px; opacity: 0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        <p>Drop tu imagen de referencia aquí</p>
+                                    </div>
                                 </div>
+                                <input type="file" id="fh3ImageInput" accept="image/*" class="hidden-input">
                             </div>
-                            <div id="chainSequence"></div>
+                            <div class="wf-section">
+                                <label class="wf-label">Prompt</label>
+                                <textarea class="wf-textarea" id="fh3Prompt" placeholder="Describí el personaje, la escena y el movimiento..."></textarea>
+                            </div>
                             <div class="wf-params-grid">
                                 <div class="wf-param">
-                                    <label>Width <span class="wf-val">1280</span></label>
-                                    <input type="range" min="512" max="1920" step="64" value="1280" class="wf-param-slider" data-bind="chainWidth">
+                                    <label>Width <span class="wf-val">1344</span></label>
+                                    <input type="range" min="384" max="1920" step="32" value="1344" class="wf-param-slider" data-bind="fh3Width">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Height <span class="wf-val">720</span></label>
-                                    <input type="range" min="512" max="1088" step="64" value="720" class="wf-param-slider" data-bind="chainHeight">
+                                    <label>Height <span class="wf-val">768</span></label>
+                                    <input type="range" min="352" max="1088" step="32" value="768" class="wf-param-slider" data-bind="fh3Height">
                                 </div>
                                 <div class="wf-param">
-                                    <label>Frames <span class="wf-val">121</span></label>
-                                    <input type="range" min="25" max="481" step="8" value="121" class="wf-param-slider" data-bind="chainFrames">
-                                </div>
-                                <div class="wf-param">
-                                    <label>Steps <span class="wf-val">20</span></label>
-                                    <input type="range" min="10" max="50" step="1" value="20" class="wf-param-slider" data-bind="chainSteps">
-                                </div>
-                                <div class="wf-param">
-                                    <label>CFG <span class="wf-val">4.0</span></label>
-                                    <input type="range" min="1" max="10" step="0.5" value="4" class="wf-param-slider" data-bind="chainCFG">
+                                    <label>Duración <span class="wf-val">5</span> s</label>
+                                    <input type="range" min="1" max="15" step="1" value="5" class="wf-param-slider" id="fh3Duration" data-bind="fh3Duration">
                                 </div>
                                 <div class="wf-param">
                                     <label>Seed</label>
-                                    <input type="number" value="-1" class="wf-seed-input" id="chainSeed">
-                                    <label class="wf-check-label"><input type="checkbox" id="chainRandomSeed" checked> Random</label>
+                                    <input type="number" value="-1" class="wf-seed-input" id="fh3Seed">
+                                    <label class="wf-check-label"><input type="checkbox" id="fh3RandomSeed" checked> Random</label>
                                 </div>
                             </div>
-                            <button class="wf-gen-btn generate-btn-main" data-workflow="chainvideo" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🚀 GENERATE CHAIN VIDEOS</button>
+                            <div class="wf-section" style="margin-top: 14px;">
+                                <label class="wf-label">🎛️ Opciones</label>
+                                <div class="wf-options-row">
+                                    <label class="wf-check-label"><input type="checkbox" id="fh3Audio" checked> 🎵 Audio</label>
+                                </div>
+                            </div>
+                            <div style="font-size:11px; opacity:.65; margin:6px 0 10px;">🚀 MiniMax H3 Omni (ref2va, 8 steps). Hasta 9 imágenes de referencia. Modelos: <code>fasth3_omniref_8step_pruned_int8_convrot</code> + <code>qwen3vl_32b_minimax_h3_int4_convrot</code> + VAE video/audio H3.</div>
+                            <button class="wf-gen-btn generate-btn-main" data-workflow="fasth3">🚀 GENERATE VIDEO</button>
                         </div>
                     </div>
+
                 </div>
 
                 <div class="tab-content" id="tabStoryboard">
@@ -1108,6 +1206,7 @@
     <script src="js/admin-panel.js?v=1"></script>
     <script src="js/motor-imagen.js?v=1"></script>
     <script src="js/ideogram4.js?v=1"></script>
+    <script src="js/flux3klein.js?v=1"></script>
     <script src="js/entorno-jpi.js?v=4"></script>
     <script src="vendor/socket.io.min.js"></script>
     <script src="js/red.js?v=46"></script>

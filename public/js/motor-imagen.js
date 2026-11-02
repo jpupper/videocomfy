@@ -11,7 +11,7 @@
     'use strict';
 
     var CLAVE = 'jpi.motorImagen';
-    var NOMBRES = { zimage: 'Z-Image Turbo', qwen21: 'Qwen-Image 2.1', flux: 'FLUX' };
+    var NOMBRES = { zimage: 'Z-Image Turbo', qwen21: 'Qwen 2.1', flux: 'FLUX' };
 
     function labelImagen() {
         // La etiqueta "Image Prompt (...)" del panel del pipeline
